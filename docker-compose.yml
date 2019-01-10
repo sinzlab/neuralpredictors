@@ -1,0 +1,11 @@
+version: '2'
+services:
+
+  jupyter:
+    build: .
+    ports:
+      - "7777:8888"
+    volumes:
+      - ./:/src/ml-utils
+      - ./notebooks:/notebooks
+      - $HOME/data:/notebooks/data

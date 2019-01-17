@@ -1,4 +1,4 @@
-from attorch.dataset import H5SequenceSet, Invertible
+from .datasets import H5SequenceSet, Invertible
 import numpy as np
 import torch
 
@@ -11,6 +11,9 @@ class DataTransform:
 
     def column_transform(self, label):
         return label
+
+    def __call__(self, *args, **kwargs):
+        raise NotImplementedError
 
 
 class Subsequence(DataTransform):

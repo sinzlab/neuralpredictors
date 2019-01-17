@@ -22,6 +22,13 @@ class AttributeTransformer:
             return ret
 
 
+
+class Invertible:
+    def inv(self, y):
+        raise NotImplemented('Subclasses of Invertible must implement an inv method')
+
+
+
 class TransformDataset(Dataset):
 
     def transform(self, x, exclude=None):

@@ -2,6 +2,7 @@ import h5py
 from torch.utils.data import Dataset
 from collections import namedtuple
 import numpy as np
+from .transforms import MovieTransform, StaticTransform
 
 class AttributeTransformer:
     def __init__(self, name, h5_handle, transforms):
@@ -22,13 +23,14 @@ class AttributeTransformer:
             return ret
 
 
-class TransformDataset(Dataset):
 
-    def transform(self, x, exclude=None):
-        for tr in self.transforms:
-            if exclude is None or not isinstance(tr, exclude):
-                x = tr(x)
-        return x
+class Invertible:
+    def inv(self, y):
+        raise NotImplemented('Subclasses of Invertible must implement an inv method')
+
+
+
+class TransformDataset(Dataset):
 
     def invert(self, x, exclude=None):
         for tr in reversed(filter(lambda tr: not isinstance(tr, exclude), self.transforms)):
@@ -71,6 +73,7 @@ class H5SequenceSet(TransformDataset):
     def __getitem__(self, item):
         x = self.data_point(*(np.array(self._fid[g][str(item)]) for g in self.data_groups))
         for tr in self.transforms:
+            assert isinstance(tr, MovieTransform)
             x = tr(x)
         return x
 
@@ -110,6 +113,7 @@ class MovieSet(H5SequenceSet):
                                            str(item if g not in self.shuffle_dims else self.shuffle_dims[g][item])])
                               for g in self.data_groups))
         for tr in self.transforms:
+            assert isinstance(tr, MovieTransform)
             x = tr(x)
         return x
 

@@ -16,7 +16,15 @@ class DataTransform:
         raise NotImplementedError
 
 
-class Subsequence(DataTransform):
+class MovieTransform:
+    pass
+
+
+class StaticTransform:
+    pass
+
+
+class Subsequence(MovieTransform):
     def __init__(self, frames):
         self.frames = frames
 
@@ -31,7 +39,7 @@ class Subsequence(DataTransform):
         return self.__class__.__name__ + '({})'.format(self.frames)
 
 
-class Subsample(DataTransform):
+class Subsample(MovieTransform, StaticTransform):
     def __init__(self, idx):
         self.idx = idx
 
@@ -46,7 +54,7 @@ class Subsample(DataTransform):
         return label[self.idx]
 
 
-class ToTensor(DataTransform, Invertible):
+class ToTensor(MovieTransform, StaticTransform, Invertible):
     def __init__(self, cuda=False):
         self.cuda = cuda
 
@@ -58,7 +66,7 @@ class ToTensor(DataTransform, Invertible):
                              if self.cuda else torch.from_numpy(elem.astype(np.float32)) for elem in x])
 
 
-class Identity(DataTransform, Invertible):
+class Identity(MovieTransform, StaticTransform, Invertible):
     def __call__(self, x):
         return x
 

@@ -2,7 +2,6 @@ import h5py
 from torch.utils.data import Dataset
 from collections import namedtuple
 import numpy as np
-from .transforms import MovieTransform, StaticTransform
 
 class AttributeTransformer:
     def __init__(self, name, h5_handle, transforms):

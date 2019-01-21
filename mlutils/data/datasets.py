@@ -2,7 +2,7 @@ import h5py
 from torch.utils.data import Dataset
 from collections import namedtuple
 import numpy as np
-from .transforms import MovieTransform, StaticTransform
+from .transforms import MovieTransform, StaticTransform, Invertible
 
 
 class AttributeHandler:
@@ -31,11 +31,6 @@ class AttributeTransformer(AttributeHandler):
         for tr in self.transforms:
             ret = tr.column_transform(ret)
         return ret
-
-
-class Invertible:
-    def inv(self, y):
-        raise NotImplemented('Subclasses of Invertible must implement an inv method')
 
 
 class TransformDataset(Dataset):

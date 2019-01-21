@@ -1,8 +1,9 @@
-from .datasets import H5SequenceSet, Invertible
 import numpy as np
 import torch
 
-
+class Invertible:
+    def inv(self, y):
+        raise NotImplemented('Subclasses of Invertible must implement an inv method')
 
 class DataTransform:
 
@@ -16,11 +17,11 @@ class DataTransform:
         raise NotImplementedError
 
 
-class MovieTransform:
+class MovieTransform(DataTransform):
     pass
 
 
-class StaticTransform:
+class StaticTransform(DataTransform):
     pass
 
 
@@ -42,6 +43,7 @@ class Subsequence(MovieTransform):
 class Subsample(MovieTransform, StaticTransform):
     def __init__(self, idx):
         self.idx = idx
+        assert np.ndim(self.idx) == 1, 'Dimensionality of index array has to be 1'
 
     def __call__(self, x):
         return x.__class__(
@@ -72,3 +74,5 @@ class Identity(MovieTransform, StaticTransform, Invertible):
 
     def inv(self, y):
         return y
+
+

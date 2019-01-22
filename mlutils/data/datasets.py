@@ -96,7 +96,6 @@ class H5SequenceSet(TransformDataset):
 class MovieSet(H5SequenceSet):
     def __init__(self, filename, *data_keys, transforms=None):
         super().__init__(filename, *data_keys, transforms=transforms)
-        self.shuffle_dims = {}
 
     @property
     def n_neurons(self):
@@ -112,9 +111,7 @@ class MovieSet(H5SequenceSet):
 
 
     def __getitem__(self, item):
-        x = self.data_point(*(np.array(self._fid[g][
-                                           str(item if g not in self.shuffle_dims else self.shuffle_dims[g][item])])
-                              for g in self.data_groups))
+        x = self.data_point(*(np.array(self._fid[g][str(item)]) for g in self.data_groups))
         for tr in self.transforms:
             assert isinstance(tr, MovieTransform)
             x = tr(x)
@@ -124,8 +121,6 @@ class MovieSet(H5SequenceSet):
         s =  'MovieSet m={}:\n\t({})'.format(len(self), ', '.join(self.data_groups))
         if self.transforms is not None:
             s += '\n\t[Transforms: ' + '->'.join([repr(tr) for tr in self.transforms]) + ']'
-        if len(self.shuffle_dims) > 0:
-            s +=  ('\n\t[Shuffled Features: ' + ', '.join(self.shuffle_dims) + ']')
         return s
 
 
@@ -192,7 +187,6 @@ class H5ArraySet(Dataset):
 class StaticImageSet(H5ArraySet):
     def __init__(self, filename, *data_keys, transforms=None, cache_raw=False, stats_source=None):
         super().__init__(filename, *data_keys, transforms=transforms)
-        self.shuffle_dims = {}
         self.cache_raw = cache_raw
         self.last_raw = None
         self.stats_source = stats_source if stats_source is not None else 'all'

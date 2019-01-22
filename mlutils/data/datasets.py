@@ -2,7 +2,7 @@ import h5py
 from torch.utils.data import Dataset
 from collections import namedtuple
 import numpy as np
-from .transforms import MovieTransform, Invertible
+from .transforms import MovieTransform, StaticTransform, Invertible
 
 
 class AttributeHandler:
@@ -144,6 +144,7 @@ class H5ArraySet(Dataset):
     def __getitem__(self, item):
         x = self.data_point(*(self._fid[g][item] for g in self.data_keys))
         for tr in self.transforms:
+            assert isinstance(tr, StaticTransform)
             x = tr(x)
         return x
 

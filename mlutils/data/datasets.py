@@ -108,6 +108,7 @@ class MovieSet(H5SequenceSet):
 
 
     def __getitem__(self, item):
+        from .transforms import MovieTransform
         x = self.data_point(*(np.array(self._fid[g][
                                            str(item if g not in self.shuffle_dims else self.shuffle_dims[g][item])])
                               for g in self.data_groups))

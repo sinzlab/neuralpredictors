@@ -112,6 +112,7 @@ class MovieSet(H5SequenceSet):
 
     def __getitem__(self, item):
         x = self.data_point(*(np.array(self._fid[g][str(item)]) for g in self.data_groups))
+
         for tr in self.transforms:
             assert isinstance(tr, MovieTransform)
             x = tr(x)

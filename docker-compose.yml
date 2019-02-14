@@ -9,3 +9,4 @@ services:
       - ./:/src/ml-utils
       - ./notebooks:/notebooks
       - $HOME/data:/notebooks/data
+

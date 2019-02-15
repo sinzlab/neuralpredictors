@@ -1,7 +1,10 @@
-FROM eywalker/attorch
+FROM eywalker/pytorch-jupyter:v0.4.1-cuda9.2
 
-RUN apt-get -y update && apt-get  -y install ffmpeg libhdf5-10 git
-RUN pip3 install imageio ffmpy h5py opencv-python statsmodels
+
+RUN apt-get -y update && apt-get  -y install ffmpeg libhdf5-10 git python3-pip
+RUN pip3 install imageio ffmpy h5py opencv-python statsmodels datajoint
+
+RUN pip3 install torch torchvision datajoint --upgrade
 
 RUN pip install jupyterlab && \
     jupyter serverextension enable --py jupyterlab --sys-prefix

@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 import torch
 from scipy import linalg
@@ -33,7 +35,7 @@ class ResNet(nn.Module):
 
 
 class InvertibleLinear(nn.Module):
-    def __init__(self, pdims, ldims=None, LU_decomposed=False):
+    def __init__(self, pdims, ldims=None, type='full', components=2):
         super().__init__()
         w_shape = [pdims, pdims]
         w_init = np.linalg.qr(np.random.randn(*w_shape))[0].astype(np.float32)
@@ -43,14 +45,18 @@ class InvertibleLinear(nn.Module):
             self.bias = nn.Parameter(torch.zeros(1, pdims))
         else:
             self.bias = ldims
-            # self.bias = nn.Linear(ldims, pdims)
-            # self.bias.weight.data.zero_()
-            # self.bias.bias.data.zero_()
 
-        if not LU_decomposed:
+        self._type = type
+        self._components = components
+
+        if type == 'full':
             # Sample a random orthogonal matrix:
             self.register_parameter("weight", nn.Parameter(torch.Tensor(w_init)))
-        else:
+        elif type == 'lowrank':
+            self.register_parameter("u", nn.Parameter(torch.zeros(pdims, components)))
+            self.register_parameter("v", nn.Parameter(torch.zeros(components, pdims)))
+            self.d = nn.Parameter(torch.ones(pdims))
+        elif type == 'LU':
             np_p, np_l, np_u = linalg.lu(w_init)
             np_s = np.diag(np_u)
             np_sign_s = np.sign(np_s)
@@ -59,19 +65,19 @@ class InvertibleLinear(nn.Module):
             l_mask = np.tril(np.ones(w_shape, dtype=np.float32), -1)
             eye = np.eye(*w_shape, dtype=np.float32)
 
-            self.p = torch.Tensor(np_p.astype(np.float32))
-            self.sign_s = torch.Tensor(np_sign_s.astype(np.float32))
+            self.register_buffer('p', torch.Tensor(np_p.astype(np.float32)))
+            self.register_buffer('sign_s', torch.Tensor(np_sign_s.astype(np.float32)))
+            self.register_buffer('l_mask', torch.Tensor(l_mask))
+            self.register_buffer('I', torch.Tensor(eye))
+
             self.l = nn.Parameter(torch.Tensor(np_l.astype(np.float32)))
             self.log_s = nn.Parameter(torch.Tensor(np_log_s.astype(np.float32)))
             self.u = nn.Parameter(torch.Tensor(np_u.astype(np.float32)))
-            self.l_mask = torch.Tensor(l_mask)
-            self.eye = torch.Tensor(eye)
-        self.LU = LU_decomposed
 
     def get_weight(self, input, reverse, compute_logdet=False):
         dlogdet = None
 
-        if not self.LU:
+        if self._type == 'full':
             if compute_logdet:
                 dlogdet = torch.slogdet(self.weight)[1]
             if not reverse:
@@ -79,30 +85,36 @@ class InvertibleLinear(nn.Module):
             else:
                 weight = torch.inverse(self.weight.double()).float()
 
-            return weight, dlogdet
-        else:
-            self.p = self.p.to(input.device)
-            self.sign_s = self.sign_s.to(input.device)
-            self.l_mask = self.l_mask.to(input.device)
-            self.eye = self.eye.to(input.device)
-            l = self.l * self.l_mask + self.eye
+        elif self._type == 'LU':
+            l = self.l * self.l_mask + self.I
             u = self.u * self.l_mask.transpose(0, 1).contiguous() + torch.diag(self.sign_s * torch.exp(self.log_s))
             if compute_logdet:
                 dlogdet = self.log_s.sum()
             if not reverse:
-                w = self.p @ l @ u
+                weight = self.p @ l @ u
             else:
                 l = torch.inverse(l.double()).float()
                 u = torch.inverse(u.double()).float()
-                w = u @ l @ self.p.inverse()
-            return w, dlogdet
+                weight = u @ l @ self.p.inverse()
+
+        elif self._type == 'lowrank':
+            if not reverse:
+                weight = self.u @ self.v + torch.diag(self.d)
+            else:
+                raise NotImplementedError()
+
+            if compute_logdet:
+                dlogdet = torch.slogdet(weight)[1]
+
+        return weight, dlogdet
+
 
     def forward(self, y, x=None, logdet=None, reverse=False):
 
         weight, dlogdet = self.get_weight(y, reverse, compute_logdet=logdet is not None)
         if not reverse:
             bias = self.bias if self.nonlinear_bias is None else self.bias(x)
-            z = F.linear(y, weight) + bias
+            z = F.linear(y, weight) - bias # <-- the negative bias is important if bias is supposed to be a neuronal prediction
             if logdet is not None:
                 logdet = logdet + dlogdet
             return z, x, logdet
@@ -231,33 +243,41 @@ class CouplingLayer(nn.Module):
             raise NotImplementedError('Inverse not implemented yet.')
 
 
-from torch import nn
-from mlutils.layers.flows import Anscombe
-
-
-class PoissonPopulationFlow(nn.Module):
-
-    def __init__(self, neurons, bins):
-        super().__init__()
-        self.tuning_curves = nn.Linear(bins, neurons, bias=None)
-        self.anscombe = Anscombe()
-
-    def forward(self, y, x, logdet=None, reverse=False):
-        g = self.tuning_curves(x)
-        A = self.anscombe
-        if not reverse:
-            y, _, logdet = A(y, x, logdet=logdet, reverse=reverse)
-            g, _, _ = A(g)
-            z = y - g - 1 / (4 * g.sqrt())
-        else:
-            raise NotImplementedError('Sampling not implemented yet')
-        return z, g, logdet
+# class PoissonPopulationFlow(nn.Module):
+#
+#     def __init__(self, neurons, bins):
+#         super().__init__()
+#         self.tuning_curves = nn.Linear(bins, neurons, bias=None)
+#         self.anscombe = Anscombe()
+#
+#     def forward(self, y, x, logdet=None, reverse=False):
+#         g = self.tuning_curves(x)
+#         A = self.anscombe
+#         if not reverse:
+#             y, _, logdet = A(y, x, logdet=logdet, reverse=reverse)
+#             g, _, _ = A(g)
+#             z = y - g - 1 / (4 * g.sqrt())
+#         else:
+#             raise NotImplementedError('Sampling not implemented yet')
+#         return z, g, logdet
 
 
 class ConditionalFlow(nn.ModuleList):
+    LOG2 = math.log(2)
+
+    def __init__(self, modules, output_dim):
+        super().__init__(modules)
+        self.output_dim = output_dim
 
     def forward(self, y, x=None, logdet=None, reverse=False):
         modules = self if not reverse else reversed(self)
         for module in modules:
             y, x, logdet = module(y, x=x, logdet=logdet, reverse=reverse)
         return y, x, logdet
+
+    def cross_entropy(self, y, x, target_density, average=True):
+        z, _, ld = self(y, x, logdet=0)
+        if average:
+            return -(target_density.log_prob(z).mean() + ld.mean()) / self.output_dim / self.LOG2
+        else:
+            return -(target_density.log_prob(z) + ld) / self.output_dim / self.LOG2

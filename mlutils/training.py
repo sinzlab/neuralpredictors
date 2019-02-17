@@ -1,4 +1,6 @@
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
+from contextlib import contextmanager
+
 import numpy as np
 import time
 
@@ -19,8 +21,16 @@ def copy_state(model):
 
     return copy_dict
 
+class Tracker:
 
-class TimeObjectiveTracker():
+    def log_objective(self, obj):
+        raise NotImplementedError()
+
+    def finalize(self, obj):
+        pass
+
+
+class TimeObjectiveTracker(Tracker):
     def __init__(self):
         self.tracker = np.array([[time.time(), 0.0]])
 
@@ -32,16 +42,45 @@ class TimeObjectiveTracker():
     def finalize(self):
         self.tracker[:, 0] -= self.tracker[0, 0]
 
+class MultipleObjectiveTracker(Tracker):
 
-def early_stopping(model, objective, interval=5, patience=20, start=0, max_iter=1000,
+    def __init__(self, **objectives):
+        self.objectives = objectives
+        self.log = defaultdict(list)
+        self.time = []
+
+    def log_objective(self, obj):
+        t = time.time()
+        for name, objective in self.objectives.items():
+            self.log[name].append(objective())
+        self.time.append(t)
+
+    def finalize(self):
+        self.time = np.array(self.time)
+        self.time -= self.time[0]
+        for k, l in self.log.items():
+            self.log[k] = np.array(l)
+
+@contextmanager
+def eval_state(model):
+    training_status = model.training
+
+    try:
+        model.eval()
+        yield model
+    finally:
+        model.train(training_status)
+
+def early_stopping(model, objective_closue, interval=5, patience=20, start=0, max_iter=1000,
                    maximize=True, tolerance=1e-5, switch_mode=True, restore_best=True,
-                   time_obj_tracker=None):
+                   tracker=None):
     """
     Early stopping iterator. When it stops, it restores the best previous state of the model.
 
     Args:
         model:     model that is being optimized
-        objective: objective function that is used for early stopping. Must be of the form objective(model)
+        objective_closue: objective function that is used for early stopping. Must be of the form objective() and
+                          encapsulate the model. Should return the best objective
         interval:  interval at which objective is evaluated to consider early stopping
         patience:  number of times the objective is allow to not become better before the iterator terminates
         start:     start value for iteration (used to check against `max_iter`)
@@ -52,48 +91,48 @@ def early_stopping(model, objective, interval=5, patience=20, start=0, max_iter=
                      the model is switched to eval mode before objective evaluation and restored to its previous mode
                      after the evaluation.
         restore_best: whether to restore the best scoring model state at the end of early stopping
-        time_obj_tracker (TimeObjectiveTracker):
+        tracker (Tracker):
             for tracking training time & stopping objective
 
     """
     training_status = model.training
 
-    def _objective(mod):
+    def _objective():
         if switch_mode:
-            mod.eval()
-        ret = objective(mod)
+            model.eval()
+        ret = objective_closue()
         if switch_mode:
-            mod.train(training_status)
+            model.train(training_status)
         return ret
 
     def finalize(model, best_state_dict):
-        old_objective = _objective(model)
+        old_objective = _objective()
         if restore_best:
             model.load_state_dict(best_state_dict)
             print(
                 'Restoring best model! {:.6f} ---> {:.6f}'.format(
-                    old_objective, _objective(model)))
+                    old_objective, _objective()))
         else:
             print('Final best model! objective {:.6f}'.format(
-                _objective(model)))
+                _objective()))
 
     epoch = start
     maximize = float(maximize)
-    best_objective = current_objective = _objective(model)
+    best_objective = current_objective = _objective()
     best_state_dict = copy_state(model)
     patience_counter = 0
     while patience_counter < patience and epoch < max_iter:
         for _ in range(interval):
             epoch += 1
-            if time_obj_tracker is not None:
-                time_obj_tracker.log_objective(current_objective)
+            if tracker is not None:
+                tracker.log_objective(current_objective)
             if (~np.isfinite(current_objective)).any():
                 print('Objective is not Finite. Stopping training')
                 finalize(model, best_state_dict)
                 return
             yield epoch, current_objective
 
-        current_objective = _objective(model)
+        current_objective = _objective()
 
         if current_objective * (-1) ** maximize < best_objective * (-1) ** maximize - tolerance:
             print('[{:03d}|{:02d}/{:02d}] ---> {}'.format(epoch, patience_counter, patience, current_objective),

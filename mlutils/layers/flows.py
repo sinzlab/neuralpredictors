@@ -10,6 +10,9 @@ from torch.nn import functional as F
 
 # TODO: make sure to either compute the inverse log det and add, or the forward logdet and subtract
 
+class Identity(nn.Module):
+    def forward(self, x):
+        return x
 
 class ResNet(nn.Module):
     def __init__(self, n_in, n_out, layers=3):
@@ -71,8 +74,8 @@ class InvertibleLinear(nn.Module):
             # Sample a random orthogonal matrix:
             self.register_parameter("weight", nn.Parameter(torch.Tensor(w_init)))
         elif type == 'lowrank':
-            self.register_parameter("u", nn.Parameter(torch.zeros(pdims, components).normal_() * 1e-2))
-            self.register_parameter("v", nn.Parameter(torch.zeros(components, pdims).normal_() * 1e-2))
+            self.u = nn.Parameter(torch.zeros(pdims, components))   #.normal_() * 1e-2))
+            self.v = nn.Parameter(torch.zeros(components, pdims))   #.normal_() * 1e-2))
             self.d = nn.Parameter(torch.ones(pdims))
         elif type == 'LU':
             np_p, np_l, np_u = linalg.lu(w_init)
@@ -248,6 +251,22 @@ def split(tensor, type="split"):
     elif type == "alternate":
         return tensor[:, 0::2], tensor[:, 1::2]
 
+class Preprocessor(nn.Module):
+
+    def __init__(self, preprocessor):
+        """
+        Preprocessor module for x (the variables conditioned on).
+        Only transforms x and leaves y untouched.
+
+        Args:
+            preprocessor: arbitrary nonlinear network preprocessing x
+        """
+        super().__init__()
+        self.preprocessor = preprocessor
+
+    def forward(self, y, x, logdet=None, reverse=False):
+        x = self.preprocessor(x)
+        return y, x, logdet
 
 class CouplingLayer(nn.Module):
 

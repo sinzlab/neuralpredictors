@@ -246,6 +246,22 @@ def split(tensor, type="split"):
     elif type == "alternate":
         return tensor[:, 0::2], tensor[:, 1::2]
 
+class Preprocessor(nn.Module):
+
+    def __init__(self, preprocessor):
+        """
+        Preprocessor module for x (the variables conditioned on).
+        Only transforms x and leaves y untouched.
+
+        Args:
+            preprocessor: arbitrary nonlinear network preprocessing x
+        """
+        super().__init__()
+        self.preprocessor = preprocessor
+
+    def forward(self, y, x, logdet=None, reverse=False):
+        x = self.preprocessor(x)
+        return y, x, logdet
 
 class CouplingLayer(nn.Module):
     def __init__(self, f, split_type="middle", affine=True):

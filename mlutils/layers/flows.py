@@ -1,21 +1,27 @@
+import math
+
 import numpy as np
 import torch
 from scipy import linalg
 from torch import nn
+from torch.distributions import Gamma
 from torch.nn import functional as F
 
 
 # TODO: make sure to either compute the inverse log det and add, or the forward logdet and subtract
 
-class Identity(nn.Module):
-
-    def forward(self, input):
-        return input
-
 
 class ResNet(nn.Module):
-
     def __init__(self, n_in, n_out, layers=3):
+        """
+        Fully connectected ResNet layer. Each block consists of ELU(BatchNorm(Linear(x)))
+
+        Args:
+            n_in:   input dimensions
+            n_out:  ouput dimensions
+            layers: number of layers
+
+        """
         super().__init__()
         self.layers = nn.ModuleList(
             [nn.Sequential(
@@ -33,24 +39,42 @@ class ResNet(nn.Module):
 
 
 class InvertibleLinear(nn.Module):
-    def __init__(self, pdims, ldims=None, LU_decomposed=False):
+    def __init__(self, pdims, bias=None, type='full', components=2):
+        """
+        Invertible Linear Layer
+
+        z = Wy + bias(x)
+
+        Args:
+            pdims:  invertible (probability) dimensions
+            bias:   if None -> no bias, if True -> learned bias, else callable providing bias
+            type:   "LU", "full", or "lowrank":
+                       - "LU" see Glow paper parametrization,
+                       - "full" unconstrained
+                       - "lowrank" U @ V + diag(D) (U and V.T have dimension pdims x components)
+            components: number of components for "lowrank"
+        """
         super().__init__()
         w_shape = [pdims, pdims]
         w_init = np.linalg.qr(np.random.randn(*w_shape))[0].astype(np.float32)
 
-        self.nonlinear_bias = ldims is not None
-        if ldims is None:
+        self.nonlinear_bias = bias is not None
+        if bias is True:
             self.bias = nn.Parameter(torch.zeros(1, pdims))
-        else:
-            self.bias = ldims
-            # self.bias = nn.Linear(ldims, pdims)
-            # self.bias.weight.data.zero_()
-            # self.bias.bias.data.zero_()
+        elif bias is not None:
+            self.bias = bias
 
-        if not LU_decomposed:
+        self._type = type
+        self._components = components
+
+        if type == 'full':
             # Sample a random orthogonal matrix:
             self.register_parameter("weight", nn.Parameter(torch.Tensor(w_init)))
-        else:
+        elif type == 'lowrank':
+            self.register_parameter("u", nn.Parameter(torch.zeros(pdims, components).normal_() * 1e-2))
+            self.register_parameter("v", nn.Parameter(torch.zeros(components, pdims).normal_() * 1e-2))
+            self.d = nn.Parameter(torch.ones(pdims))
+        elif type == 'LU':
             np_p, np_l, np_u = linalg.lu(w_init)
             np_s = np.diag(np_u)
             np_sign_s = np.sign(np_s)
@@ -59,99 +83,118 @@ class InvertibleLinear(nn.Module):
             l_mask = np.tril(np.ones(w_shape, dtype=np.float32), -1)
             eye = np.eye(*w_shape, dtype=np.float32)
 
-            self.p = torch.Tensor(np_p.astype(np.float32))
-            self.sign_s = torch.Tensor(np_sign_s.astype(np.float32))
+            self.register_buffer('p', torch.Tensor(np_p.astype(np.float32)))
+            self.register_buffer('sign_s', torch.Tensor(np_sign_s.astype(np.float32)))
+            self.register_buffer('l_mask', torch.Tensor(l_mask))
+            self.register_buffer('I', torch.Tensor(eye))
+
             self.l = nn.Parameter(torch.Tensor(np_l.astype(np.float32)))
             self.log_s = nn.Parameter(torch.Tensor(np_log_s.astype(np.float32)))
             self.u = nn.Parameter(torch.Tensor(np_u.astype(np.float32)))
-            self.l_mask = torch.Tensor(l_mask)
-            self.eye = torch.Tensor(eye)
-        self.LU = LU_decomposed
 
-    def get_weight(self, input, reverse, compute_logdet=False):
+    def get_weight(self, reverse, compute_logdet=False):
         dlogdet = None
 
-        if not self.LU:
+        if self._type == 'full':
             if compute_logdet:
                 dlogdet = torch.slogdet(self.weight)[1]
+
             if not reverse:
                 weight = self.weight
             else:
                 weight = torch.inverse(self.weight.double()).float()
 
-            return weight, dlogdet
-        else:
-            self.p = self.p.to(input.device)
-            self.sign_s = self.sign_s.to(input.device)
-            self.l_mask = self.l_mask.to(input.device)
-            self.eye = self.eye.to(input.device)
-            l = self.l * self.l_mask + self.eye
+        elif self._type == 'LU':
+            l = self.l * self.l_mask + self.I
             u = self.u * self.l_mask.transpose(0, 1).contiguous() + torch.diag(self.sign_s * torch.exp(self.log_s))
             if compute_logdet:
                 dlogdet = self.log_s.sum()
             if not reverse:
-                w = self.p @ l @ u
+                weight = self.p @ l @ u
             else:
                 l = torch.inverse(l.double()).float()
                 u = torch.inverse(u.double()).float()
-                w = u @ l @ self.p.inverse()
-            return w, dlogdet
+                weight = u @ l @ self.p.inverse()
+
+        elif self._type == 'lowrank':
+            weight = self.u @ self.v + torch.diag(self.d)
+
+            if reverse:
+                weight = torch.inverse(weight.double()).float()
+
+            if compute_logdet:
+                dlogdet = torch.slogdet(weight)[1]
+
+        if reverse:
+            dlogdet = -dlogdet
+
+        return weight, dlogdet
+
 
     def forward(self, y, x=None, logdet=None, reverse=False):
 
-        weight, dlogdet = self.get_weight(y, reverse, compute_logdet=logdet is not None)
+        weight, dlogdet = self.get_weight(reverse, compute_logdet=logdet is not None)
+        bias = self.bias if self.nonlinear_bias is None else self.bias(x)
+
         if not reverse:
-            bias = self.bias if self.nonlinear_bias is None else self.bias(x)
-            z = F.linear(y, weight) + bias
-            if logdet is not None:
-                logdet = logdet + dlogdet
-            return z, x, logdet
+            z = F.linear(y, weight) - bias # <-- the minus is important if the bias is a nonelinear network with positive output
         else:
-            raise NotImplementedError('Not implemented yet')
+            z = F.linear(y + bias, weight)
+
+        if logdet is not None:
+            logdet = logdet + dlogdet
+
+        return z, x, logdet
 
 
-class AffineLayer(nn.Module):
+# class AffineLayer(nn.Module):
+#
+#     def __init__(self, pdim, ldim):
+#         super().__init__()
+#         outdim = pdim // 2 if pdim % 2 == 0 else pdim // 2 + 1
+#         self.linear = nn.Linear(pdim // 2 + ldim, 2 * outdim)
+#         self.outdim = outdim
+#         self.initialize()
+#
+#     def initialize(self):
+#         self.linear.weight.data.zero_()
+#         self.linear.bias.data.zero_()
+#
+#     def forward(self, y, x):
+#         pred = F.elu(self.linear(torch.cat((y, x), dim=1)))
+#         return pred[:, :self.outdim], pred[:, self.outdim:]
 
-    def __init__(self, pdim, ldim):
-        super().__init__()
-        outdim = pdim // 2 if pdim % 2 == 0 else pdim // 2 + 1
-        self.linear = nn.Linear(pdim // 2 + ldim, 2 * outdim)
-        self.outdim = outdim
-        self.initialize()
 
-    def initialize(self):
-        self.linear.weight.data.zero_()
-        self.linear.bias.data.zero_()
-
-    def forward(self, y, x):
-        pred = F.elu(self.linear(torch.cat((y, x), dim=1)))
-        return pred[:, :self.outdim], pred[:, self.outdim:]
-
-
-class AdditiveLayer(nn.Module):
-
-    def __init__(self, pdim, ldim):
-        super().__init__()
-        outdim = pdim // 2 if pdim % 2 == 0 else pdim // 2 + 1
-        self.linear = nn.Linear(pdim // 2 + ldim, outdim)
-        self.outdim = outdim
-        self.initialize()
-
-    def initialize(self):
-        self.linear.weight.data.zero_()
-        self.linear.bias.data.zero_()
-
-    def forward(self, y, x):
-        return F.elu(self.linear(torch.cat((y, x), dim=1)))
+# class AdditiveLayer(nn.Module):
+#
+#     def __init__(self, pdim, ldim):
+#         super().__init__()
+#         outdim = pdim // 2 if pdim % 2 == 0 else pdim // 2 + 1
+#         self.linear = nn.Linear(pdim // 2 + ldim, outdim)
+#         self.outdim = outdim
+#         self.initialize()
+#
+#     def initialize(self):
+#         self.linear.weight.data.zero_()
+#         self.linear.bias.data.zero_()
+#
+#     def forward(self, y, x):
+#         return F.elu(self.linear(torch.cat((y, x), dim=1)))
 
 
 class Anscombe(nn.Module):
 
+    def __init__(self, transform_x = False):
+        super().__init__()
+        self.transform_x = transform_x
+
     def forward(self, y, x=None, logdet=None, reverse=False):
-
+        A = lambda g: 2 * torch.sqrt(g + 3 / 8)
         if not reverse:
-            z = 2 * torch.sqrt(y + 3 / 8)
-
+            z = A(y)
+            if self.transform_x:
+                g = A(x)
+                x = g - 1 / (4 * g.sqrt())
             if logdet is not None:
                 dlogdet = (-0.5 * torch.log(y + 3 / 8)).sum(dim=1)
                 logdet = logdet + dlogdet
@@ -163,6 +206,10 @@ class Anscombe(nn.Module):
             #     logdet = logdet - dlogdet
 
         return z, x, logdet
+
+    def __repr__(self):
+        return 'Anscombe(transform_x={})'.format(self.transform_x)
+
 
 
 class Permute(nn.Module):
@@ -231,33 +278,41 @@ class CouplingLayer(nn.Module):
             raise NotImplementedError('Inverse not implemented yet.')
 
 
-from torch import nn
-from mlutils.layers.flows import Anscombe
-
-
-class PoissonPopulationFlow(nn.Module):
-
-    def __init__(self, neurons, bins):
-        super().__init__()
-        self.tuning_curves = nn.Linear(bins, neurons, bias=None)
-        self.anscombe = Anscombe()
-
-    def forward(self, y, x, logdet=None, reverse=False):
-        g = self.tuning_curves(x)
-        A = self.anscombe
-        if not reverse:
-            y, _, logdet = A(y, x, logdet=logdet, reverse=reverse)
-            g, _, _ = A(g)
-            z = y - g - 1 / (4 * g.sqrt())
-        else:
-            raise NotImplementedError('Sampling not implemented yet')
-        return z, g, logdet
+# class PoissonPopulationFlow(nn.Module):
+#
+#     def __init__(self, neurons, bins):
+#         super().__init__()
+#         self.tuning_curves = nn.Linear(bins, neurons, bias=None)
+#         self.anscombe = Anscombe()
+#
+#     def forward(self, y, x, logdet=None, reverse=False):
+#         g = self.tuning_curves(x)
+#         A = self.anscombe
+#         if not reverse:
+#             y, _, logdet = A(y, x, logdet=logdet, reverse=reverse)
+#             g, _, _ = A(g)
+#             z = y - g - 1 / (4 * g.sqrt())
+#         else:
+#             raise NotImplementedError('Sampling not implemented yet')
+#         return z, g, logdet
 
 
 class ConditionalFlow(nn.ModuleList):
+    LOG2 = math.log(2)
+
+    def __init__(self, modules, output_dim):
+        super().__init__(modules)
+        self.output_dim = output_dim
 
     def forward(self, y, x=None, logdet=None, reverse=False):
         modules = self if not reverse else reversed(self)
         for module in modules:
             y, x, logdet = module(y, x=x, logdet=logdet, reverse=reverse)
         return y, x, logdet
+
+    def cross_entropy(self, y, x, target_density, average=True):
+        z, _, ld = self(y, x, logdet=0)
+        if average:
+            return -(target_density.log_prob(z).mean() + ld.mean()) / self.output_dim / self.LOG2
+        else:
+            return -(target_density.log_prob(z) + ld) / self.output_dim / self.LOG2

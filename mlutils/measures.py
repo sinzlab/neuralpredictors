@@ -1,5 +1,6 @@
 from torch import nn
 import torch
+import numpy as np
 
 class Corr(nn.Module):
     def __init__(self, eps=1e-12):
@@ -33,7 +34,6 @@ class PoissonLoss(nn.Module):
         else:
             return loss.view(-1, loss.shape[-1]).mean(dim=0)
 
-
 class GammaLoss(nn.Module):
     def __init__(self, bias=1e-12, per_neuron=False):
         super().__init__()
@@ -42,10 +42,11 @@ class GammaLoss(nn.Module):
 
     def forward(self, output, target):
         target = target.detach()
-
         # use output + 1/2 as shape parameter
         shape = output + 0.5
-        loss = -torch.lgamma(shape) + (shape - 1) * torch.log(target + self.bias) - target
+
+        # assert np.all(shape.detach().cpu().numpy() > 0), 'Shape parameter is smaller than zero'
+        loss = torch.lgamma(shape) - (shape - 1) * torch.log(target + self.bias) + target
 
         if not self.per_neuron:
             return loss.mean()

@@ -2,6 +2,45 @@ import torch
 from torch import nn as nn
 from torch.nn import Parameter
 from torch.nn import functional as F
+from torch.nn import ModuleDict
+
+class Readout():
+    def initialize(self, *args, **kwargs):
+        raise NotImplementedError('initialize is not implemented for ', self.__class__.__name__)
+
+    def __repr__(self):
+        s = super().__repr__()
+        s += ' [{} regularizers: '.format(self.__class__.__name__)
+        ret = []
+        for attr in filter(lambda x: not x.startswith('_') and
+                                     ('gamma' in x or 'pool' in x or 'positive' in x), dir(self)):
+            ret.append('{} = {}'.format(attr, getattr(self, attr)))
+        return s + '|'.join(ret) + ']\n'
+
+
+class MultiplePointPooled2d(Readout, ModuleDict):
+    def __init__(self, in_shape, neurons, gamma_readout, **kwargs):
+        super().__init__()
+
+        self.in_shape = in_shape
+        self.neurons = neurons
+        self.gamma_readout = gamma_readout
+
+        # use no nonlinearity - e.g. identity
+        self.nonlinearity = lambda x: x
+
+        for k, neur in neurons.items():
+            if isinstance(self.in_shape, dict):
+                in_shape = self.in_shape[k]
+            self.add_module(k, PointPooled2d(in_shape, neur))
+
+    def initialize(self, mu_dict):
+        for k, mu in mu_dict.items():
+            self[k].initialize(init_noise=1e-6)
+            self[k].bias.data = mu.squeeze() - 1
+
+    def regularizer(self, readout_key):
+        return self[readout_key].l1() * self.gamma_readout
 
 
 class PointPooled2d(nn.Module):

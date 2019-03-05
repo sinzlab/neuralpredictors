@@ -1,6 +1,5 @@
 from collections import OrderedDict, defaultdict
 from contextlib import contextmanager
-
 import numpy as np
 import time
 

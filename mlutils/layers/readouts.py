@@ -1,3 +1,5 @@
+from collections import OrderedDict
+
 import torch
 from torch import nn as nn
 from torch.nn import Parameter
@@ -19,23 +21,19 @@ class Readout():
 
 
 class MultiplePointPooled2d(Readout, ModuleDict):
-    def __init__(self, in_shape, neurons, gamma_readout, **kwargs):
+    def __init__(self, in_shape, loaders, gamma_readout, **kwargs):
         super().__init__()
 
         self.in_shape = in_shape
-        self.neurons = neurons
+        self.neurons = OrderedDict([(k, loader.dataset.n_neurons) for k, loader in loaders.items()])
+
         self.gamma_readout = gamma_readout
 
-        # use no nonlinearity - e.g. identity
-        self.nonlinearity = lambda x: x
+        for k, n_neurons in self.neurons.items():
+            self.add_module(k, PointPooled2d(in_shape, n_neurons))
 
-        for k, neur in neurons.items():
-            if isinstance(self.in_shape, dict):
-                in_shape = self.in_shape[k]
-            self.add_module(k, PointPooled2d(in_shape, neur))
-
-    def initialize(self, mu_dict):
-        for k, mu in mu_dict.items():
+    def initialize(self, mean_activity_dict):
+        for k, mu in mean_activity_dict.items():
             self[k].initialize(init_noise=1e-6)
             self[k].bias.data = mu.squeeze() - 1
 

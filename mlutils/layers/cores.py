@@ -1,6 +1,6 @@
 from collections import OrderedDict
 from torch import nn
-from .regularizers import LaplaceL2
+from ..regularizers import LaplaceL2
 import torch
 
 

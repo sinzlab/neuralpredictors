@@ -30,7 +30,7 @@ class MultiplePointPooled2d(Readout, ModuleDict):
         self.gamma_readout = gamma_readout
 
         for k, n_neurons in self.neurons.items():
-            self.add_module(k, PointPooled2d(in_shape, n_neurons))
+            self.add_module(k, PointPooled2d(in_shape, n_neurons, **kwargs))
 
     def initialize(self, mean_activity_dict):
         for k, mu in mean_activity_dict.items():
@@ -38,7 +38,7 @@ class MultiplePointPooled2d(Readout, ModuleDict):
             self[k].bias.data = mu.squeeze() - 1
 
     def regularizer(self, readout_key):
-        return self[readout_key].l1() * self.gamma_readout
+        return self[readout_key].feature_l1() * self.gamma_readout
 
 
 class PointPooled2d(nn.Module):

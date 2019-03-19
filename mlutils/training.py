@@ -67,7 +67,7 @@ def eval_state(model):
 
     try:
         model.eval()
-        yield model
+#        yield model
     finally:
         model.train(training_status)
 

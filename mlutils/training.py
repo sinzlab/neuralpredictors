@@ -67,6 +67,7 @@ def eval_state(model):
 
     try:
         model.eval()
+        print('hello')
         return model
     finally:
         model.train(training_status)

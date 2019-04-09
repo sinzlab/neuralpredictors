@@ -151,14 +151,12 @@ class MultiplePointPyramid2d(Readout, ModuleDict):
 
         self.in_shape = in_shape
         self.neurons = OrderedDict([(k, loader.dataset.n_neurons) for k, loader in loaders.items()])
-        print(','.join('{0}={1!r}'.format(k,v) for k,v in kwargs.items()))
         self._positive = positive #kwargs['positive']
-        print(positive)
         self.gamma_readout = gamma_readout
         for k, n_neurons in self.neurons.items():
             if isinstance(self.in_shape, dict):
                 in_shape = self.in_shape[k]
-            self.add_module(k, self.PointPyramid2d(in_shape=in_shape, outdims=n_neurons, positive = positive, **kwargs))
+            self.add_module(k, PointPyramid2d(in_shape=in_shape, outdims=n_neurons, positive = positive, **kwargs))
 
     @property
     def positive(self):

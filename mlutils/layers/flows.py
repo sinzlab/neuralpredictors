@@ -4,11 +4,13 @@ import numpy as np
 import torch
 from scipy import linalg
 from torch import nn
-from torch.distributions import Gamma
 from torch.nn import functional as F
 
-
 # TODO: make sure to either compute the inverse log det and add, or the forward logdet and subtract
+# TODO: how should x be handled when reverse = True
+from mlutils.constraints import positive, at_least
+
+
 
 
 class ResNet(nn.Module):
@@ -56,6 +58,7 @@ class InvertibleLinear(nn.Module):
         """
         super().__init__()
         w_shape = [pdims, pdims]
+        # Sample a random orthogonal matrix:
         w_init = np.linalg.qr(np.random.randn(*w_shape))[0].astype(np.float32)
 
         self.nonlinear_bias = bias is not None
@@ -147,44 +150,34 @@ class InvertibleLinear(nn.Module):
 
         return z, x, logdet
 
-
-# class AffineLayer(nn.Module):
-#
-#     def __init__(self, pdim, ldim):
-#         super().__init__()
-#         outdim = pdim // 2 if pdim % 2 == 0 else pdim // 2 + 1
-#         self.linear = nn.Linear(pdim // 2 + ldim, 2 * outdim)
-#         self.outdim = outdim
-#         self.initialize()
-#
-#     def initialize(self):
-#         self.linear.weight.data.zero_()
-#         self.linear.bias.data.zero_()
-#
-#     def forward(self, y, x):
-#         pred = F.elu(self.linear(torch.cat((y, x), dim=1)))
-#         return pred[:, :self.outdim], pred[:, self.outdim:]
+    def __repr__(self):
+        if self._type == 'full':
+            tstring = 'W'
+        elif self._type == 'LU':
+            tstring = 'PL(U+ diag(s))'
+        elif self._type == 'lowrank':
+            tstring = 'UV + D [components={}]'.format(self._components)
+        bias = 'b' if self.nonlinear_bias is None else '{}(x)'.format(self.bias.__class__.__name__)
+        return 'Linear(W={}, bias={})'.format(tstring, bias)
 
 
-# class AdditiveLayer(nn.Module):
-#
-#     def __init__(self, pdim, ldim):
-#         super().__init__()
-#         outdim = pdim // 2 if pdim % 2 == 0 else pdim // 2 + 1
-#         self.linear = nn.Linear(pdim // 2 + ldim, outdim)
-#         self.outdim = outdim
-#         self.initialize()
-#
-#     def initialize(self):
-#         self.linear.weight.data.zero_()
-#         self.linear.bias.data.zero_()
-#
-#     def forward(self, y, x):
-#         return F.elu(self.linear(torch.cat((y, x), dim=1)))
+
 
 
 class Anscombe(nn.Module):
+
     def __init__(self, transform_x=False):
+        """
+        Variance stabilizing transform for Poisson variables.
+
+        A(x): x |-> 2 * sqrt(x + 3 / 8)
+
+        For Poisson variables with rate r, A(x) is approximately Gaussian with mean A(r) - 1/(4 sqrt(r))
+        and standard deviation one.
+
+        Args:
+            transform_x: if True, x is transformed with A(x) - 1/(4 sqrt(x))
+        """
         super().__init__()
         self.transform_x = transform_x
 
@@ -197,9 +190,90 @@ class Anscombe(nn.Module):
                 x = g - 1 / (4 * g.sqrt())
             if logdet is not None:
                 dlogdet = (-0.5 * torch.log(y + 3 / 8)).sum(dim=1)
-                logdet = logdet + dlogdet
         else:
-            raise NotImplementedError("Check above todo")
+            z = 1 / 8 * (2 * y ** 2 - 3)
+            if logdet is not None:
+                dlogdet = (y / 2).log().sum(dim=1)
+
+        return z, x, logdet if logdet is None else logdet + dlogdet
+
+    def __repr__(self):
+        return 'Anscombe(transform_x={})'.format(self.transform_x)
+
+
+class Difference(nn.Module):
+
+    def forward(self, y, x, logdet=None, reverse=False):
+
+        if not reverse:
+            z = y - x
+        else:
+            z = y + x
+
+        return z, x, logdet
+
+    def __repr__(self):
+        return 'Difference(y-x)'
+
+
+class MixtureOfSigmoids(nn.Module):
+
+    def __init__(self, pdims, components, a_init=0.01, b_init=1.):
+        super().__init__()
+        self.a = nn.Parameter(torch.Tensor(1, pdims, components).uniform_(a_init, 2 * a_init))
+        self.b = nn.Parameter(torch.Tensor(1, pdims, components).normal_(0, b_init))
+        self.logits = nn.Parameter(torch.Tensor(1, pdims, components).normal_())
+        self.pdims = pdims
+        self.components = components
+
+    def forward(self, y, x, logdet=None, reverse=False):
+        positive(self.a)
+
+
+        if not reverse:
+            f = torch.sigmoid(y[..., None] * self.a + self.b)
+            q = F.softmax(self.logits, dim=-1)
+
+            if logdet is not None:
+                diag_jacobian = (f * (1 - f) * self.a * q).sum(-1)
+                logdet = logdet + torch.log(diag_jacobian).sum(1)
+            z = (f * q).sum(-1)
+        else:
+            raise NotImplementedError()
+
+        return z, x, logdet
+
+    def __repr__(self):
+        return 'Mixture of Sigmoids(components={}, dimensions={})'.format(self.components, self.pdims)
+
+
+class AffineLog(nn.Module):
+    def __init__(self, pdims, lower_bound=1e-4, transform_x=False):
+        super().__init__()
+        assert lower_bound > 0, 'lower bound must be greater than 0'
+        self.a = nn.Parameter(torch.ones(1, pdims))
+        self.b = nn.Parameter(torch.ones(1, pdims))
+        self.lower_bound = lower_bound
+        self.pdims = pdims
+        self.transform_x = transform_x
+
+    def forward(self, y, x, logdet=None, reverse=False):
+        at_least(self.a, self.lower_bound)
+        at_least(self.b, self.lower_bound)
+
+
+        if not reverse:
+            act = self.b + self.a * y
+            z = torch.log(act)
+
+            if self.transform_x:
+                x = torch.log(self.b + self.a * x)
+
+            if logdet is not None:
+                log_diag_jacobian = torch.log(self.a) - torch.log(act)
+                logdet = logdet + log_diag_jacobian.sum(1)
+        else:
+            raise NotImplementedError('Check above todo')
             # z = (y / 2) ** 2 - 3 / 8
             # if logdet is not None:
             #     dlogdet = (y / 2).log().sum(dim=1)
@@ -209,6 +283,18 @@ class Anscombe(nn.Module):
 
     def __repr__(self):
         return "Anscombe(transform_x={})".format(self.transform_x)
+        return 'AffineLog(lower_bound={}, dimensions={})'.format(self.lower_bound, self.pdims)
+
+class Logit(nn.Module):
+
+    def forward(self, y, x=None, logdet=None, reverse=False):
+        z = torch.log(y / (1 - y))
+        if logdet is not None:
+            dlogdet = -torch.log(y - y.pow(2))
+            logdet = logdet + dlogdet.sum(1)
+
+        return z, x, logdet
+
 
 
 class Permute(nn.Module):
@@ -237,7 +323,11 @@ class Permute(nn.Module):
 
 def split(tensor, type="split"):
     """
-    type = ["middle", "alternate"]
+    Splits a tensor into two along the columns.
+
+    Args:
+        tensor: m x dim tensor to be split
+        type: Either "middle" (separate at dim//2) or "alternate" (separate every other).
     """
 
     C = tensor.size(1)
@@ -245,6 +335,7 @@ def split(tensor, type="split"):
         return tensor[:, : C // 2], tensor[:, C // 2 :]
     elif type == "alternate":
         return tensor[:, 0::2], tensor[:, 1::2]
+
 
 class Preprocessor(nn.Module):
 
@@ -289,6 +380,68 @@ class CouplingLayer(nn.Module):
             return z, x, logdet
         else:
             raise NotImplementedError("Inverse not implemented yet.")
+# class AffineLayer(nn.Module):
+#
+#     def __init__(self, pdim, ldim):
+#         super().__init__()
+#         outdim = pdim // 2 if pdim % 2 == 0 else pdim // 2 + 1
+#         self.linear = nn.Linear(pdim // 2 + ldim, 2 * outdim)
+#         self.outdim = outdim
+#         self.initialize()
+#
+#     def initialize(self):
+#         self.linear.weight.data.zero_()
+#         self.linear.bias.data.zero_()
+#
+#     def forward(self, y, x):
+#         pred = F.elu(self.linear(torch.cat((y, x), dim=1)))
+#         return pred[:, :self.outdim], pred[:, self.outdim:]
+#
+#
+# class AdditiveLayer(nn.Module):
+#
+#     def __init__(self, pdim, ldim):
+#         super().__init__()
+#         outdim = pdim // 2 if pdim % 2 == 0 else pdim // 2 + 1
+#         self.linear = nn.Linear(pdim // 2 + ldim, outdim)
+#         self.outdim = outdim
+#         self.initialize()
+#
+#     def initialize(self):
+#         self.linear.weight.data.zero_()
+#         self.linear.bias.data.zero_()
+#
+#     def forward(self, y, x):
+#         return F.elu(self.linear(torch.cat((y, x), dim=1)))
+#
+# class CouplingLayer(nn.Module):
+#
+#     def __init__(self, f, split_type='middle', affine=True):
+#         super().__init__()
+#         self.f = f
+#         self.split_type = split_type
+#         self.affine = affine
+#
+#     def forward(self, y, x, logdet=None, reverse=False):
+#         if not reverse:
+#             y1, y2 = split(y, type=self.split_type)
+#
+#             if self.affine:
+#                 logs, t = self.f(y1, x)
+#                 s = logs.exp()
+#                 y2 = s * y2 + t
+#
+#                 if logdet is not None:
+#                     logdet = logdet + logs.sum(dim=1)
+#             else:
+#                 t = self.f(y1, x)
+#                 y2 = y2 + t
+#
+#             z = torch.cat((y1, y2), dim=1)
+#             return z, x, logdet
+#         else:
+#             raise NotImplementedError('Inverse not implemented yet.')
+#
 
 
 # class PoissonPopulationFlow(nn.Module):

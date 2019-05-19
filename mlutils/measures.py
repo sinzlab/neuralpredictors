@@ -41,18 +41,58 @@ class GammaLoss(nn.Module):
         self.per_neuron = per_neuron
 
     def forward(self, output, target):
-        target = target.detach()
+        target = (target + self.bias).detach()
         # use output + 1/2 as shape parameter
         shape = output + 0.5
 
         # assert np.all(shape.detach().cpu().numpy() > 0), 'Shape parameter is smaller than zero'
-        loss = torch.lgamma(shape) - (shape - 1) * torch.log(target + self.bias) + target
+        loss = torch.lgamma(shape) - (shape - 1) * torch.log(target) + target
 
         if not self.per_neuron:
             return loss.mean()
         else:
             return loss.view(-1, loss.shape[-1]).mean(dim=0)
 
+class ExponentialLoss(nn.Module):
+    def __init__(self, bias=1e-12, target_bias=1e-6, per_neuron=False):
+        super().__init__()
+        self.bias = bias
+        self.target_bias = target_bias
+        self.per_neuron = per_neuron
+
+    def forward(self, output, target):
+        output = output + self.bias
+
+        target = (target + self.target_bias).detach()
+
+        loss =  target/output + torch.log(output)
+
+        if not self.per_neuron:
+            return loss.mean()
+        else:
+            return loss.view(-1, loss.shape[-1]).mean(dim=0)
+
+
+class AnscombeMSE(nn.Module):
+
+    def __init__(self, per_neuron=False):
+        super().__init__()
+        self.per_neuron = per_neuron
+
+    @staticmethod
+    def A(x):
+        return 2 * torch.sqrt(x+ 3 / 8)
+
+    def forward(self, output, target):
+        target = self.A(target).detach()
+        output = self.A(output) - 1/(4 * output.sqrt())
+
+        loss = (target - output).pow(2)
+
+        if not self.per_neuron:
+            return loss.mean()
+        else:
+            return loss.view(-1, loss.shape[-1]).mean(dim=0)
 
 def corr(y1,y2, axis=-1, eps=1e-8, **kwargs):
     """

@@ -24,6 +24,15 @@ def positive(weight, cache=None):
     return cache
 
 
+def at_least(weight, bound, cache=None):
+    weight.data[weight < bound] = bound
+    return cache
+
+def at_most(weight, bound, cache=None):
+    weight.data[weight > bound] = bound
+    return cache
+
+
 def negative(weight, cache=None):
     weight.data *= weight.data.le(0).float()
     return cache

@@ -479,6 +479,12 @@ class ELU1D(nn.Module):
         return 'ELU(coefficients from {})'.format(bias)
 
 
+def bucketize(tensor, bucket_boundaries):
+    result = torch.zeros_like(tensor, dtype=torch.long) - 1
+    for b in range(bucket_boundaries.shape[-1]):
+        result += (tensor >= bucket_boundaries[..., b:b+1]).long()
+    return result.squeeze()
+
 class Interpolate1D(nn.Module):
     def __init__(self, f, resolution, y_min=0, y_max=1, scale=1, offset=0):
         super().__init__()
@@ -489,18 +495,19 @@ class Interpolate1D(nn.Module):
         self.y_min, self.y_max = (y_min, y_max)
         self.register_buffer('base_points', torch.linspace(self.y_min, self.y_max, resolution))
 
+
+
     def forward(self, y, x, logdet=None, reverse=False):
 
         basefeatures = F.softmax(self.f(x), dim=1).cumsum(dim=1)
 
         i = torch.arange(0, basefeatures.shape[0])
-        start = (y / (self.y_max - self.y_min) * (self.resolution - 1)).floor().detach().squeeze().type(
-            torch.LongTensor)
-
-        start[start < 0] = 0
-        start[start > self.resolution - 2] = self.resolution - 2
 
         if not reverse:
+            start = bucketize(y, self.base_points)
+            # start[start < 0] = 0
+            # start[start > self.resolution - 2] = self.resolution - 2
+
             x0 = self.base_points[start][:, None]
             x1 = self.base_points[start + 1][:, None]
 
@@ -508,7 +515,6 @@ class Interpolate1D(nn.Module):
             f1 = basefeatures[i, start + 1][:, None]
 
             slope = (f1 - f0) / (x1 - x0)
-
             z = f0 + slope * (y - x0)
             z = self.scale * z + self.offset
 
@@ -516,9 +522,27 @@ class Interpolate1D(nn.Module):
                 dlogdet = math.log(self.scale) + slope.squeeze().abs().log()
                 logdet = logdet + dlogdet
 
-            return self.scale * z + self.offset, x, logdet
+            return z, x, logdet
         else:
-            raise NotImplementedError('Inverse not implemented yet.')
+            y = (y - self.offset) / self.scale
+            start = bucketize(y, basefeatures)
+            # start[start < 0] = 0
+            # start[start > self.resolution - 2] = self.resolution - 2
+
+            f0 = self.base_points[start][:, None]
+            f1 = self.base_points[start + 1][:, None]
+
+            x0 = basefeatures[i, start][:, None]
+            x1 = basefeatures[i, start + 1][:, None]
+            slope = (f1 - f0) / (x1 - x0)
+            z = f0 + slope * (y - x0)
+
+            if logdet is not None:
+                dlogdet = math.log(self.scale) - slope.squeeze().abs().log()
+                logdet = logdet + dlogdet
+
+            return z, x, logdet
+
 
     def __repr__(self):
         bias = '{}(x)'.format(self.f.__class__.__name__)

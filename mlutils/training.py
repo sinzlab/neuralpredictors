@@ -1,6 +1,6 @@
 from collections import OrderedDict, defaultdict
 from contextlib import contextmanager
-
+from itertools import cycle
 import numpy as np
 import time
 
@@ -145,3 +145,37 @@ def early_stopping(model, objective_closue, interval=5, patience=20, start=0, ma
             print('[{:03d}|{:02d}/{:02d}] -/-> {}'.format(epoch, patience_counter, patience, current_objective),
                   flush=True)
     finalize(model, best_state_dict)
+
+
+def alternate(*args):
+    """
+    Given multiple iterators, returns a generator that alternatively visit one element from each iterator at a time.
+
+    Examples:
+        >>> list(alternate(['a', 'b', 'c'], [1, 2, 3], ['Mon', 'Tue', 'Wed']))
+        ['a', 1, 'Mon', 'b', 2, 'Tue', 'c', 3, 'Wed']
+
+    Args:
+        *args: one or more iterables (e.g. tuples, list, iterators) separated by commas
+
+    Returns:
+        A generator that alternatively visits one element at a time from the list of iterables
+    """
+    for row in zip(*args):
+        yield from row
+
+
+def cycle_datasets(trainloaders):
+    """
+    Cycles through datasets of train loaders.
+
+    Args:
+        trainloaders: OrderedDict with trainloaders as values
+
+    Yields:
+        readout key, input, targets
+
+    """
+    assert isinstance(trainloaders, OrderedDict), 'trainloaders must be an ordered dict'
+    for readout_key, outputs in zip(cycle(trainloaders.keys()), alternate(*trainloaders.values())):
+        yield readout_key, outputs

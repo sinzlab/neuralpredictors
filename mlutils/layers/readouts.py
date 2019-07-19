@@ -22,12 +22,11 @@ class Readout():
         return s + '|'.join(ret) + ']\n'
 
 
-##############
-#Pooled Readout
-##############
+#################
+#Gaussian Readout
+################
 
-
-class MultiplePointPooled2d(Readout, ModuleDict):
+class MultipleGaussian2d(Readout, ModuleDict):
     def __init__(self, in_shape, loaders, gamma_readout, **kwargs):
         super().__init__()
 
@@ -37,7 +36,7 @@ class MultiplePointPooled2d(Readout, ModuleDict):
         self.gamma_readout = gamma_readout
 
         for k, n_neurons in self.neurons.items():
-            self.add_module(k, PointPooled2d(in_shape=in_shape, outdims=n_neurons, **kwargs))
+            self.add_module(k, Gaussian2d(in_shape=in_shape, outdims=n_neurons, **kwargs))
 
     def initialize(self, mean_activity_dict):
         for k, mu in mean_activity_dict.items():
@@ -48,15 +47,15 @@ class MultiplePointPooled2d(Readout, ModuleDict):
         return self[readout_key].feature_l1() * self.gamma_readout
 
 
-class PointPooled2d(nn.Module):
-    def __init__(self, in_shape, outdims, pool_steps, bias, pool_kern, init_range, **kwargs):
+class Gaussian2d(nn.Module):
+    def __init__(self, in_shape, outdims, bias, init_range, **kwargs):
         super().__init__()
-        self._pool_steps = pool_steps
         self.in_shape = in_shape
         c, w, h = in_shape
         self.outdims = outdims
-        self.grid = Parameter(torch.Tensor(1, outdims, 1, 2))
-        self.features = Parameter(torch.Tensor(1, c * (self._pool_steps + 1), 1, outdims))
+        self.mu = Parameter(torch.Tensor(1, outdims, 1, 2))       # mean location of gaussian for each neuron
+        self.sigma = Parameter(torch.Tensor(1, outdims, 1, 2))    # standard deviation for gaussian for each neuron
+        self.features = Parameter(torch.Tensor(1, c, 1, outdims)) # saliency  weights for each channel from core
 
         if bias:
             bias = Parameter(torch.Tensor(outdims))
@@ -64,27 +63,26 @@ class PointPooled2d(nn.Module):
         else:
             self.register_parameter('bias', None)
 
-        self.pool_kern = pool_kern
-        self.avg = nn.AvgPool2d((pool_kern, pool_kern), stride=pool_kern, count_include_pad=False)
         self.init_range = init_range
         self.initialize()
 
     @property
-    def pool_steps(self):
-        return self._pool_steps
+    def grid(self):
 
-    @pool_steps.setter
-    def pool_steps(self, value):
-        assert value >= 0 and int(value) - value == 0, 'new pool steps must be a non-negative integer'
-        if value != self._pool_steps:
-            print('Resizing readout features')
-            c, w, h = self.in_shape
-            self._pool_steps = int(value)
-            self.features = Parameter(torch.Tensor(1, c * (self._pool_steps + 1), 1, self.outdims))
-            self.features.data.fill_(1 / self.in_shape[0])
+        if self.training:
+            Normal = torch.distributions.Normal(torch.tensor([0.0]), torch.tensor([1.0]))  # normal distribution with
+            # mean 0, std = 1
+            z = self.mu + self.sigma * Normal.sample((1,readout.outdims,1,2)).squeeze(-1) # reparameterise normal to get the grid
+            return(torch.clamp(z, -1, 1))
+
+        elif self.eval:
+
+            return(self.mu)
+
 
     def initialize(self):
-        self.grid.data.uniform_(-self.init_range, self.init_range)
+        self.mu.data.uniform_(-self.init_range,self.init_range)
+        self.sigma.data.uniform_(-self.init_range,self.init_range)
         self.features.data.fill_(1 / self.in_shape[0])
 
         if self.bias is not None:
@@ -97,10 +95,10 @@ class PointPooled2d(nn.Module):
             return self.features.abs().sum()
 
     def forward(self, x, shift=None, out_idx=None):
-        self.grid.data = torch.clamp(self.grid.data, -1, 1)
+
+
         N, c, w, h = x.size()
-        m = self.pool_steps + 1
-        feat = self.features.view(1, m * c, self.outdims)
+        feat = self.features.view(1, c, self.outdims)
 
         if out_idx is None:
             grid = self.grid
@@ -118,11 +116,7 @@ class PointPooled2d(nn.Module):
         else:
             grid = grid.expand(N, outdims, 1, 2) + shift[:, None, None, :]
 
-        pools = [F.grid_sample(x, grid)]
-        for _ in range(self.pool_steps):
-            x = self.avg(x)
-            pools.append(F.grid_sample(x, grid))
-        y = torch.cat(pools, dim=1)
+        y = F.grid_sample(x, grid)
         y = (y.squeeze(-1) * feat).sum(1).view(N, outdims)
 
         if self.bias is not None:
@@ -135,7 +129,6 @@ class PointPooled2d(nn.Module):
             ' (' + '{} x {} x {}'.format(c, w, h) + ' -> ' + str(self.outdims) + ')'
         if self.bias is not None:
             r += ' with bias'
-        r += ' and pooling for {} steps\n'.format(self.pool_steps)
         for ch in self.children():
             r += '  -> ' + ch.__repr__() + '\n'
         return r
@@ -467,3 +460,120 @@ class PointPyramid2d(nn.Module):
 
 
 
+##############
+#Point Pooled Readout
+##############
+
+
+class MultiplePointPool2d(Readout, ModuleDict):
+    def __init__(self, in_shape, loaders, gamma_readout, **kwargs):
+        super().__init__()
+
+        self.in_shape = in_shape
+        self.neurons = OrderedDict([(k, loader.dataset.n_neurons) for k, loader in loaders.items()])
+
+        self.gamma_readout = gamma_readout
+
+        for k, n_neurons in self.neurons.items():
+            self.add_module(k, PointPooled2d(in_shape=in_shape, outdims=n_neurons, **kwargs))
+
+    def initialize(self, mean_activity_dict):
+        for k, mu in mean_activity_dict.items():
+            self[k].initialize()
+            self[k].bias.data = mu.squeeze() - 1
+
+    def regularizer(self, readout_key):
+        return self[readout_key].feature_l1() * self.gamma_readout
+
+
+class PointPooled2d(nn.Module):
+    def __init__(self, in_shape, outdims, pool_steps, bias, pool_kern, init_range, **kwargs):
+        super().__init__()
+        self._pool_steps = pool_steps
+        self.in_shape = in_shape
+        c, w, h = in_shape
+        self.outdims = outdims
+        self.grid = Parameter(torch.Tensor(1, outdims, 1, 2))
+        self.features = Parameter(torch.Tensor(1, c * (self._pool_steps + 1), 1, outdims))
+
+        if bias:
+            bias = Parameter(torch.Tensor(outdims))
+            self.register_parameter('bias', bias)
+        else:
+            self.register_parameter('bias', None)
+
+        self.pool_kern = pool_kern
+        self.avg = nn.AvgPool2d((pool_kern, pool_kern), stride=pool_kern, count_include_pad=False)
+        self.init_range = init_range
+        self.initialize()
+
+    @property
+    def pool_steps(self):
+        return self._pool_steps
+
+    @pool_steps.setter
+    def pool_steps(self, value):
+        assert value >= 0 and int(value) - value == 0, 'new pool steps must be a non-negative integer'
+        if value != self._pool_steps:
+            print('Resizing readout features')
+            c, w, h = self.in_shape
+            self._pool_steps = int(value)
+            self.features = Parameter(torch.Tensor(1, c * (self._pool_steps + 1), 1, self.outdims))
+            self.features.data.fill_(1 / self.in_shape[0])
+
+    def initialize(self):
+        self.grid.data.uniform_(-self.init_range, self.init_range)
+        self.features.data.fill_(1 / self.in_shape[0])
+
+        if self.bias is not None:
+            self.bias.data.fill_(0)
+
+    def feature_l1(self, average=True):
+        if average:
+            return self.features.abs().mean()
+        else:
+            return self.features.abs().sum()
+
+    def forward(self, x, shift=None, out_idx=None):
+        self.grid.data = torch.clamp(self.grid.data, -1, 1)
+        N, c, w, h = x.size()
+        m = self.pool_steps + 1
+        feat = self.features.view(1, m * c, self.outdims)
+
+        if out_idx is None:
+            grid = self.grid
+            bias = self.bias
+            outdims = self.outdims
+        else:
+            feat = feat[:, :, out_idx]
+            grid = self.grid[:, out_idx]
+            if self.bias is not None:
+                bias = self.bias[out_idx]
+            outdims = len(out_idx)
+
+        if shift is None:
+            grid = grid.expand(N, outdims, 1, 2)
+        else:
+            grid = grid.expand(N, outdims, 1, 2) + shift[:, None, None, :]
+
+        pools = [F.grid_sample(x, grid)]
+        for _ in range(self.pool_steps):
+            x = self.avg(x)
+            pools.append(F.grid_sample(x, grid))
+        y = torch.cat(pools, dim=1)
+        y = (y.squeeze(-1) * feat).sum(1).view(N, outdims)
+
+        if self.bias is not None:
+            y = y + bias
+        return y
+
+    def __repr__(self):
+        c, w, h = self.in_shape
+        r = self.__class__.__name__ + \
+            ' (' + '{} x {} x {}'.format(c, w, h) + ' -> ' + str(self.outdims) + ')'
+        if self.bias is not None:
+            r += ' with bias'
+        r += ' and pooling for {} steps\n'.format(self.pool_steps)
+        for ch in self.children():
+            r += '  -> ' + ch.__repr__() + '\n'
+        return r

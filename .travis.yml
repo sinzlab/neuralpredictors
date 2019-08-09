@@ -1,4 +1,3 @@
-sudo: required
 language: python
 python:
   - "3.6"
@@ -13,6 +12,7 @@ before_script:
 script:
   - pytest --cov=mlutils
   - echo $MY_ENV
+  - echo "Testing output"
 after_script:
   - coverage xml
   - ./cc-test-reporter after-build --exit-code $TRAVIS_TEST_RESULT -r $CC_TEST_REPORTER_ID

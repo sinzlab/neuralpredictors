@@ -6,4 +6,5 @@ install:
   - pip install pytest python-coveralls
 # command to run tests
 script:
+  - travis_wait 30 pip install -r requirements.txt
   - pytest

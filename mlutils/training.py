@@ -1,8 +1,9 @@
+import time
 from collections import OrderedDict, defaultdict
 from contextlib import contextmanager
 from itertools import cycle
+
 import numpy as np
-import time
 
 
 def copy_state(model):
@@ -21,7 +22,16 @@ def copy_state(model):
 
     return copy_dict
 
+
 class Tracker:
+    """
+    Abstract tracker object that defines what every tracker needs to implement. Currently, forces the subclass
+    to implement:
+        - log_objective
+
+    If also implements a `finalize` method that does nothing, but can be overwritten.
+
+    """
 
     def log_objective(self, obj):
         raise NotImplementedError()
@@ -31,26 +41,50 @@ class Tracker:
 
 
 class TimeObjectiveTracker(Tracker):
+    """
+    Tracker that records the wallclock time and objective values.
+
+    The variable `tracker.log` contains pairs of time and objective values.
+    """
+
     def __init__(self):
-        self.tracker = np.array([[time.time(), 0.0]])
+        self.log = np.array([[time.time(), 0.0]])
 
     def log_objective(self, obj):
         new_track_point = np.array([[time.time(), obj]])
-        self.tracker = np.concatenate(
-            (self.tracker, new_track_point), axis=0)
+        self.log = np.concatenate(
+            (self.log, new_track_point), axis=0)
 
     def finalize(self):
-        self.tracker[:, 0] -= self.tracker[0, 0]
+        self.log[:, 0] -= self.log[0, 0]
+
 
 class MultipleObjectiveTracker(Tracker):
+    """
+    Tracks multiple objectives at once. The objective need to passed as keyword arguments to the tracker.
+    Each objective needs to be a function that can be called without argument and returns a value.
+
+
+    Example:
+
+    ```
+    mot = MultipleObjectiveTracker(loss1=loss1_closure, loss2=loss2_closure)
+    ```
+
+    The objective values and time will be stored in a dictionary called `tracker.log`.
+    The objective value passed to the `log_objective` function will be tracked under the name `raw_objective`).
+
+    """
 
     def __init__(self, **objectives):
         self.objectives = objectives
         self.log = defaultdict(list)
+        assert 'raw_objective' not in objectives, 'raw_objective is reserved'
         self.time = []
 
     def log_objective(self, obj):
         t = time.time()
+        self.log['raw_objective'] = obj
         for name, objective in self.objectives.items():
             self.log[name].append(objective())
         self.time.append(t)
@@ -61,15 +95,23 @@ class MultipleObjectiveTracker(Tracker):
         for k, l in self.log.items():
             self.log[k] = np.array(l)
 
+
 @contextmanager
 def eval_state(model):
-    training_status = model.training
+    """
+    Context manager to temporarily set the training state of a model to `eval`
 
+    Args:
+        model: the model that needs to be altered
+
+    """
+    training_status = model.training
     try:
         model.eval()
         yield model
     finally:
         model.train(training_status)
+
 
 def early_stopping(model, objective_closue, interval=5, patience=20, start=0, max_iter=1000,
                    maximize=True, tolerance=1e-5, switch_mode=True, restore_best=True,

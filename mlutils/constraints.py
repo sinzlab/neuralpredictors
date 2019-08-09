@@ -1,3 +1,5 @@
+import torch
+
 from torch import nn
 
 
@@ -18,10 +20,17 @@ nn.Module.constrain_all = constrain_all
 # item usable in the constraining. For example, the cache can store the
 # binary map of all units that should be constrained.
 
+def positive(weight):
+    """
+    Enforces tensor to be positive. Changes the tensor in place. Produces no gradient.
+
+    Args:
+        weight: tensor to be positive
+
+    """
 
 def positive(weight, cache=None):
     weight.data *= weight.data.ge(0).float()
-    return cache
 
 
 def at_least(weight, bound, cache=None):

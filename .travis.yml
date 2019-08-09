@@ -6,4 +6,4 @@ install:
   - pip install pytest python-coveralls
 # command to run tests
 script:
-  - pytest
+  - pytest test

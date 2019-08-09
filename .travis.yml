@@ -13,4 +13,5 @@ before_script:
 script:
   - pytest --cov=mlutils
 after_script:
+  - coverage xml
   - ./cc-test-reporter after-build --exit-code $TRAVIS_TEST_RESULT

@@ -1,29 +1,42 @@
 import torch
+from torch import nn
 
 from mlutils.constraints import positive
 
 
-class TestPositive:
+class GradientMixin:
 
-    tolerance = 1e-8
-
-    def test_positive(self):
-        w = torch.Tensor([-1, 1.])
-        positive(w)
-
-        assert torch.all(w >= 0)
+    @staticmethod
+    def apply_constrain(w):
+        raise NotImplementedError("You need to implement constraint")
 
     def test_nograd(self):
         w = torch.Tensor([-.1, 1.]).requires_grad_(True)
-        v = torch.Tensor([-.1, 1.]).requires_grad_(True)
+        old_grad_fn = w.grad_fn
 
+        self.apply_constrain(w)
+
+        assert old_grad_fn is w.grad_fn
+
+    def test_nograd_param(self):
+        w = nn.Parameter(torch.Tensor([-.1, 1.]))
+
+        old_grad_fn = w.grad_fn
+
+        self.apply_constrain(w)
+
+        assert old_grad_fn is w.grad_fn
+
+
+class TestPositive(GradientMixin):
+    tolerance = 1e-8
+
+    @staticmethod
+    def apply_constrain(w):
         positive(w)
 
-        s1 = (w * w).sum()
-        s2 = (v * v).sum()
+    def test_positive(self):
+        w = torch.Tensor([-1, 1.])
+        self.apply_constrain(w)
 
-        s1.backward()
-        s2.backward()
-        assert (w.grad[-1] - v.grad[-1]).abs() < self.tolerance
-        assert (w.grad[0] - v.grad[0]).abs() > self.tolerance
-
+        assert torch.all(w >= 0)

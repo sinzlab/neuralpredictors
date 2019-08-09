@@ -5,7 +5,19 @@ from mlutils.constraints import positive
 
 
 class GradientMixin:
+    """
+    Test whether the constrain correctly switches off the gradient for tensors and parameters.
 
+    When subclassing, you need to implement a function
+
+    ```
+    @staticmethod
+    def apply_constrain(w):
+        ... # apply the constraint here
+
+    ```
+
+    """
     @staticmethod
     def apply_constrain(w):
         raise NotImplementedError("You need to implement constraint")

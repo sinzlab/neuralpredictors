@@ -1,6 +1,9 @@
 language: python
 python:
   - "3.6"
+env:
+  - CC_TEST_REPORTER_ID=$CC_TEST_REPORTER_ID
+  - MY_ENV
 install:
   - pip install pytest pytest-cov
   - pip install .

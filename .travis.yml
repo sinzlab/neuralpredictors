@@ -1,10 +1,21 @@
-sudo: required
 language: python
 python:
   - "3.6"
+env:
+  - CC_TEST_REPORTER_ID=$CC_TEST_REPORTER_ID
+  - MY_ENV
 install:
-  - pip install pytest python-coveralls
+  - pip install pytest pytest-cov
+  - pip install .
 # command to run tests
+before_script:
+    - curl -L https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64 > ./cc-test-reporter
+    - chmod +x ./cc-test-reporter
+    - ./cc-test-reporter before-build
 script:
-  - travis_wait 30 pip install -r requirements.txt
-  - pytest
+  - pytest --cov=mlutils
+  - echo $MY_ENV
+  - echo "Testing output"
+after_script:
+  - coverage xml
+  - ./cc-test-reporter after-build --exit-code $TRAVIS_TEST_RESULT -r $CC_TEST_REPORTER_ID

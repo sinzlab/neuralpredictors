@@ -4,6 +4,10 @@ from os import path
 
 here = path.abspath(path.dirname(__file__))
 
+with open(path.join(here, 'requirements.txt')) as f:
+    requirements = f.read().split()
+
+
 setup(
     name='ml-utils',
     version='0.0.0',
@@ -12,5 +16,5 @@ setup(
     author_email='fabian.sinz@uni-tuebingen.de',
     url='https://github.com/sinzlab/ml-utils',
     packages=find_packages(exclude=[]),
-    install_requires=['numpy', 'tqdm', 'datajoint', 'pandas', 'h5py'],
+    install_requires=requirements,
 )

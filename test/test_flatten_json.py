@@ -1,17 +1,22 @@
 from mlutils.utils import flatten_json
 import pytest
 
-def test_with_keep_nested_name():
-    nested_dictionary = dict(a=0, dict2 = dict(b=0, dict3=dict(c=0)))
-    flat_dictionary = dict(a=0, dict2_b=0, dict2_dict3_c=0)
-    assert flatten_json(nested_dictionary, keep_nested_name=True) == flat_dictionary
+def nested_dictionary(duplicates):
+    dictionary = dict(a=0, dict2=dict(b=0, dict3=dict(c=0)))
+    if duplicates:
+        dictionary['c'] = 0
+    return dictionary
 
-def test_without_keep_nested_name():
-    nested_dictionary = dict(a=0, dict2 = dict(b=0, dict3=dict(c=0)))
-    flat_dictionary = dict(a=0, b=0, c=0)
-    assert flatten_json(nested_dictionary, keep_nested_name=False) == flat_dictionary
+def flat_dictionary(keep_nested_name):
+    if keep_nested_name:
+        return dict(a=0, dict2_b=0, dict2_dict3_c=0)
+    else:
+        return dict(a=0, b=0, c=0)
+
+def test_output():
+    for keep_nested_name in (True,False):
+        assert flatten_json(nested_dictionary(duplicates=False), keep_nested_name) == flat_dictionary(keep_nested_name)
 
 def test_exception():
-    nested_dictionary = dict(a=0, dict2 = dict(a=0, dict3=dict(c=0)))
     with pytest.raises(ValueError):
-        flatten_json(nested_dictionary, keep_nested_name=False)
+        flatten_json(nested_dictionary(duplicates=True), keep_nested_name=False)

@@ -1,7 +1,7 @@
 def flatten_json(nested_dict, keep_nested_name=True):
-    '''
-    Turns a nested dictionary into a flattened dictionary. Designed to facilitate the populating of Config.Part tables
+    """Turns a nested dictionary into a flattened dictionary. Designed to facilitate the populating of Config.Part tables
     with the corresponding config json list of parameters from the Config master table.
+
     Args:
         nested_dict: dict
             Nested dictionary to be flattened
@@ -11,7 +11,10 @@ def flatten_json(nested_dict, keep_nested_name=True):
 
     Returns: dict
             Flattened dictionary
-    '''
+
+    Raises:
+        ValueError: Multiple entries with identical names
+    """
     out = {}
 
     def flatten(x, name=''):

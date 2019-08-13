@@ -19,6 +19,7 @@ def flatten_json(y, keep_nested_name=True):
             for a in x:
                 flatten(x[a], (name if keep_nested_name else '') + a + '_')
         else:
+            if name[:-1] in out: raise ValueError('Multiple entries with identical names')
             out[name[:-1]] = x
 
     flatten(y)

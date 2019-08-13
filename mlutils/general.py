@@ -16,8 +16,8 @@ def flatten_json(nested_dict, keep_nested_name=True):
 
     def flatten(x, name=''):
         if type(x) is dict:
-            for a in x:
-                flatten(x[a], (name if keep_nested_name else '') + a + '_')
+            for key, value in x.items():
+                flatten(value, (name if keep_nested_name else '') + key + '_')
         else:
             if name[:-1] in out: raise ValueError('Multiple entries with identical names')
             out[name[:-1]] = x

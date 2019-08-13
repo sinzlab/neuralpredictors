@@ -1,4 +1,4 @@
-from mlutils.general import flatten_json
+from mlutils.utils import flatten_json
 
 def test_with_keep_nested_name():
     nested_dictionary = dict(a=0, dict2 = dict(b=0, dict3=dict(c=0)))

@@ -1,9 +1,9 @@
-def flatten_json(y, keep_nested_name=True):
+def flatten_json(nested_dict, keep_nested_name=True):
     '''
     Turns a nested dictionary into a flattened dictionary. Designed to facilitate the populating of Config.Part tables
     with the corresponding config json list of parameters from the Config master table.
     Args:
-        y: dict
+        nested_dict: dict
             Nested dictionary to be flattened
         keep_nested_name: boolean, default True
             If True, record names will consist of all nested names separated by '_'. If False, last record name is
@@ -22,5 +22,5 @@ def flatten_json(y, keep_nested_name=True):
             if name[:-1] in out: raise ValueError('Multiple entries with identical names')
             out[name[:-1]] = x
 
-    flatten(y)
+    flatten(nested_dict)
     return out

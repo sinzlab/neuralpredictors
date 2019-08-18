@@ -99,7 +99,12 @@ class Gaussian2d(nn.Module):
         """
         if self.training:
             norm = self.mu.new(*self.grid_shape).normal_()
-            z = norm * torch.clamp(self.sigma, min=0) + torch.clamp(self.mu, min=-1, max=1)
+            with torch.no_grad():
+                self.mu.clamp_(min=-1, max=1) # at eval time, only self.mu is used so it must belong to [-1,1]
+                self.sigma.clamp_(min=0)      # sigma/variance is always a positive quantity
+
+            z = norm * self.sigma + self.mu # grid locations in feature space sampled randomly around the mean self.muq
+
             return (torch.clamp(z, -1, 1))
 
 

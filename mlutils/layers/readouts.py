@@ -8,6 +8,7 @@ from torch.nn import functional as F
 from torch.nn import ModuleDict
 from ..constraints import positive
 
+
 class Readout():
     def initialize(self, *args, **kwargs):
         raise NotImplementedError('initialize is not implemented for ', self.__class__.__name__)
@@ -27,6 +28,13 @@ class Readout():
 ################
 
 class MultipleGaussian2d(Readout, ModuleDict):
+    """
+
+    "MultipleGaussian2d" instantiates multiple instances of PointPool2d Readouts
+    usually used when dealing with different datasets or areas sharing the same core.
+
+    """
+
     def __init__(self, in_shape, loaders, gamma_readout, **kwargs):
         super().__init__()
 
@@ -100,10 +108,10 @@ class Gaussian2d(nn.Module):
         if self.training:
             norm = self.mu.new(*self.grid_shape).normal_()
             with torch.no_grad():
-                self.mu.clamp_(min=-1, max=1) # at eval time, only self.mu is used so it must belong to [-1,1]
-                self.sigma.clamp_(min=0)      # sigma/variance is always a positive quantity
+                self.mu.clamp_(min=-1, max=1)  # at eval time, only self.mu is used so it must belong to [-1,1]
+                self.sigma.clamp_(min=0)  # sigma/variance is always a positive quantity
 
-            z = norm * self.sigma + self.mu # grid locations in feature space sampled randomly around the mean self.muq
+            z = norm * self.sigma + self.mu  # grid locations in feature space sampled randomly around the mean self.muq
 
             return (torch.clamp(z, -1, 1))
 
@@ -119,7 +127,6 @@ class Gaussian2d(nn.Module):
         self.mu.data.uniform_(-self.init_range, self.init_range)
         self.sigma.data.uniform_(0.0, 3 * self.init_range)
         self.features.data.fill_(1 / self.in_shape[0])
-
 
         if self.bias is not None:
             self.bias.data.fill_(0)
@@ -500,7 +507,14 @@ class PointPyramid2d(nn.Module):
 ##############
 
 
-class MultiplePointPool2d(Readout, ModuleDict):
+class MultiplePointPool2d(Readout, ModuleDict)
+    """
+    
+    "MultiplePointPool2d" instantiates multiple instances of PointPool2d Readouts 
+    usually used when dealing with different datasets or areas sharing the same core. 
+    
+    """
+
     def __init__(self, in_shape, loaders, gamma_readout, **kwargs):
         super().__init__()
 

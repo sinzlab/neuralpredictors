@@ -151,7 +151,7 @@ class TransferLearningCore(Core2d, nn.Module):
 
     def forward(self, input_):
         # Model is designed for RBG input. If input is greyscale, repeat the same input 3 times
-        if self.input_channels == 1:
+        if self.input_channels == 1 and self.features.TransferLearning[0].in_channels == 3:
             input_ = input_.repeat(1, 3, 1, 1)
         input_ = self.features(input_)
         return input_

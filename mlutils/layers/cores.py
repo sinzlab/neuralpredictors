@@ -3,7 +3,7 @@ from torch import nn
 from ..regularizers import LaplaceL2
 import torch
 import torchvision
-
+import warnings
 
 class Core:
     def initialize(self):
@@ -113,7 +113,8 @@ class TransferLearningCore(Core2d, nn.Module):
 
         Args:
             input_channels (int): Number of input channels. 1 if greyscale, 3 if RBG
-            TL_model_name (str): Name of the image recognition Transfer Learning model, i.e. vgg16, alexnet, ...
+            TL_model_name (str): Name of the image recognition Transfer Learning model. Possible are all models in
+            torchvision, i.e. vgg16, alexnet, ...
             layers (int): Number of layers, i.e. after which layer to cut the original network
             pretrained (boolean): Whether to use a randomly initialized or pretrained network
             final_batchnorm (boolean): Whether to add a batch norm after the final conv layer
@@ -122,7 +123,8 @@ class TransferLearningCore(Core2d, nn.Module):
             fine_tune: Whether to clip gradients before this core or to allow training on the core
             **kwargs:
         """
-        log.info('Ignoring input {} when creating {}'.format(repr(kwargs), self.__class__.__name__))
+        if kwargs:
+            warnings.warn('Ignoring input {} when creating {}'.format(repr(kwargs), self.__class__.__name__), UserWarning)
         super().__init__()
 
         self.input_channels = input_channels
@@ -132,7 +134,7 @@ class TransferLearningCore(Core2d, nn.Module):
         TL_model = getattr(torchvision.models, TL_model_name)(pretrained=pretrained)
         TL_model_clipped = nn.Sequential(*list(TL_model.features.children())[:layers])
         if not isinstance(TL_model_clipped[-1], nn.Conv2d):
-            log.warning('Final layer is of type {}, not nn.Conv2d'.format(type(TL_model_clipped[-1])))
+            warnings.warn('Final layer is of type {}, not nn.Conv2d'.format(type(TL_model_clipped[-1])), UserWarning)
 
         # Fix pretrained parameters during training
         if not fine_tune:

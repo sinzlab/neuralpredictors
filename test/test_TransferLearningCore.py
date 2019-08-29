@@ -28,7 +28,7 @@ def test_detached_mode():
                                 loss_fn=F.mse_loss,
                                 optim=torch.optim.Adam(model.parameters()),
                                 batch=batch,
-                                device='cuda')
+                                device='cpu')
 
     compare_variables(vars_change=False, params=params_not_to_train)
     compare_variables(vars_change=True, params=params_to_train)

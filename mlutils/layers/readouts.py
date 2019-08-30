@@ -73,22 +73,26 @@ class Gaussian2d(nn.Module):
         in_shape (list): shape of the input feature map [channels, width, height]
         outdims (int): number of output units
         bias (bool): adds a bias term
-        init_range (float): intialises the the mean with Uniform([-init_range, init_range])
+        batch_sample (bool): if True, samples a position for each image in the batch separately
+        init_range (float): initialises the the mean with Uniform([-init_range, init_range])
                             [expected: positive value <=1]
-                            and sigmal with Uniform([0.0, 3*init_range])
+                            and sigma with Uniform([0.0, 3*init_range])
 
 
     """
 
-    def __init__(self, in_shape, outdims, bias, init_range, **kwargs):
+    def __init__(self, in_shape, outdims, bias, init_range, batch_sample, **kwargs):
 
         super().__init__()
+        if init_range > 1.0 or init_range <= 0.0:
+            raise ValueError("init_range should be a positive number <=1")
         self.in_shape = in_shape
         c, w, h = in_shape
         self.outdims = outdims
+        self.batch_sample = batch_sample
         self.grid_shape = (1, outdims, 1, 2)
-        self.mu = Parameter(torch.Tensor(1, outdims, 1, 2))  # mean location of gaussian for each neuron
-        self.sigma = Parameter(torch.Tensor(1, outdims, 1, 2))  # standard deviation for gaussian for each neuron
+        self.mu = Parameter(torch.Tensor(*self.grid_shape))  # mean location of gaussian for each neuron
+        self.sigma = Parameter(torch.Tensor(*self.grid_shape))  # standard deviation for gaussian for each neuron
         self.features = Parameter(torch.Tensor(1, c, 1, outdims))  # saliency  weights for each channel from core
 
         if bias:
@@ -107,9 +111,10 @@ class Gaussian2d(nn.Module):
         """
         if self.training:
             norm = self.mu.new(*self.grid_shape).normal_()
+
             with torch.no_grad():
                 self.mu.clamp_(min=-1, max=1)  # at eval time, only self.mu is used so it must belong to [-1,1]
-                self.sigma.clamp_(min=0)  # sigma/variance is always a positive quantity
+                self.sigma.clamp_(min=0)       # sigma/variance is always a positive quantity
 
             z = norm * self.sigma + self.mu  # grid locations in feature space sampled randomly around the mean self.muq
 
@@ -118,7 +123,16 @@ class Gaussian2d(nn.Module):
 
         elif self.eval:
 
+            with torch.no_grad():
+                self.mu.clamp_(min=-1, max=1)
+                self.sigma.clamp_(min=0)
+
             return (self.mu)
+
+    def batch_grid(self, batch_size):
+
+        self.grid_shape = (batch_size,) + self.grid_shape[1:]
+
 
     def initialize(self):
         """
@@ -144,7 +158,13 @@ class Gaussian2d(nn.Module):
 
     def forward(self, x, shift=None, out_idx=None):
         N, c, w, h = x.size()
+        c_in, w_in, h_in = self.in_shape
+        if [c_in, w_in, h_in] != [c, w, h]:
+            raise ValueError("the specified feature map dimension is not the readout's expected input dimension")
         feat = self.features.view(1, c, self.outdims)
+
+        if self.batch_sample:
+            self.batch_grid(N)
 
         if out_idx is None:
             grid = self.grid
@@ -157,10 +177,11 @@ class Gaussian2d(nn.Module):
                 bias = self.bias[out_idx]
             outdims = len(out_idx)
 
-        if shift is None:
+        if ~self.batch_sample:
             grid = grid.expand(N, outdims, 1, 2)
-        else:
-            grid = grid.expand(N, outdims, 1, 2) + shift[:, None, None, :]
+
+        if shift is not None:
+            grid = grid + shift[:, None, None, :]
 
         y = F.grid_sample(x, grid)
         y = (y.squeeze(-1) * feat).sum(1).view(N, outdims)
@@ -507,7 +528,7 @@ class PointPyramid2d(nn.Module):
 ##############
 
 
-class MultiplePointPool2d(Readout, ModuleDict)
+class MultiplePointPooled2d(Readout, ModuleDict):
     """
     
     "MultiplePointPool2d" instantiates multiple instances of PointPool2d Readouts 
@@ -560,7 +581,7 @@ class PointPooled2d(nn.Module):
 
         """
         super().__init__()
-        if 0 <= init_range <= 1:
+        if init_range > 1.0 or init_range <= 0.0:
             raise ValueError("init_range should be a positive number <=1")
         self._pool_steps = pool_steps
         self.in_shape = in_shape
@@ -618,7 +639,7 @@ class PointPooled2d(nn.Module):
             return self.features.abs().sum()
 
     def forward(self, x, shift=None, out_idx=None):
-        self.grid.data = torch.clamp(self.grid.data, -1, 1)  # test if clipping is part of the gradient
+        self.grid.data = torch.clamp(self.grid.data, -1, 1)
         N, c, w, h = x.size()
         c_in, w_in, h_in = self.in_shape
         if [c_in, w_in, h_in] != [c, w, h]:

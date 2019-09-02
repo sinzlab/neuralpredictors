@@ -15,10 +15,9 @@ def flat_dictionary(keep_nested_name):
     else:
         return dict(a=0, b=0, c=0)
 
-
+@pytest.mark.parametrize('keep_nested_name', [True, False])
 def test_output():
-    for keep_nested_name in (True, False):
-        assert flatten_json(nested_dictionary(duplicates=False), keep_nested_name) == flat_dictionary(keep_nested_name)
+    assert flatten_json(nested_dictionary(duplicates=False), keep_nested_name) == flat_dictionary(keep_nested_name)
 
 
 def test_exception():

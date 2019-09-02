@@ -124,7 +124,8 @@ class TransferLearningCore(Core2d, nn.Module):
             **kwargs:
         """
         if kwargs:
-            warnings.warn('Ignoring input {} when creating {}'.format(repr(kwargs), self.__class__.__name__), UserWarning)
+            warnings.warn('Ignoring input {} when creating {}'.format(repr(kwargs), self.__class__.__name__),
+                          UserWarning)
         super().__init__()
 
         self.input_channels = input_channels

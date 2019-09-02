@@ -1,11 +1,13 @@
 from mlutils.utils import flatten_json
 import pytest
 
+
 def nested_dictionary(duplicates):
     dictionary = dict(a=0, dict2=dict(b=0, dict3=dict(c=0)))
     if duplicates:
         dictionary['c'] = 0
     return dictionary
+
 
 def flat_dictionary(keep_nested_name):
     if keep_nested_name:
@@ -13,9 +15,11 @@ def flat_dictionary(keep_nested_name):
     else:
         return dict(a=0, b=0, c=0)
 
+
 def test_output():
-    for keep_nested_name in (True,False):
+    for keep_nested_name in (True, False):
         assert flatten_json(nested_dictionary(duplicates=False), keep_nested_name) == flat_dictionary(keep_nested_name)
+
 
 def test_exception():
     with pytest.raises(ValueError):

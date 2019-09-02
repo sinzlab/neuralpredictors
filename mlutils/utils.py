@@ -18,7 +18,7 @@ def flatten_json(nested_dict, keep_nested_name=True):
     out = {}
 
     def flatten(x, name=''):
-        if type(x) is dict:
+        if isinstance(x, dict):
             for key, value in x.items():
                 flatten(value, (name if keep_nested_name else '') + key + '_')
         else:

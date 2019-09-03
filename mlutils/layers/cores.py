@@ -120,7 +120,7 @@ class TransferLearningCore(Core2d, nn.Module):
             final_batchnorm (boolean): Whether to add a batch norm after the final conv layer
             final_nonlinearity (boolean): Whether to add a final nonlinearity (ReLU)
             momentum (float): Momentum term for batch norm. Irrelevant if batch_norm=False
-            fine_tune: Whether to clip gradients before this core or to allow training on the core
+            fine_tune (boolean): Whether to clip gradients before this core or to allow training on the core
             **kwargs:
         """
         if kwargs:

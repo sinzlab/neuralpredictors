@@ -105,7 +105,7 @@ class Stacked2dCore(Core2d, nn.Module):
 
 
 class TransferLearningCore(Core2d, nn.Module):
-    def __init__(self, input_channels, TL_model_name, layers, pretrained=True,
+    def __init__(self, input_channels, tl_model_name, layers, pretrained=True,
                  final_batchnorm=True, final_nonlinearity=True,
                  momentum=0.1, fine_tune=False, **kwargs):
         """
@@ -113,14 +113,14 @@ class TransferLearningCore(Core2d, nn.Module):
 
         Args:
             input_channels (int): Number of input channels. 1 if greyscale, 3 if RBG
-            TL_model_name (str): Name of the image recognition Transfer Learning model. Possible are all models in
+            tl_model_name (str): Name of the image recognition Transfer Learning model. Possible are all models in
             torchvision, i.e. vgg16, alexnet, ...
             layers (int): Number of layers, i.e. after which layer to cut the original network
             pretrained (boolean): Whether to use a randomly initialized or pretrained network
             final_batchnorm (boolean): Whether to add a batch norm after the final conv layer
             final_nonlinearity (boolean): Whether to add a final nonlinearity (ReLU)
             momentum (float): Momentum term for batch norm. Irrelevant if batch_norm=False
-            fine_tune: Whether to clip gradients before this core or to allow training on the core
+            fine_tune (boolean): Whether to clip gradients before this core or to allow training on the core
             **kwargs:
         """
         if kwargs:
@@ -132,7 +132,7 @@ class TransferLearningCore(Core2d, nn.Module):
         self.momentum = momentum
 
         # Download model and cut after specified layer
-        TL_model = getattr(torchvision.models, TL_model_name)(pretrained=pretrained)
+        TL_model = getattr(torchvision.models, tl_model_name)(pretrained=pretrained)
         TL_model_clipped = nn.Sequential(*list(TL_model.features.children())[:layers])
         if not isinstance(TL_model_clipped[-1], nn.Conv2d):
             warnings.warn('Final layer is of type {}, not nn.Conv2d'.format(type(TL_model_clipped[-1])), UserWarning)
@@ -151,7 +151,7 @@ class TransferLearningCore(Core2d, nn.Module):
             self.features.add_module('OutNonlin', nn.ReLU(inplace=True))
 
     def forward(self, input_):
-        # Model is designed for RBG input. If input is greyscale, repeat the same input 3 times
+        # If model is designed for RBG input but input is greyscale, repeat the same input 3 times
         if self.input_channels == 1 and self.features.TransferLearning[0].in_channels == 3:
             input_ = input_.repeat(1, 3, 1, 1)
         input_ = self.features(input_)

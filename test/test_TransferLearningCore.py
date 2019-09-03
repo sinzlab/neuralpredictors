@@ -8,7 +8,7 @@ from utils_for_tests import compare_vars
 
 def test_detached_mode():
     model = TransferLearningCore(input_channels=1,
-                                 TL_model_name='vgg16',
+                                 tl_model_name='vgg16',
                                  layers=8,
                                  pretrained=True,
                                  final_batchnorm=True,

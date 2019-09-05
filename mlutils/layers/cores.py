@@ -21,6 +21,9 @@ class Core:
 class Core2d(Core):
     def initialize(self, cuda=False):
         self.apply(self.init_conv)
+        self.put_to_cuda(cuda=cuda)
+
+    def put_to_cuda(self, cuda):
         if cuda:
             self = self.cuda()
 
@@ -176,3 +179,7 @@ class TransferLearningCore(Core2d, nn.Module):
             else:
                 i += 1
         return self.features.TransferLearning[-i].out_channels
+
+    def initialize(self, cuda=False):
+        # Overwrite parent class's initialize function because initialization is done by the 'pretrained' parameter
+        self.put_to_cuda(cuda=cuda)

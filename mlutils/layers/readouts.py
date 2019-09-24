@@ -1019,7 +1019,7 @@ class Gaussian3d(nn.Module):
         if self.batch_sample:
             grid = self.sample_grid(batch_size=N)
         else:
-            grid = self.grid.expand(N, 1, outdims, 1, 3)
+            grid = self.sample_grid(batch_size=1).expand(N, 1, outdims, 1, 3)
 
         if out_idx is not None:
         # out_idx specifies the indices to subset of neurons for training/testing

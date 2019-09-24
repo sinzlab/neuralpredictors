@@ -72,19 +72,19 @@ class Gaussian2d(nn.Module):
         in_shape (list): shape of the input feature map [channels, width, height]
         outdims (int): number of output units
         bias (bool): adds a bias term
-        batch_sample (bool): if True, samples a position for each image in the batch separately
-        init_range (float): initialises the the mean with Uniform([-init_range, init_range])
+        init_mu_range (float): initialises the the mean with Uniform([-init_range, init_range])
                             [expected: positive value <=1]
-                            and sigma with Uniform([0.0, 3*init_range])
-
+        init_sigma_range (float): initialises sigma with Uniform([0.0, init_sigma_range])
+        batch_sample (bool): if True, samples a position for each image in the batch separately
+                            [default: True as it decreases convergence time and performs just as well]
 
     """
 
-    def __init__(self, in_shape, outdims, bias, init_range, batch_sample, **kwargs):
+    def __init__(self, in_shape, outdims, bias, init_mu_range, init_sigma_range, batch_sample=True, **kwargs):
 
         super().__init__()
-        if init_range > 1.0 or init_range <= 0.0:
-            raise ValueError("init_range should be a positive number <=1")
+        if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma_range <= 0.0:
+            raise ValueError("init_mu_range or init_sigma_range is not within required limit!")
         self.in_shape = in_shape
         c, w, h = in_shape
         self.outdims = outdims
@@ -100,49 +100,40 @@ class Gaussian2d(nn.Module):
         else:
             self.register_parameter('bias', None)
 
-        self.init_range = init_range
+        self.init_mu_range = init_mu_range
+        self.init_sigma_range = init_sigma_range
         self.initialize()
-
-    @property
-    def grid(self):
-        """
-        grid function returns the grid location sampled from a Gaussian distribution, N(mu,sigma)
-        """
-        if self.training:
-            norm = self.mu.new(*self.grid_shape).normal_()
-
-            with torch.no_grad():
-                self.mu.clamp_(min=-1, max=1)  # at eval time, only self.mu is used so it must belong to [-1,1]
-                self.sigma.clamp_(min=0)       # sigma/variance is always a positive quantity
-
-            z = norm * self.sigma + self.mu  # grid locations in feature space sampled randomly around the mean self.muq
-
-            return (torch.clamp(z, -1, 1))
-
-
-        elif self.eval:
-
-            with torch.no_grad():
-                self.mu.clamp_(min=-1, max=1)
-                self.sigma.clamp_(min=0)
-
-            return (self.mu)
-
-    def batch_grid(self, batch_size):
-
-        self.grid_shape = (batch_size,) + self.grid_shape[1:]
-
 
     def initialize(self):
         """
         initialize function initializes the mean, sigma for the Gaussian readout and features weights
         """
-        self.mu.data.uniform_(-self.init_range, self.init_range)
-        self.sigma.data.uniform_(0.0, 3 * self.init_range)
+        self.mu.data.uniform_(-self.init_mu_range, self.init_mu_range)
+        self.sigma.data.uniform_(0, self.init_sigma_range)
         self.features.data.fill_(1 / self.in_shape[0])
 
         if self.bias is not None:
             self.bias.data.fill_(0)
+
+    def sample_grid(self, batch_size, force_eval_state=False):
+
+        with torch.no_grad():
+            self.mu.clamp_(min=-1, max=1)  # at eval time, only self.mu is used so it must belong to [-1,1]
+            self.sigma.clamp_(min=0)  # sigma/variance is always a positive quantity
+        grid_shape = (batch_size,) + self.grid_shape[1:]
+
+        if self.training and not force_eval_state:
+            norm = self.mu.new(*grid_shape).normal_()
+        else:
+            norm = self.mu.new(*grid_shape).zero_()
+
+        z = norm * self.sigma + self.mu  # grid locations in feature space sampled randomly around the mean self.muq
+
+        return torch.clamp(z, min=-1, max=1)
+
+    @property
+    def grid(self):
+        return self.sample_grid(batch_size=1, force_eval_state=True)
 
     def feature_l1(self, average=True):
         """
@@ -158,26 +149,26 @@ class Gaussian2d(nn.Module):
     def forward(self, x, shift=None, out_idx=None):
         N, c, w, h = x.size()
         c_in, w_in, h_in = self.in_shape
-        if [c_in, w_in, h_in] != [c, w, h]:
+        if (c_in, w_in, h_in) != (c, w, h):
             raise ValueError("the specified feature map dimension is not the readout's expected input dimension")
         feat = self.features.view(1, c, self.outdims)
+        bias = self.bias
+        outdims = self.outdims
 
         if self.batch_sample:
-            self.batch_grid(N)
-
-        if out_idx is None:
-            grid = self.grid
-            bias = self.bias
-            outdims = self.outdims
+            grid = self.sample_grid(batch_size=N)
         else:
-            feat = feat[:, :, out_idx]
-            grid = self.grid[:, out_idx]
-            if self.bias is not None:
-                bias = self.bias[out_idx]
-            outdims = len(out_idx)
+            grid = self.grid.expand(N, outdims, 1, 2)
 
-        if ~self.batch_sample:
-            grid = grid.expand(N, outdims, 1, 2)
+        if out_idx is not None:
+            if isinstance(out_idx, np.ndarray):
+                if out_idx.dtype == bool:
+                    out_idx = np.where(out_idx)[0]
+            feat = feat[:, :, out_idx]
+            grid = grid[:, out_idx, :, :]
+            if bias is not None:
+                bias = bias[out_idx]
+            outdims = len(out_idx)
 
         if shift is not None:
             grid = grid + shift[:, None, None, :]

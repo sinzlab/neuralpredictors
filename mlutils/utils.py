@@ -1,3 +1,6 @@
+import warnings
+
+
 def flatten_json(nested_dict, keep_nested_name=True):
     """Turns a nested dictionary into a flattened dictionary. Designed to facilitate the populating of Config.Part tables
     with the corresponding config json list of parameters from the Config master table.
@@ -45,7 +48,8 @@ def gini(x):
     """
     # The rest of the code requires numpy arrays.
     x = np.asarray(x)
-
+    if any(i < 0 for i in x):
+        warnings.warn("Input x contains negative values")
     sorted_x = np.sort(x)
     n = len(x)
     cumx = np.cumsum(sorted_x, dtype=float)

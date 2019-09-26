@@ -36,11 +36,11 @@ class Core2d(Core):
 class Stacked2dCore(Core2d, nn.Module):
     def __init__(self, input_channels, hidden_channels, input_kern, hidden_kern, layers=3,
                  gamma_hidden=0, gamma_input=0., skip=0, final_nonlinearity=True, bias=False,
-                 momentum=0.1, pad_input=True, batch_norm=True, hidden_dilation=1,laplace_padding=None):
+                 momentum=0.1, pad_input=True, batch_norm=True, hidden_dilation=1,laplace_padding=0):
         super().__init__()
 
         assert not bias or not batch_norm, "bias and batch_norm should not both be true"
-        self._input_weights_regularizer = LaplaceL2(laplace_padding)
+        self._input_weights_regularizer = LaplaceL2(padding=laplace_padding)
 
         self.layers = layers
         self.gamma_input = gamma_input

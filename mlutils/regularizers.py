@@ -34,7 +34,7 @@ class LaplaceL2(nn.Module):
 
     def __init__(self, padding = None):
         super().__init__()
-        self.laplace = Laplace(padding)
+        self.laplace = Laplace(padding=padding)
 
 
     def forward(self, x):

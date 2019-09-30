@@ -1,4 +1,5 @@
 import warnings
+import numpy as np
 
 
 def flatten_json(nested_dict, keep_nested_name=True):
@@ -46,8 +47,7 @@ def gini(x):
             Gini coefficient
 
     """
-    # The rest of the code requires numpy arrays.
-    x = np.asarray(x)
+    x = np.asarray(x)  # The code below requires numpy arrays.
     if any(i < 0 for i in x):
         warnings.warn("Input x contains negative values")
     sorted_x = np.sort(x)

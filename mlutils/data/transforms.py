@@ -76,3 +76,78 @@ class Identity(MovieTransform, StaticTransform, Invertible):
         return y
 
 
+
+
+class Normalizer(DataTransform, Invertible):
+    """
+    Normalizes a trial with fields: inputs, behavior, eye_position, and responses. The pair of
+    behavior and eye_position can be missing. The following normalizations are applied:
+
+    - inputs are scaled by the training std of the stats_source and centered on the mean of the movie
+    - behavior is divided by the std if the std is greater than 1% of the mean std (to avoid division by 0)
+    - eye_position is z-scored
+    - reponses are divided by the per neuron std if the std is greater than
+            1% of the mean std (to avoid division by 0)
+    """
+
+    def __init__(self, data, stats_source='all', exclude=None):
+        assert isinstance(data, H5SequenceSet), 'data must be a H5SequenceSet'
+
+        exclude = self.exclude = exclude or []
+
+        self._inputs_std = data.statistics['inputs/{}/mean'.format(stats_source)][()]
+
+        s = np.array(data.statistics['responses/{}/std'.format(stats_source)])
+
+        idx = s > 0.01 * s.mean()
+        self._response_precision = np.ones_like(s)
+        self._response_precision[idx] = 1 / s[idx]
+
+        transforms, itransforms = {}, {}
+
+        # -- inputs
+        transforms['inputs'] = lambda x: (x - x.mean()) / self._inputs_std
+        itransforms['inputs'] = lambda x: x * self._inputs_std + x.mean()
+
+        # -- responses
+        transforms['responses'] = lambda x: x * self._response_precision
+        itransforms['responses'] = lambda x: x / self._response_precision
+
+        if 'eye_position' in data.data_groups:
+            s = np.array(
+                data.statistics['behavior/{}/std'.format(stats_source)])
+            idx = s > 0.01 * s.mean()
+            self._behavior_precision = np.ones_like(s)
+            self._behavior_precision[idx] = 1 / s[idx]
+
+            s = np.array(
+                data.statistics['eye_position/{}/std'.format(stats_source)])
+            mu = np.array(
+                data.statistics['eye_position/{}/mean'.format(stats_source)])
+            self._eye_mean = mu
+            self._eye_std = s
+
+            # -- eye position
+            transforms['eye_position'] = lambda x: (
+                x - self._eye_mean) / self._eye_std
+            itransforms['eye_position'] = lambda x: x * \
+                self._eye_std + self._eye_mean
+
+            # -- behavior
+            transforms['behavior'] = lambda x: x * self._behavior_precision
+            itransforms['behavior'] = lambda x: x / self._behavior_precision
+
+        self._transforms = transforms
+        self._itransforms = itransforms
+
+    def inv(self, x):
+        return x.__class__(
+            **{k: (self._itransforms[k](v) if not k in self.exclude else v) for k, v in zip(x._fields, x)})
+
+    def __call__(self, x):
+        return x.__class__(
+            **{k: (self._transforms[k](v) if not k in self.exclude else v) for k, v in zip(x._fields, x)})
+
+    def __repr__(self):
+        return super().__repr__() + ('(not {})'.format(', '.join(self.exclude)) if self.exclude is not None else '')
+

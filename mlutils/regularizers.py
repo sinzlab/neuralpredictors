@@ -58,7 +58,7 @@ class Laplace3d(nn.Module):
     Laplace filter for a stack of data.
     """
 
-    def __init__(self):
+    def __init__(self, padding=None):
         super().__init__()
         self.register_buffer('filter', torch.from_numpy(laplace3d()))
 

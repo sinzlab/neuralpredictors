@@ -18,7 +18,7 @@ class AttributeHandler:
         return ret
 
     def __dir__(self):
-        return self.h5_handle[self.name].keys()
+        return list(self.h5_handle[self.name].keys())
 
 
 class AttributeTransformer(AttributeHandler):
@@ -31,6 +31,8 @@ class AttributeTransformer(AttributeHandler):
         for tr in self.transforms:
             ret = tr.column_transform(ret)
         return ret
+
+
 
 
 class TransformDataset(Dataset):

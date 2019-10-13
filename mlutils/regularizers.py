@@ -89,7 +89,7 @@ class LaplaceL2(nn.Module):
 
 
 class GaussianLaplaceL2(nn.Module):
-    """Short summary.
+    """Laplace regularizer, with a Gaussian mask, for a 2D convolutional layer.
 
     Parameters
     ----------

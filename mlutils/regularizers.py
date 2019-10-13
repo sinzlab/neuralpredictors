@@ -38,7 +38,7 @@ def gaussian2d(size, sigma=5, gamma=1, theta=0, center=(0, 0), normalize=True):
     sigma_x = sigma
     sigma_y = sigma / gamma
 
-    xmax, ymax = size if isinstance(size, tuple) else size, size
+    xmax, ymax = (size, size) if isinstance(size, int) else size
     xmax, ymax = (xmax - 1)/2, (ymax - 1)/2
     xmin, ymin = -xmax, -ymax
     (y, x) = np.meshgrid(np.arange(ymin, ymax+1), np.arange(xmin, xmax+1))
@@ -112,10 +112,11 @@ class GaussianLaplaceL2(nn.Module):
     def __init__(self, size, sigma=5, padding=None):
         super().__init__()
         self.laplace = Laplace(padding=padding)
-        self.register_buffer('gaussian_filter', torch.from_numpy(gaussian2d(size=size, sigma=sigma)))
+        self.register_buffer('gaussian_filter',
+                             torch.from_numpy(gaussian2d(size=size, sigma=sigma)))
 
     def forward(self, x):
         ic, oc, k1, k2 = x.size()
         out = self.laplace(x.view(ic * oc, 1, k1, k2))
-        out = out * (1 - self.gaussian_filter.expand(*x.shape))
+        out = out * (1 - self.gaussian_filter.expand(1, 1, k1, k2))
         return out.pow(2).mean() / 2

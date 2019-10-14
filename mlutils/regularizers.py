@@ -93,30 +93,31 @@ class GaussianLaplaceL2(nn.Module):
 
     Parameters
     ----------
-    size : integer or tuple of integers
-        Filter/image height and width.
-    sigma : float
-        std deviation of the Gaussian along x-axis. Default is 5.
     padding : type
         Controls the amount of zero-padding for the convolution operation.
+    sigma : float
+        std deviation of the Gaussian along x-axis. Default is 5.
 
     Attributes
     ----------
     laplace : Laplace
         Laplace convolution object. The output is the result of convolving an input image with laplace filter.
-    gaussian_filter : 2D Numpy array
-        Gaussian mask
+    sigma : 2D Numpy array
+        std deviation of the gaussian
 
     """
 
-    def __init__(self, size, sigma=5, padding=None):
+    def __init__(self, padding=None, sigma=None):
         super().__init__()
         self.laplace = Laplace(padding=padding)
-        self.register_buffer('gaussian_filter',
-                             torch.from_numpy(gaussian2d(size=size, sigma=sigma)))
+        self.sigma = sigma
 
     def forward(self, x):
+        device = 'cuda' if x.is_cuda else 'cpu'
         ic, oc, k1, k2 = x.size()
+        sigma = self.sigma if self.sigma else min(k1, k2) / 4
+
         out = self.laplace(x.view(ic * oc, 1, k1, k2))
-        out = out * (1 - self.gaussian_filter.expand(1, 1, k1, k2))
+        out = out * (1 - torch.from_numpy(gaussian2d(size=(k1, k2), sigma=sigma)).expand(1, 1, k1, k2).to(device))
+
         return out.pow(2).mean() / 2

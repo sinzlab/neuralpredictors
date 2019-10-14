@@ -8,11 +8,14 @@ from torch.nn import functional as F
 #     return np.array([[0.25, 0.5, 0.25], [0.5, -3.0, 0.5], [0.25, 0.5, 0.25]]).astype(np.float32)[None, None, ...]
 
 def laplace():
+    """Returns a 3x3 laplace filter.
+
+    """
     return np.array([[0, -1, 0], [-1, 4, -1], [0, -1, 0]]).astype(np.float32)[None, None, ...]
 
 
 def gaussian2d(size, sigma=5, gamma=1, theta=0, center=(0, 0), normalize=True):
-    """Returns a 2D Gaussian filter
+    """Returns a 2D Gaussian filter.
 
     Parameters
     ----------
@@ -61,8 +64,20 @@ def gaussian2d(size, sigma=5, gamma=1, theta=0, center=(0, 0), normalize=True):
 
 
 class Laplace(nn.Module):
-    """
-    Laplace filter for a stack of data.
+    """Laplace filter for a stack of data.
+
+    Parameters
+    ----------
+    padding : integer
+        Controls the amount of zero-padding for the convolution operation.
+
+    Attributes
+    ----------
+    filter : 2D numpy array
+        3x3 Laplace filter.
+    padding_size : integer
+        Number of zeros added to each side
+
     """
 
     def __init__(self, padding):
@@ -75,8 +90,18 @@ class Laplace(nn.Module):
 
 
 class LaplaceL2(nn.Module):
-    """
-    Laplace regularizer for a 2D convolutional layer.
+    """Laplace regularizer for a 2D convolutional layer.
+
+    Parameters
+    ----------
+    padding : integer
+        Controls the amount of zero-padding for the convolution operation.
+
+    Attributes
+    ----------
+    laplace : Laplace
+        Laplace convolution object. The output is the result of convolving an input image with laplace filter.
+
     """
 
     def __init__(self, padding=None):
@@ -93,7 +118,7 @@ class GaussianLaplaceL2(nn.Module):
 
     Parameters
     ----------
-    padding : type
+    padding : integer
         Controls the amount of zero-padding for the convolution operation.
     sigma : float
         std deviation of the Gaussian along x-axis. Default is 5.

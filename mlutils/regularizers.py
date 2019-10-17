@@ -138,11 +138,10 @@ class GaussianLaplaceL2(nn.Module):
         self.sigma = sigma
 
     def forward(self, x):
-        device = 'cuda' if x.is_cuda else 'cpu'
         ic, oc, k1, k2 = x.size()
         sigma = self.sigma if self.sigma else min(k1, k2) / 4
 
         out = self.laplace(x.view(ic * oc, 1, k1, k2))
-        out = out * (1 - torch.from_numpy(gaussian2d(size=(k1, k2), sigma=sigma)).expand(1, 1, k1, k2).to(device))
+        out = out * (1 - torch.from_numpy(gaussian2d(size=(k1, k2), sigma=sigma)).expand(1, 1, k1, k2).to(x.device))
 
         return out.pow(2).mean() / 2

@@ -11,14 +11,15 @@ class Corr(nn.Module):
 
     def forward(self, output, target):
         target = target.detach()
-        delta_out = (output - output.mean(0, keepdim=True))
-        delta_target = (target - target.mean(0, keepdim=True))
+        delta_out = output - output.mean(0, keepdim=True)
+        delta_target = target - target.mean(0, keepdim=True)
 
         var_out = delta_out.pow(2).mean(0, keepdim=True)
         var_target = delta_target.pow(2).mean(0, keepdim=True)
 
         corrs = (delta_out * delta_target).mean(0, keepdim=True) / (
-                (var_out + self.eps) * (var_target + self.eps)).sqrt()
+            (var_out + self.eps) * (var_target + self.eps)
+        ).sqrt()
         return corrs
 
 
@@ -33,7 +34,7 @@ class PoissonLoss(nn.Module):
 
     def forward(self, output, target):
         target = target.detach()
-        loss = (output - target * torch.log(output + self.bias))
+        loss = output - target * torch.log(output + self.bias)
         if not self.per_neuron:
             return loss.mean() if self.avg else loss.sum()
         else:
@@ -49,7 +50,7 @@ class PoissonLoss3d(nn.Module):
 
     def forward(self, output, target):
         lag = target.size(1) - output.size(1)
-        loss = (output - target[:, lag:, :] * torch.log(output + self.bias))
+        loss = output - target[:, lag:, :] * torch.log(output + self.bias)
         if not self.per_neuron:
             return loss.mean()
         else:
@@ -82,18 +83,19 @@ class AvgCorr(nn.Module):
         super().__init__()
 
     def forward(self, output, target):
-        delta_out = (output - output.mean(0, keepdim=True))
-        delta_target = (target - target.mean(0, keepdim=True))
+        delta_out = output - output.mean(0, keepdim=True)
+        delta_target = target - target.mean(0, keepdim=True)
 
         var_out = delta_out.pow(2).mean(0, keepdim=True)
         var_target = delta_target.pow(2).mean(0, keepdim=True)
 
         corrs = (delta_out * delta_target).mean(0, keepdim=True) / (
-                (var_out + self.eps) * (var_target + self.eps)).sqrt()
+            (var_out + self.eps) * (var_target + self.eps)
+        ).sqrt()
         return -corrs.mean()
 
 
-def corr(y1,y2, axis=-1, eps=1e-8, **kwargs):
+def corr(y1, y2, axis=-1, eps=1e-8, **kwargs):
     """
     Compute the correlation between two matrices along certain dimensions.
 
@@ -107,7 +109,6 @@ def corr(y1,y2, axis=-1, eps=1e-8, **kwargs):
     Returns: correlation vector
 
     """
-    y1 = (y1 - y1.mean(axis=axis, keepdims=True))/(y1.std(axis=axis, keepdims=True, ddof=1) + eps)
-    y2 = (y2 - y2.mean(axis=axis, keepdims=True))/(y2.std(axis=axis, keepdims=True, ddof=1) + eps)
+    y1 = (y1 - y1.mean(axis=axis, keepdims=True)) / (y1.std(axis=axis, keepdims=True, ddof=1) + eps)
+    y2 = (y2 - y2.mean(axis=axis, keepdims=True)) / (y2.std(axis=axis, keepdims=True, ddof=1) + eps)
     return (y1 * y2).mean(axis=axis, **kwargs)
-

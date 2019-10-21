@@ -17,27 +17,20 @@ def laplace():
 def gaussian2d(size, sigma=5, gamma=1, theta=0, center=(0, 0), normalize=True):
     """Returns a 2D Gaussian filter.
 
-    Parameters
-    ----------
-    size : integer or tuple of integers
-        Image height and width.
-    sigma : float
-        std deviation of the Gaussian along x-axis. Default is 5.
-    gamma : float
-        ratio between std devidation along x-axis and y-axis. Default is 1.
-    theta : float
-        Orientation of the Gaussian (in ratian). Default is 0.
-    center : tuple
-        the position of the filter. Default is center (0, 0).
-    normalize : boolean
-        Whether to normalize the entries. This is computed by subtracting the minimum value and then dividing by the max. Default is True.
+    Args:
+        size (tuple of int, or int): Image height and width.
+        sigma (float): std deviation of the Gaussian along x-axis. Default is 5..
+        gamma (float): ratio between std devidation along x-axis and y-axis. Default is 1.
+        theta (float): Orientation of the Gaussian (in ratian). Default is 0.
+        center (tuple): The position of the filter. Default is center (0, 0).
+        normalize (bool): Whether to normalize the entries. This is computed by
+            subtracting the minimum value and then dividing by the max. Default is True.
 
-    Returns
-    -------
-    2D Numpy array
-        A 2D Gaussian filter.
+    Returns:
+        2D Numpy array: A 2D Gaussian filter.
 
     """
+
     sigma_x = sigma
     sigma_y = sigma / gamma
 
@@ -66,17 +59,13 @@ def gaussian2d(size, sigma=5, gamma=1, theta=0, center=(0, 0), normalize=True):
 class Laplace(nn.Module):
     """Laplace filter for a stack of data.
 
-    Parameters
-    ----------
-    padding : integer
-        Controls the amount of zero-padding for the convolution operation.
+    Args:
+        padding (int): Controls the amount of zero-padding for the convolution operation.
 
-    Attributes
-    ----------
-    filter : 2D numpy array
-        3x3 Laplace filter.
-    padding_size : integer
-        Number of zeros added to each side
+    Attributes:
+        filter (2D Numpy array): 3x3 Laplace filter.
+        padding_size (int): Number of zeros added to each side of the input image
+            before convolution operation.
 
     """
 
@@ -92,15 +81,12 @@ class Laplace(nn.Module):
 class LaplaceL2(nn.Module):
     """Laplace regularizer for a 2D convolutional layer.
 
-    Parameters
-    ----------
-    padding : integer
-        Controls the amount of zero-padding for the convolution operation.
+    Args:
+        padding (int): Controls the amount of zero-padding for the convolution operation.
 
-    Attributes
-    ----------
-    laplace : Laplace
-        Laplace convolution object. The output is the result of convolving an input image with laplace filter.
+    Attributes:
+        laplace (Laplace): Laplace convolution object. The output is the result of
+            convolving an input image with laplace filter.
 
     """
 
@@ -116,19 +102,15 @@ class LaplaceL2(nn.Module):
 class GaussianLaplaceL2(nn.Module):
     """Laplace regularizer, with a Gaussian mask, for a 2D convolutional layer.
 
-    Parameters
-    ----------
-    padding : integer
-        Controls the amount of zero-padding for the convolution operation.
-    sigma : float
-        std deviation of the Gaussian along x-axis. Default is 5.
+    Args:
+        padding (int): Controls the amount of zero-padding for the convolution operation.
+        sigma (float): std deviation of the Gaussian along x-axis. Default is calculated
+            as the 1/4th of the minimum dimenison (height vs width) of the input.
 
-    Attributes
-    ----------
-    laplace : Laplace
-        Laplace convolution object. The output is the result of convolving an input image with laplace filter.
-    sigma : 2D Numpy array
-        std deviation of the gaussian
+    Attributes:
+        laplace (Laplace): Laplace convolution object. The output is the result of
+            convolving an input image with laplace filter.
+        sigma (float): std deviation of the Gaussian along x-axis.
 
     """
 

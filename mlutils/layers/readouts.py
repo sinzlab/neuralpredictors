@@ -1027,7 +1027,7 @@ class Gaussian3d(nn.Module):
                 if out_idx.dtype == bool:
                     out_idx = np.where(out_idx)[0]
             feat = feat[:, :, :, out_idx]
-            grid = grid[:, :, out_idx, :, :]
+            grid = grid[:, :, out_idx]
             if bias is not None:
                 bias = bias[out_idx]
             outdims = len(out_idx)
@@ -1215,7 +1215,7 @@ class UltraSparse(nn.Module):
                 if out_idx.dtype == bool:
                     out_idx = np.where(out_idx)[0]
             feat = feat[:, :, :, out_idx]
-            grid = grid[:, :, out_idx, :, :]
+            grid = grid[:, :, out_idx]
             if bias is not None:
                 bias = bias[out_idx]
             outdims = len(out_idx)

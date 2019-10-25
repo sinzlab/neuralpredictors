@@ -25,7 +25,7 @@ class Readout():
 
 #################
 # Gaussian Readout
-################
+#################
 
 class MultipleGaussian2d(Readout, ModuleDict):
     """
@@ -120,7 +120,7 @@ class Gaussian2d(nn.Module):
 
         with torch.no_grad():
             self.mu.clamp_(min=-1, max=1)  # at eval time, only self.mu is used so it must belong to [-1,1]
-            self.sigma.clamp_(min=0)  # sigma/variance is always a positive quantity
+            self.sigma.clamp_(min=0)       # sigma/variance is always a positive quantity
         grid_shape = (batch_size,) + self.grid_shape[1:]
 
         if self.training and not force_eval_state:
@@ -159,14 +159,14 @@ class Gaussian2d(nn.Module):
         if self.batch_sample:
             grid = self.sample_grid(batch_size=N)
         else:
-            grid = self.grid.expand(N, outdims, 1, 2)
+            grid = self.sample_grid(batch_size=1).expand(N, outdims, 1, 2)
 
         if out_idx is not None:
             if isinstance(out_idx, np.ndarray):
                 if out_idx.dtype == bool:
                     out_idx = np.where(out_idx)[0]
             feat = feat[:, :, out_idx]
-            grid = grid[:, out_idx, :, :]
+            grid = grid[:, out_idx]
             if bias is not None:
                 bias = bias[out_idx]
             outdims = len(out_idx)
@@ -338,6 +338,10 @@ class SpatialTransformerPooled3d(nn.Module):
 
 class MultiplePointPyramid2d(Readout, ModuleDict):
     def __init__(self, in_shape, loaders, gamma_readout, positive, **kwargs):
+<<<<<<< HEAD
+=======
+        super().__init__()
+>>>>>>> Resolve Issues
 
         super().__init__()
         self.in_shape = in_shape

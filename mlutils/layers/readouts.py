@@ -200,13 +200,14 @@ class Gaussian2d(nn.Module):
 
 
 class MultiplePointPyramid2d(Readout, ModuleDict):
+
     def __init__(self, in_shape, loaders, gamma_readout, positive, **kwargs):
-        #        log.info('Ignoring input {} when creating {}'.format(repr(kwargs), self.__class__.__name__))
+
         super().__init__()
 
         self.in_shape = in_shape
         self.neurons = OrderedDict([(k, loader.dataset.n_neurons) for k, loader in loaders.items()])
-        self._positive = positive  # kwargs['positive']
+        self._positive = positive
         self.gamma_readout = gamma_readout
         for k, n_neurons in self.neurons.items():
             if isinstance(self.in_shape, dict):
@@ -224,7 +225,6 @@ class MultiplePointPyramid2d(Readout, ModuleDict):
             self[k].positive = value
 
     def initialize(self, mu_dict):
-        #        log.info('Initializing with mu_dict: ' + ', '.join(['{}: {}'.format(k, len(m)) for k, m in mu_dict.items()]))
 
         for k, mu in mu_dict.items():
             self[k].initialize()
@@ -687,7 +687,7 @@ class Gaussian3d(nn.Module):
                 if out_idx.dtype == bool:
                     out_idx = np.where(out_idx)[0]
             feat = feat[:, :, :, out_idx]
-            grid = grid[:, :, out_idx, :, :]
+        grid = grid[:, :, out_idx]
             if bias is not None:
                 bias = bias[out_idx]
             outdims = len(out_idx)
@@ -875,7 +875,7 @@ class UltraSparse(nn.Module):
                 if out_idx.dtype == bool:
                     out_idx = np.where(out_idx)[0]
             feat = feat[:, :, :, out_idx]
-            grid = grid[:, :, out_idx, :, :]
+            grid = grid[:, :, out_idx]
             if bias is not None:
                 bias = bias[out_idx]
             outdims = len(out_idx)

@@ -24,7 +24,7 @@ class Readout():
 
 #################
 # Gaussian Readout
-################
+#################
 
 class MultipleGaussian2d(Readout, ModuleDict):
     """
@@ -119,7 +119,7 @@ class Gaussian2d(nn.Module):
 
         with torch.no_grad():
             self.mu.clamp_(min=-1, max=1)  # at eval time, only self.mu is used so it must belong to [-1,1]
-            self.sigma.clamp_(min=0)  # sigma/variance is always a positive quantity
+            self.sigma.clamp_(min=0)       # sigma/variance is always a positive quantity
         grid_shape = (batch_size,) + self.grid_shape[1:]
 
         if self.training and not force_eval_state:
@@ -158,14 +158,14 @@ class Gaussian2d(nn.Module):
         if self.batch_sample:
             grid = self.sample_grid(batch_size=N)
         else:
-            grid = self.grid.expand(N, outdims, 1, 2)
+            grid = self.sample_grid(batch_size=1).expand(N, outdims, 1, 2)
 
         if out_idx is not None:
             if isinstance(out_idx, np.ndarray):
                 if out_idx.dtype == bool:
                     out_idx = np.where(out_idx)[0]
             feat = feat[:, :, out_idx]
-            grid = grid[:, out_idx, :, :]
+            grid = grid[:, out_idx]
             if bias is not None:
                 bias = bias[out_idx]
             outdims = len(out_idx)
@@ -198,12 +198,11 @@ class Gaussian2d(nn.Module):
 
 class MultiplePointPyramid2d(Readout, ModuleDict):
     def __init__(self, in_shape, loaders, gamma_readout, positive, **kwargs):
-        #        log.info('Ignoring input {} when creating {}'.format(repr(kwargs), self.__class__.__name__))
         super().__init__()
 
         self.in_shape = in_shape
         self.neurons = OrderedDict([(k, loader.dataset.n_neurons) for k, loader in loaders.items()])
-        self._positive = positive  # kwargs['positive']
+        self._positive = positive
         self.gamma_readout = gamma_readout
         for k, n_neurons in self.neurons.items():
             if isinstance(self.in_shape, dict):
@@ -221,7 +220,6 @@ class MultiplePointPyramid2d(Readout, ModuleDict):
             self[k].positive = value
 
     def initialize(self, mu_dict):
-        #        log.info('Initializing with mu_dict: ' + ', '.join(['{}: {}'.format(k, len(m)) for k, m in mu_dict.items()]))
 
         for k, mu in mu_dict.items():
             self[k].initialize()

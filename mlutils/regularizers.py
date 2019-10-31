@@ -72,7 +72,7 @@ class Laplace(nn.Module):
 
     """
 
-    def __init__(self, padding):
+    def __init__(self, padding=None):
         super().__init__()
         self.register_buffer('filter', torch.from_numpy(laplace()))
         self.padding_size = self.filter.shape[-1] // 2 if padding is None else padding

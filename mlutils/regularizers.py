@@ -8,14 +8,16 @@ from torch.nn import functional as F
 #     return np.array([[0.25, 0.5, 0.25], [0.5, -3.0, 0.5], [0.25, 0.5, 0.25]]).astype(np.float32)[None, None, ...]
 
 def laplace():
-    """Returns a 3x3 laplace filter.
+    """
+    Returns a 3x3 laplace filter.
 
     """
     return np.array([[0, -1, 0], [-1, 4, -1], [0, -1, 0]]).astype(np.float32)[None, None, ...]
 
 
 def gaussian2d(size, sigma=5, gamma=1, theta=0, center=(0, 0), normalize=True):
-    """Returns a 2D Gaussian filter.
+    """
+    Returns a 2D Gaussian filter.
 
     Args:
         size (tuple of int, or int): Image height and width.
@@ -57,7 +59,8 @@ def gaussian2d(size, sigma=5, gamma=1, theta=0, center=(0, 0), normalize=True):
 
 
 class Laplace(nn.Module):
-    """Laplace filter for a stack of data.
+    """
+    Laplace filter for a stack of data.
 
     Args:
         padding (int): Controls the amount of zero-padding for the convolution operation.
@@ -79,7 +82,8 @@ class Laplace(nn.Module):
 
 
 class LaplaceL2(nn.Module):
-    """Laplace regularizer for a 2D convolutional layer.
+    """
+    Laplace regularizer for a 2D convolutional layer.
 
     Args:
         padding (int): Controls the amount of zero-padding for the convolution operation.
@@ -100,7 +104,8 @@ class LaplaceL2(nn.Module):
 
 
 class GaussianLaplaceL2(nn.Module):
-    """Laplace regularizer, with a Gaussian mask, for a 2D convolutional layer.
+    """
+    Laplace regularizer, with a Gaussian mask, for a 2D convolutional layer.
 
     Args:
         padding (int): Controls the amount of zero-padding for the convolution operation.

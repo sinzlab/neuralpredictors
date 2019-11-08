@@ -3,7 +3,7 @@ from torch.utils.data import Dataset
 from collections import namedtuple
 import numpy as np
 from .transforms import MovieTransform, StaticTransform, Invertible, Subsequence
-
+from scipy.signal import convolve2d
 
 class AttributeHandler:
     def __init__(self, name, h5_handle):

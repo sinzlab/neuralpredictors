@@ -77,8 +77,7 @@ class Identity(MovieTransform, StaticTransform, Invertible):
 
 
 
-
-class Normalizer(DataTransform, Invertible):
+class Normalizer(MovieTransform, StaticTransform, Invertible):
     """
     Normalizes a trial with fields: inputs, behavior, eye_position, and responses. The pair of
     behavior and eye_position can be missing. The following normalizations are applied:
@@ -91,8 +90,6 @@ class Normalizer(DataTransform, Invertible):
     """
 
     def __init__(self, data, stats_source='all', exclude=None):
-        assert isinstance(data, H5SequenceSet), 'data must be a H5SequenceSet'
-
         exclude = self.exclude = exclude or []
 
         self._inputs_std = data.statistics['inputs/{}/mean'.format(stats_source)][()]

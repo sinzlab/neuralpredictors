@@ -176,6 +176,8 @@ def cycle_datasets(trainloaders):
         readout key, input, targets
 
     """
-    assert isinstance(trainloaders, OrderedDict), 'trainloaders must be an ordered dict'
-    for readout_key, outputs in zip(cycle(trainloaders.keys()), alternate(*trainloaders.values())):
+    #assert isinstance(trainloaders, OrderedDict), 'trainloaders must be an ordered dict'
+    keys = list(trainloaders.keys())
+    ordered_loaders = [trainloaders[k] for k in keys]
+    for readout_key, outputs in zip(cycle(trainloaders.keys()), alternate(*ordered_loaders)):
         yield readout_key, outputs

@@ -71,7 +71,7 @@ def eval_state(model):
     finally:
         model.train(training_status)
 
-def early_stopping(model, objective_closue, interval=5, patience=20, start=0, max_iter=1000,
+def early_stopping(model, objective_closure, interval=5, patience=20, start=0, max_iter=1000,
                    maximize=True, tolerance=1e-5, switch_mode=True, restore_best=True,
                    tracker=None):
     """
@@ -100,7 +100,7 @@ def early_stopping(model, objective_closue, interval=5, patience=20, start=0, ma
     def _objective():
         if switch_mode:
             model.eval()
-        ret = objective_closue()
+        ret = objective_closure(model)
         if switch_mode:
             model.train(training_status)
         return ret
@@ -176,6 +176,8 @@ def cycle_datasets(trainloaders):
         readout key, input, targets
 
     """
-    assert isinstance(trainloaders, OrderedDict), 'trainloaders must be an ordered dict'
-    for readout_key, outputs in zip(cycle(trainloaders.keys()), alternate(*trainloaders.values())):
+    #assert isinstance(trainloaders, OrderedDict), 'trainloaders must be an ordered dict'
+    keys = list(trainloaders.keys())
+    ordered_loaders = [trainloaders[k] for k in keys]
+    for readout_key, outputs in zip(cycle(trainloaders.keys()), alternate(*ordered_loaders)):
         yield readout_key, outputs

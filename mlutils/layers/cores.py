@@ -2,7 +2,8 @@ from collections import OrderedDict
 from torch import nn
 from ..regularizers import LaplaceL2
 import torch
-
+import torchvision
+import warnings
 
 class Core:
     def initialize(self):
@@ -20,6 +21,9 @@ class Core:
 class Core2d(Core):
     def initialize(self, cuda=False):
         self.apply(self.init_conv)
+        self.put_to_cuda(cuda=cuda)
+
+    def put_to_cuda(self, cuda):
         if cuda:
             self = self.cuda()
 
@@ -36,11 +40,11 @@ class Core2d(Core):
 class Stacked2dCore(Core2d, nn.Module):
     def __init__(self, input_channels, hidden_channels, input_kern, hidden_kern, layers=3,
                  gamma_hidden=0, gamma_input=0., skip=0, final_nonlinearity=True, bias=False,
-                 momentum=0.1, pad_input=True, batch_norm=True, hidden_dilation=1):
+                 momentum=0.1, pad_input=True, batch_norm=True, hidden_dilation=1,laplace_padding=0):
         super().__init__()
 
         assert not bias or not batch_norm, "bias and batch_norm should not both be true"
-        self._input_weights_regularizer = LaplaceL2()
+        self._input_weights_regularizer = LaplaceL2(padding=laplace_padding)
 
         self.layers = layers
         self.gamma_input = gamma_input
@@ -102,3 +106,90 @@ class Stacked2dCore(Core2d, nn.Module):
     def outchannels(self):
         return len(self.features) * self.hidden_channels
 
+
+class TransferLearningCore(Core2d, nn.Module):
+    def __init__(self, input_channels, tl_model_name, layers, pretrained=True,
+                 final_batchnorm=True, final_nonlinearity=True,
+                 momentum=0.1, fine_tune=False, **kwargs):
+        """
+        Core from popular image recognition networks such as VGG or AlexNet. Can be already pretrained on ImageNet.
+
+        Args:
+            input_channels (int): Number of input channels. 1 if greyscale, 3 if RBG
+            tl_model_name (str): Name of the image recognition Transfer Learning model. Possible are all models in
+            torchvision, i.e. vgg16, alexnet, ...
+            layers (int): Number of layers, i.e. after which layer to cut the original network
+            pretrained (boolean): Whether to use a randomly initialized or pretrained network
+            final_batchnorm (boolean): Whether to add a batch norm after the final conv layer
+            final_nonlinearity (boolean): Whether to add a final nonlinearity (ReLU)
+            momentum (float): Momentum term for batch norm. Irrelevant if batch_norm=False
+            fine_tune (boolean): Whether to clip gradients before this core or to allow training on the core
+            **kwargs:
+        """
+        if kwargs:
+            warnings.warn('Ignoring input {} when creating {}'.format(repr(kwargs), self.__class__.__name__),
+                          UserWarning)
+        super().__init__()
+
+        self.input_channels = input_channels
+        self.momentum = momentum
+
+        # Download model and cut after specified layer
+        TL_model = getattr(torchvision.models, tl_model_name)(pretrained=pretrained)
+        TL_model_clipped = nn.Sequential(*list(TL_model.features.children())[:layers])
+        if not isinstance(TL_model_clipped[-1], nn.Conv2d):
+            warnings.warn('Final layer is of type {}, not nn.Conv2d'.format(type(TL_model_clipped[-1])), UserWarning)
+
+        # Fix pretrained parameters during training
+        if not fine_tune:
+            for param in TL_model_clipped.parameters():
+                param.requires_grad = False
+
+        # Stack model together
+        self.features = nn.Sequential()
+        self.features.add_module('TransferLearning', TL_model_clipped)
+        if final_batchnorm:
+            self.features.add_module('OutBatchNorm', nn.BatchNorm2d(self.outchannels, momentum=self.momentum))
+        if final_nonlinearity:
+            self.features.add_module('OutNonlin', nn.ReLU(inplace=True))
+
+    def forward(self, input_):
+        # If model is designed for RBG input but input is greyscale, repeat the same input 3 times
+        if self.input_channels == 1 and self.features.TransferLearning[0].in_channels == 3:
+            input_ = input_.repeat(1, 3, 1, 1)
+        input_ = self.features(input_)
+        return input_
+
+    def regularizer(self):
+        return 0
+
+    @property
+    def outchannels(self):
+        """
+        Function which returns the number of channels in the output conv layer. If the output layer is not a conv
+        layer, the last conv layer in the network is used.
+
+        Returns: Number of output channels
+        """
+        found_outchannels = False
+        i = 1
+        while not found_outchannels:
+            if 'out_channels' in self.features.TransferLearning[-i].__dict__:
+                found_outchannels = True
+            else:
+                i += 1
+        return self.features.TransferLearning[-i].out_channels
+
+    def initialize(self, cuda=False):
+        # Overwrite parent class's initialize function because initialization is done by the 'pretrained' parameter
+        self.put_to_cuda(cuda=cuda)
+
+
+class DepthSeparableConv2d(nn.Sequential):
+
+    def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0, dilation=1, bias=True):
+        super().__init__()
+        self.add_module('in_depth_conv', nn.Conv2d(in_channels, out_channels, 1, bias=bias))
+        self.add_module('spatial_conv', nn.Conv2d(out_channels, out_channels, kernel_size, stride=1, padding=padding,
+                                                  dilation=dilation, bias=bias, groups=out_channels))
+        self.add_module('out_depth_conv', nn.Conv2d(out_channels, out_channels, 1, bias=bias))

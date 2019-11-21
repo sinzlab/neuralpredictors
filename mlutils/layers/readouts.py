@@ -6,6 +6,7 @@ from torch import nn as nn
 from torch.nn import Parameter
 from torch.nn import functional as F
 from torch.nn import ModuleDict
+from ..constraints import positive
 
 
 class Readout():
@@ -194,6 +195,148 @@ class Gaussian2d(nn.Module):
         return r
 
 
+<<<<<<< HEAD
+=======
+class SpatialTransformerPooled3d(nn.Module):
+
+    def __init__(self, in_shape, outdims, pool_steps=1, positive=False, bias=True,
+                 init_range=.05, kernel_size=2, stride=2, grid=None, stop_grad=False):
+        super().__init__()
+        self._pool_steps = pool_steps
+        self.in_shape = in_shape
+        c, t, w, h = in_shape
+        self.outdims = outdims
+        self.positive = positive
+        if grid is None:
+            self.grid = Parameter(torch.Tensor(1, outdims, 1, 2))
+        else:
+            self.grid = grid
+        self.features = Parameter(torch.Tensor(1, c * (self._pool_steps + 1), 1, outdims))
+        self.register_buffer('mask', torch.ones_like(self.features))
+
+        if bias:
+            bias = Parameter(torch.Tensor(outdims))
+            self.register_parameter('bias', bias)
+        else:
+            self.register_parameter('bias', None)
+
+        self.avg = nn.AvgPool2d(kernel_size, stride=stride, count_include_pad=False)
+        self.init_range = init_range
+        self.initialize()
+        self.stop_grad = stop_grad
+
+    @property
+    def pool_steps(self):
+        return self._pool_steps
+
+    @pool_steps.setter
+    def pool_steps(self, value):
+        assert value >= 0 and int(value) - value == 0, 'new pool steps must be a non-negative integer'
+        if value != self._pool_steps:
+            print('Resizing readout features')
+            c, t, w, h = self.in_shape
+            outdims = self.outdims
+            self._pool_steps = int(value)
+            self.features = Parameter(torch.Tensor(1, c * (self._pool_steps + 1), 1, outdims))
+            self.mask = torch.ones_like(self.features)
+            self.features.data.fill_(1 / self.in_shape[0])
+
+    def initialize(self, init_noise=1e-3, grid=True):
+        # randomly pick centers within the spatial map
+
+        self.features.data.fill_(1 / self.in_shape[0])
+        if self.bias is not None:
+            self.bias.data.fill_(0)
+        if grid:
+            self.grid.data.uniform_(-self.init_range, self.init_range)
+
+    def feature_l1(self, average=True, subs_idx=None):
+        subs_idx = subs_idx if subs_idx is not None else slice(None)
+        if average:
+            return self.features[..., subs_idx].abs().mean()
+        else:
+            return self.features[..., subs_idx].abs().sum()
+
+    def reset_fisher_prune_scores(self):
+        self._prune_n = 0
+        self._prune_scores = self.features.detach() * 0
+
+    def update_fisher_prune_scores(self):
+        self._prune_n += 1
+        if self.features.grad is None:
+            raise ValueError('You need to run backward first')
+        self._prune_scores += (0.5 * self.features.grad.pow(2) * self.features.pow(2)).detach()
+
+    @property
+    def fisher_prune_scores(self):
+        return self._prune_scores / self._prune_n
+
+    def prune(self):
+        idx = (self.fisher_prune_scores + 1e6 * (1 - self.mask)).squeeze().argmin(dim=0)
+        nt = idx.new
+        seq = nt(np.arange(len(idx)))
+        self.mask[:, idx, :, seq] = 0
+        self.features.data[:, idx, :, seq] = 0
+
+    def forward(self, x, shift=None, subs_idx=None):
+        if self.stop_grad:
+            x = x.detach()
+
+        self.features.data *= self.mask
+
+        if self.positive:
+            positive(self.features)
+        self.grid.data = torch.clamp(self.grid.data, -1, 1)
+
+        N, c, t, w, h = x.size()
+        m = self._pool_steps + 1
+        if subs_idx is not None:
+            feat = self.features[..., subs_idx].contiguous()
+            outdims = feat.size(-1)
+            feat = feat.view(1, m * c, outdims)
+            grid = self.grid[:, subs_idx, ...]
+        else:
+            grid = self.grid
+            feat = self.features.view(1, m * c, self.outdims)
+            outdims = self.outdims
+
+        if shift is None:
+            grid = grid.expand(N * t, outdims, 1, 2)
+        else:
+            grid = grid.expand(N, outdims, 1, 2)
+            grid = torch.stack([grid + shift[:, i, :][:, None, None, :] for i in range(t)], 1)
+            grid = grid.contiguous().view(-1, outdims, 1, 2)
+        z = x.contiguous().transpose(2, 1).contiguous().view(-1, c, w, h)
+        pools = [F.grid_sample(z, grid)]
+        for i in range(self._pool_steps):
+            z = self.avg(z)
+            pools.append(F.grid_sample(z, grid))
+        y = torch.cat(pools, dim=1)
+        y = (y.squeeze(-1) * feat).sum(1).view(N, t, outdims)
+
+        if self.bias is not None:
+            if subs_idx is None:
+                y = y + self.bias
+            else:
+                y = y + self.bias[subs_idx]
+
+        return y
+
+    def __repr__(self):
+        c, _, w, h = self.in_shape
+        r = self.__class__.__name__ + \
+            ' (' + '{} x {} x {}'.format(c, w, h) + ' -> ' + str(self.outdims) + ')'
+        if self.bias is not None:
+            r += ' with bias'
+        if self.stop_grad:
+            r += ', stop_grad=True'
+        r += '\n'
+
+        for ch in self.children():
+            r += '  -> ' + ch.__repr__() + '\n'
+        return r
+
+>>>>>>> 2a6d18797553cf36b16d1bc645dbd463217749a6
 ##############
 # Pyramid Readout
 ##############

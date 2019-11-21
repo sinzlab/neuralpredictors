@@ -195,8 +195,6 @@ class Gaussian2d(nn.Module):
         return r
 
 
-<<<<<<< HEAD
-=======
 class SpatialTransformerPooled3d(nn.Module):
 
     def __init__(self, in_shape, outdims, pool_steps=1, positive=False, bias=True,
@@ -336,7 +334,6 @@ class SpatialTransformerPooled3d(nn.Module):
             r += '  -> ' + ch.__repr__() + '\n'
         return r
 
->>>>>>> 2a6d18797553cf36b16d1bc645dbd463217749a6
 ##############
 # Pyramid Readout
 ##############

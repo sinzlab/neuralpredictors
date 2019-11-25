@@ -22,20 +22,25 @@ def laplace3d():
     l[2, 1, 1] = 1.
     return l.astype(np.float32)[None, None, ...]
 
+
 class Laplace(nn.Module):
     """
-    Laplace filter for a stack of data.
+    Laplace filter for a stack of data. Utilized as the input weight regularizer.
     """
 
     def __init__(self, padding=None):
+        """
+
+        Args:
+            padding: Sets the padding for the laplace convolution. Default is half of the kernel size (recommended).
+            No padding will lead to edge artefacts.
+        """
         super().__init__()
         self.register_buffer('filter', torch.from_numpy(laplace()))
         self.padding_size = self.filter.shape[-1] // 2 if padding is None else padding
 
-
     def forward(self, x):
         return F.conv2d(x, self.filter, bias=None, padding=self.padding_size)
-
 
 
 class LaplaceL2(nn.Module):
@@ -47,10 +52,24 @@ class LaplaceL2(nn.Module):
         super().__init__()
         self.laplace = Laplace(padding=padding)
 
-
     def forward(self, x):
         ic, oc, k1, k2 = x.size()
         return self.laplace(x.view(ic * oc, 1, k1, k2)).pow(2).mean() / 2
+
+
+class LaplaceL2norm(nn.Module):
+    """
+    Normalized Laplace regularizer for a 2D convolutional layer.
+        returns |laplace(filters)| / |filters|
+    """
+    def __init__(self, padding=None):
+        super().__init__()
+        self.laplace = Laplace(padding=padding)
+
+    def forward(self, x):
+        ic, oc, k1, k2 = x.size()
+        return self.laplace(x.view(ic * oc, 1, k1, k2)).pow(2).sum().pow(0.5) \
+               / x.view(ic * oc, 1, k1, k2).pow(2).sum().pow(0.5)
 
 
 class Laplace3d(nn.Module):

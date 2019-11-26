@@ -1,6 +1,8 @@
 from torch import nn
 import torch
 import numpy as np
+import warnings
+
 
 class Corr(nn.Module):
     def __init__(self, eps=1e-12):
@@ -21,18 +23,25 @@ class Corr(nn.Module):
 
 
 class PoissonLoss(nn.Module):
-    def __init__(self, bias=1e-12, per_neuron=False):
+    def __init__(self, bias=1e-12, per_neuron=False, avg=True):
         super().__init__()
         self.bias = bias
         self.per_neuron = per_neuron
+        self.avg = avg
+        if self.avg:
+            warnings.warn("Poissonloss is averaged per batch. It's recommended so use sum instead")
 
     def forward(self, output, target):
         target = target.detach()
         loss = (output - target * torch.log(output + self.bias))
         if not self.per_neuron:
-            return loss.mean()
+            if self.avg:
+                return loss.mean()
+            return loss.sum()
         else:
-            return loss.view(-1, loss.shape[-1]).mean(dim=0)
+            if self.avg:
+                return loss.view(-1, loss.shape[-1]).mean(dim=0)
+            return loss.view(-1, loss.shape[-1]).sum(dim=0)
 
 
 class PoissonLoss3d(nn.Module):

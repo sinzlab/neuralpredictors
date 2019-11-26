@@ -1022,7 +1022,7 @@ class Gaussian3d(nn.Module):
             grid = self.sample_grid(batch_size=1).expand(N, 1, outdims, 1, 3)
 
         if out_idx is not None:
-        # out_idx specifies the indices to subset of neurons for training/testing
+            # out_idx specifies the indices to subset of neurons for training/testing
             if isinstance(out_idx, np.ndarray):
                 if out_idx.dtype == bool:
                     out_idx = np.where(out_idx)[0]
@@ -1154,12 +1154,15 @@ class UltraSparse(nn.Module):
     def sample_grid(self, batch_size, force_eval_state=False):
 
         if self.shared_mean:
+            with torch.no_grad():
+                self.muc.clamp_(min=-1, max=1)  # at eval time, only self.mu is used so it must belong to [-1,1]
+                self.sigmac.clamp_(min=0)       # sigma/variance is always a positive quantity
             self.mu = torch.cat((self.mux.repeat(1, 1, self.num_filters, 1, 1), self.muc), 4)
             self.sigma = torch.cat((self.sigmax.repeat(1, 1, self.num_filters, 1, 1), self.sigmac), 4)
 
         with torch.no_grad():
-            self.mu.clamp_(min=-1, max=1)  # at eval time, only self.mu is used so it must belong to [-1,1]
-            self.sigma.clamp_(min=0)  # sigma/variance is always a positive quantity
+            self.mu.clamp_(min=-1, max=1)
+            self.sigma.clamp_(min=0)
         grid_shape = (batch_size,) + self.grid_shape[1:]
 
         if self.training and not force_eval_state:

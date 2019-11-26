@@ -775,7 +775,6 @@ class Gaussian2d(nn.Module):
         self.mu.data.uniform_(-self.init_mu_range, self.init_mu_range)
         self.sigma.data.uniform_(0, self.init_sigma_range)
         self.features.data.fill_(1 / self.in_shape[0])
-git
         if self.bias is not None:
             self.bias.data.fill_(0)
 

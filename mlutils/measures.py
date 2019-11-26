@@ -34,6 +34,22 @@ class PoissonLoss(nn.Module):
         else:
             return loss.view(-1, loss.shape[-1]).mean(dim=0)
 
+
+class PoissonLoss3d(nn.Module):
+    def __init__(self, bias=1e-16, per_neuron=False):
+        super().__init__()
+        self.bias = bias
+        self.per_neuron = per_neuron
+
+    def forward(self, output, target):
+        lag = target.size(1) - output.size(1)
+        loss =  (output - target[:, lag:, :] * torch.log(output + self.bias))
+        if not self.per_neuron:
+            return loss.mean()
+        else:
+            return loss.view(-1, loss.shape[-1]).mean(dim=0)
+
+
 class GammaLoss(nn.Module):
     def __init__(self, bias=1e-12, per_neuron=False):
         super().__init__()

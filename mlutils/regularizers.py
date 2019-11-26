@@ -15,6 +15,17 @@ def laplace():
     return np.array([[0, -1, 0], [-1, 4, -1], [0, -1, 0]]).astype(np.float32)[None, None, ...]
 
 
+def laplace3d():
+    l = np.zeros((3, 3, 3))
+    l[1, 1, 1] = -6.
+    l[1, 1, 2] = 1.
+    l[1, 1, 0] = 1.
+    l[1, 0, 1] = 1.
+    l[1, 2, 1] = 1.
+    l[0, 1, 1] = 1.
+    l[2, 1, 1] = 1.
+    return l.astype(np.float32)[None, None, ...]
+
 def gaussian2d(size, sigma=5, gamma=1, theta=0, center=(0, 0), normalize=True):
     """
     Returns a 2D Gaussian filter.
@@ -60,19 +71,21 @@ def gaussian2d(size, sigma=5, gamma=1, theta=0, center=(0, 0), normalize=True):
 
 class Laplace(nn.Module):
     """
-    Laplace filter for a stack of data.
-
-    Args:
-        padding (int): Controls the amount of zero-padding for the convolution operation.
-
-    Attributes:
-        filter (2D Numpy array): 3x3 Laplace filter.
-        padding_size (int): Number of zeros added to each side of the input image
-            before convolution operation.
-
+    Laplace filter for a stack of data. Utilized as the input weight regularizer.
     """
-
     def __init__(self, padding=None):
+        """
+        Laplace filter for a stack of data.
+
+        Args:
+            padding (int): Controls the amount of zero-padding for the convolution operation
+                            Default is half of the kernel size (recommended)
+
+        Attributes:
+            filter (2D Numpy array): 3x3 Laplace filter.
+            padding_size (int): Number of zeros added to each side of the input image
+                before convolution operation.
+        """
         super().__init__()
         self.register_buffer('filter', torch.from_numpy(laplace()))
         self.padding_size = self.filter.shape[-1] // 2 if padding is None else padding
@@ -103,6 +116,76 @@ class LaplaceL2(nn.Module):
         return self.laplace(x.view(ic * oc, 1, k1, k2)).pow(2).mean() / 2
 
 
+class LaplaceL2norm(nn.Module):
+    """
+    Normalized Laplace regularizer for a 2D convolutional layer.
+        returns |laplace(filters)| / |filters|
+    """
+    def __init__(self, padding=None):
+        super().__init__()
+        self.laplace = Laplace(padding=padding)
+
+    def forward(self, x):
+        ic, oc, k1, k2 = x.size()
+        return self.laplace(x.view(ic * oc, 1, k1, k2)).pow(2).sum() \
+               / x.view(ic * oc, 1, k1, k2).pow(2).sum()
+
+
+class Laplace3d(nn.Module):
+    """
+    Laplace filter for a stack of data.
+    """
+
+    def __init__(self, padding=None):
+        super().__init__()
+        self.register_buffer('filter', torch.from_numpy(laplace3d()))
+
+    def forward(self, x):
+        return F.conv3d(x, self.filter, bias=None)
+
+
+class LaplaceL23d(nn.Module):
+    """
+    Laplace regularizer for a 2D convolutional layer.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.laplace = Laplace3d()
+
+    def forward(self, x):
+        ic, oc, k1, k2, k3 = x.size()
+        return self.laplace(x.view(ic * oc, 1, k1, k2, k3)).pow(2).mean() / 2
+
+
+class FlatLaplaceL23d(nn.Module):
+    """
+    Laplace regularizer for a 2D convolutional layer.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.laplace = Laplace()
+
+    def forward(self, x):
+        ic, oc, k1, k2, k3 = x.size()
+        assert k1 == 1, 'time dimension must be one'
+        return self.laplace(x.view(ic * oc, 1, k2, k3)).pow(2).mean() / 2
+
+
+class LaplaceL1(nn.Module):
+    """
+    Laplace regularizer for a 2D convolutional layer.
+    """
+
+    def __init__(self, padding=0):
+        super().__init__()
+        self.laplace = Laplace(padding=padding)
+
+    def forward(self, x):
+        ic, oc, k1, k2 = x.size()
+        return self.laplace(x.view(ic * oc, 1, k1, k2)).abs().mean()
+
 class GaussianLaplaceL2(nn.Module):
     """
     Laplace regularizer, with a Gaussian mask, for a 2D convolutional layer.
@@ -131,4 +214,35 @@ class GaussianLaplaceL2(nn.Module):
         out = self.laplace(x.view(ic * oc, 1, k1, k2))
         out = out * (1 - torch.from_numpy(gaussian2d(size=(k1, k2), sigma=sigma)).expand(1, 1, k1, k2).to(x.device))
 
-        return out.pow(2).mean() / 2
+        return out.pow(2).sum() / x.view(ic * oc, 1, k1, k2).pow(2).sum()
+
+class GaussianLaplaceL2fix(nn.Module):
+    """
+    Laplace regularizer, with a Gaussian mask, for a 2D convolutional layer.
+
+    Args:
+        padding (int): Controls the amount of zero-padding for the convolution operation.
+        sigma (float): std deviation of the Gaussian along x-axis. Default is calculated
+            as the 1/4th of the minimum dimenison (height vs width) of the input.
+
+    Attributes:
+        laplace (Laplace): Laplace convolution object. The output is the result of
+            convolving an input image with laplace filter.
+        sigma (float): std deviation of the Gaussian along x-axis.
+
+    """
+
+    def __init__(self, kernel, padding=None):
+        super().__init__()
+
+        self.laplace = Laplace(padding=padding)
+        self.kernel = (kernel, kernel) if isinstance(kernel, int) else kernel
+        sigma = min(*self.kernel) / 4
+        self.gaussian2d = torch.from_numpy(gaussian2d(size=(*self.kernel), sigma=sigma))
+
+    def forward(self, x):
+        ic, oc, k1, k2 = x.size()
+        out = self.laplace(x.view(ic * oc, 1, k1, k2))
+        out = out * (1 - self.gaussian2d.expand(1, 1, k1, k2).to(x.device))
+
+        return out.pow(2).sum() / x.view(ic * oc, 1, k1, k2).pow(2).sum()

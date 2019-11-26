@@ -1,6 +1,6 @@
 from collections import OrderedDict
 from torch import nn
-from ..regularizers import LaplaceL2
+from ..regularizers import LaplaceL2, LaplaceL2norm
 import torch
 import torchvision
 import warnings
@@ -40,11 +40,39 @@ class Core2d(Core):
 class Stacked2dCore(Core2d, nn.Module):
     def __init__(self, input_channels, hidden_channels, input_kern, hidden_kern, layers=3,
                  gamma_hidden=0, gamma_input=0., skip=0, final_nonlinearity=True, bias=False,
-                 momentum=0.1, pad_input=True, batch_norm=True, hidden_dilation=1,laplace_padding=0):
+                 momentum=0.1, pad_input=True, batch_norm=True, hidden_dilation=1, laplace_padding=0,
+                 normalize_laplace_regularizer=False):
+        """
+        Args:
+            input_channels:     Integer, number of input channels as in
+            hidden_channels:    Number of hidden channels (i.e feature maps) in each hidden layer
+            input_kern:     kernel size of the first layer (i.e. the input layer)
+            hidden_kern:    kernel size of each hidden layer's kernel
+            layers:         number of layers
+            gamma_hidden:   regularizer factor for group sparsity
+            gamma_input:    regularizer factor for the input weights (default: LaplaceL2, see mlutils.regularizers)
+            skip:           Adds a skip connection
+            final_nonlinearity: Boolean, if true, appends an ELU layer after the last BatchNorm (if BN=True)
+            bias:           Adds a bias layer. Note: bias and batch_norm can not both be true
+            momentum:       BN momentum
+            pad_input:      Boolean, if True, applies zero padding to all convolutions
+            batch_norm:     Boolean, if True appends a BN layer after each convolutional layer
+            hidden_dilation:    If set to > 1, will apply dilated convs for all hidden layers
+            laplace_padding: Padding size for the laplace convolution. If padding = None, it defaults to half of
+                the kernel size (recommended). Setting Padding to 0 is not recommended and leads to artefacts,
+                zero is the default however to recreate backwards compatibility.
+            normalize_laplace_regularizer: Boolean, if set to True, will use the LaplaceL2norm function from
+                mlutils.regularizers, which returns the regularizer as |laplace(filters)| / |filters|
+        """
+
         super().__init__()
 
         assert not bias or not batch_norm, "bias and batch_norm should not both be true"
-        self._input_weights_regularizer = LaplaceL2(padding=laplace_padding)
+
+        if normalize_laplace_regularizer:
+            self._input_weights_regularizer = LaplaceL2norm(padding=laplace_padding)
+        else:
+            self._input_weights_regularizer = LaplaceL2(padding=laplace_padding)
 
         self.layers = layers
         self.gamma_input = gamma_input
@@ -183,3 +211,13 @@ class TransferLearningCore(Core2d, nn.Module):
     def initialize(self, cuda=False):
         # Overwrite parent class's initialize function because initialization is done by the 'pretrained' parameter
         self.put_to_cuda(cuda=cuda)
+
+
+class DepthSeparableConv2d(nn.Sequential):
+
+    def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0, dilation=1, bias=True):
+        super().__init__()
+        self.add_module('in_depth_conv', nn.Conv2d(in_channels, out_channels, 1, bias=bias))
+        self.add_module('spatial_conv', nn.Conv2d(out_channels, out_channels, kernel_size, stride=1, padding=padding,
+                                                  dilation=dilation, bias=bias, groups=out_channels))
+        self.add_module('out_depth_conv', nn.Conv2d(out_channels, out_channels, 1, bias=bias))

@@ -1,13 +1,9 @@
 from collections import OrderedDict
 from torch import nn
-from ..regularizers import LaplaceL2, LaplaceL2norm, GaussianLaplaceL2, GaussianLaplaceL2Adaptive
+from .. import regularizers
 import torch
 import torchvision
 import warnings
-
-regularizer_dict = {None: LaplaceL2, 'laplace': LaplaceL2norm,
-                    'gaussian': GaussianLaplaceL2, 'gaussian_adaptive': GaussianLaplaceL2Adaptive}
-
 
 class Core:
     def initialize(self):
@@ -47,7 +43,7 @@ class Stacked2dCore(Core2d, nn.Module):
     def __init__(self, input_channels, hidden_channels, input_kern, hidden_kern, layers=3,
                  gamma_hidden=0, gamma_input=0., skip=0, final_nonlinearity=True, bias=False,
                  momentum=0.1, pad_input=True, batch_norm=True, hidden_dilation=1, laplace_padding=0,
-                 input_regularizer=None):
+                 input_regularizer="LaplaceL2"):
         """
         Args:
             input_channels:     Integer, number of input channels as in
@@ -70,27 +66,25 @@ class Stacked2dCore(Core2d, nn.Module):
             normalize_laplace_regularizer: Boolean, if set to True, will use the LaplaceL2norm function from
                 mlutils.regularizers, which returns the regularizer as |laplace(filters)| / |filters|
 
-            input_regularizer: Dict
-                {None: LaplaceL2, 'laplace': LaplaceL2norm,
-                        'gaussian': GaussianLaplaceL2, 'gaussian_adaptive': GaussianLaplaceL2Adaptive}
+            input_regularizer: String that must match one of the regularizers in ..regularizers
         """
 
         super().__init__()
 
         assert not bias or not batch_norm, "bias and batch_norm should not both be true"
 
-        regularizer_config = dict(padding=laplace_padding, kernel=input_kern) if input_regularizer == 'gaussian' else dict(padding=laplace_padding)
-        self._input_weights_regularizer = regularizer_dict[input_regularizer](**regularizer_config)
+        regularizer_config = dict(padding=laplace_padding, kernel=input_kern) if input_regularizer == 'GaussianLaplaceL2' \
+            else dict(padding=laplace_padding)
+        self._input_weights_regularizer = regularizers.__dict__[input_regularizer](**regularizer_config)
 
         self.layers = layers
         self.gamma_input = gamma_input
         self.gamma_hidden = gamma_hidden
         self.input_channels = input_channels
         self.hidden_channels = hidden_channels
-
         self.skip = skip
-
         self.features = nn.Sequential()
+
         # --- first layer
         layer = OrderedDict()
         layer['conv'] = \

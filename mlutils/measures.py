@@ -35,13 +35,10 @@ class PoissonLoss(nn.Module):
         target = target.detach()
         loss = (output - target * torch.log(output + self.bias))
         if not self.per_neuron:
-            if self.avg:
-                return loss.mean()
-            return loss.sum()
+            return loss.mean() if self.avg else loss.sum()
         else:
-            if self.avg:
-                return loss.view(-1, loss.shape[-1]).mean(dim=0)
-            return loss.view(-1, loss.shape[-1]).sum(dim=0)
+            loss = loss.view(-1, loss.shape[-1])
+            return loss.mean(dim=0) if self.avg else loss.sum(dim=0)
 
 
 class PoissonLoss3d(nn.Module):
@@ -52,7 +49,7 @@ class PoissonLoss3d(nn.Module):
 
     def forward(self, output, target):
         lag = target.size(1) - output.size(1)
-        loss =  (output - target[:, lag:, :] * torch.log(output + self.bias))
+        loss = (output - target[:, lag:, :] * torch.log(output + self.bias))
         if not self.per_neuron:
             return loss.mean()
         else:

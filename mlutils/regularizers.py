@@ -96,20 +96,21 @@ class Laplace(nn.Module):
 
 class LaplaceL2(nn.Module):
     """
-    Laplace regularizer for a 2D convolutional layer.
+    Laplace regularizer for a 2D convolutional layer. Unnormalized, not recommended to use.
+        Use LaplaceL2norm instead.
 
-    Args:
-        padding (int): Controls the amount of zero-padding for the convolution operation.
+        Args:
+            padding (int): Controls the amount of zero-padding for the convolution operation.
 
-    Attributes:
-        laplace (Laplace): Laplace convolution object. The output is the result of
-            convolving an input image with laplace filter.
+        Attributes:
+            laplace (Laplace): Laplace convolution object. The output is the result of
+                convolving an input image with laplace filter.
 
     """
-
     def __init__(self, padding=None):
         super().__init__()
         self.laplace = Laplace(padding=padding)
+        warnings.warn("LaplaceL2 Regularizer is deprecated. Use LaplaceL2norm instead.")
 
     def forward(self, x):
         ic, oc, k1, k2 = x.size()

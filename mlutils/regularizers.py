@@ -186,23 +186,21 @@ class LaplaceL1(nn.Module):
         ic, oc, k1, k2 = x.size()
         return self.laplace(x.view(ic * oc, 1, k1, k2)).abs().mean()
 
-class GaussianLaplaceL2(nn.Module):
+
+class GaussianLaplaceL2Adaptive(nn.Module):
     """
     Laplace regularizer, with a Gaussian mask, for a 2D convolutional layer.
-
-    Args:
-        padding (int): Controls the amount of zero-padding for the convolution operation.
-        sigma (float): std deviation of the Gaussian along x-axis. Default is calculated
-            as the 1/4th of the minimum dimenison (height vs width) of the input.
-
-    Attributes:
-        laplace (Laplace): Laplace convolution object. The output is the result of
-            convolving an input image with laplace filter.
-        sigma (float): std deviation of the Gaussian along x-axis.
-
+        Is flexible across kernel sizes, so that the regularizer can be applied to more
+        than one layer, with changing kernel sizes
     """
 
     def __init__(self, padding=None, sigma=None):
+        """
+        Args:
+            padding (int): Controls the amount of zero-padding for the convolution operation.
+            sigma (float): std deviation of the Gaussian along x-axis. Default is calculated
+                as the 1/4th of the minimum dimenison (height vs width) of the input.
+        """
         super().__init__()
         self.laplace = Laplace(padding=padding)
         self.sigma = sigma
@@ -216,29 +214,25 @@ class GaussianLaplaceL2(nn.Module):
 
         return out.pow(2).sum() / x.view(ic * oc, 1, k1, k2).pow(2).sum()
 
-class GaussianLaplaceL2fix(nn.Module):
+
+class GaussianLaplaceL2(nn.Module):
     """
-    Laplace regularizer, with a Gaussian mask, for a 2D convolutional layer.
-
-    Args:
-        padding (int): Controls the amount of zero-padding for the convolution operation.
-        sigma (float): std deviation of the Gaussian along x-axis. Default is calculated
-            as the 1/4th of the minimum dimenison (height vs width) of the input.
-
-    Attributes:
-        laplace (Laplace): Laplace convolution object. The output is the result of
-            convolving an input image with laplace filter.
-        sigma (float): std deviation of the Gaussian along x-axis.
+    Laplace regularizer, with a Gaussian mask, for a single 2D convolutional layer.
 
     """
 
     def __init__(self, kernel, padding=None):
+        """
+        Args:
+            kernel: Size of the convolutional kernel of the filter that is getting regularized
+            padding (int): Controls the amount of zero-padding for the convolution operation.
+        """
         super().__init__()
 
         self.laplace = Laplace(padding=padding)
         self.kernel = (kernel, kernel) if isinstance(kernel, int) else kernel
         sigma = min(*self.kernel) / 4
-        self.gaussian2d = torch.from_numpy(gaussian2d(size=(*self.kernel), sigma=sigma))
+        self.gaussian2d = torch.from_numpy(gaussian2d(size=(*self.kernel,), sigma=sigma))
 
     def forward(self, x):
         ic, oc, k1, k2 = x.size()
@@ -246,3 +240,4 @@ class GaussianLaplaceL2fix(nn.Module):
         out = out * (1 - self.gaussian2d.expand(1, 1, k1, k2).to(x.device))
 
         return out.pow(2).sum() / x.view(ic * oc, 1, k1, k2).pow(2).sum()
+

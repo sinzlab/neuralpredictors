@@ -8,27 +8,63 @@ from torch.nn import ModuleDict
 from ..constraints import positive
 
 
-class Readout():
+class Readout:
     def initialize(self, *args, **kwargs):
-        raise NotImplementedError('initialize is not implemented for ', self.__class__.__name__)
+        raise NotImplementedError("initialize is not implemented for ", self.__class__.__name__)
 
     def __repr__(self):
         s = super().__repr__()
-        s += ' [{} regularizers: '.format(self.__class__.__name__)
+        s += " [{} regularizers: ".format(self.__class__.__name__)
         ret = []
-        for attr in filter(lambda x: not x.startswith('_') and
-                                     ('gamma' in x or 'pool' in x or 'positive' in x), dir(self)):
-            ret.append('{} = {}'.format(attr, getattr(self, attr)))
-        return s + '|'.join(ret) + ']\n'
+        for attr in filter(
+            lambda x: not x.startswith("_") and ("gamma" in x or "pool" in x or "positive" in x), dir(self)
+        ):
+            ret.append("{} = {}".format(attr, getattr(self, attr)))
+        return s + "|".join(ret) + "]\n"
 
 
 ##############
-#Pooled Readout
+# Cloned Readout
+##############
+
+
+class ClonedReadout(nn.Module):
+    """
+    This readout clones another readout while applying a linear transformation on the output. Used for MultiDatasets
+    with matched neurons where the x-y positions in the grid stay the same but the predicted responses are rescaled due
+    to varying experimental conditions.
+    """
+
+    def __init__(self, original_readout, **kwargs):
+        super().__init__()
+
+        self._source = original_readout
+        self.alpha = Parameter(torch.ones(self._source.features.shape[-1]))
+        self.beta = Parameter(torch.zeros(self._source.features.shape[-1]))
+
+    def forward(self, x):
+        x = self._source(x) * self.alpha + self.beta
+        return x
+
+    def feature_l1(self, average=True):
+        """ Regularization is only applied on the scaled feature weights, not on the bias."""
+        if average:
+            return (self._source.features * self.alpha).abs().mean()
+        else:
+            return (self._source.features * self.alpha).abs().sum()
+
+    def initialize(self):
+        self.alpha.data.fill_(1.0)
+        self.beta.data.fill_(0.0)
+
+
+##############
+# Pooled Readout
 ##############
 
 
 class MultiplePointPooled2d(Readout, ModuleDict):
-    def __init__(self, in_shape, loaders, gamma_readout, **kwargs):
+    def __init__(self, in_shape, loaders, gamma_readout, clone_readout=False, **kwargs):
         super().__init__()
 
         self.in_shape = in_shape
@@ -36,13 +72,18 @@ class MultiplePointPooled2d(Readout, ModuleDict):
 
         self.gamma_readout = gamma_readout
 
-        for k, n_neurons in self.neurons.items():
-            self.add_module(k, PointPooled2d(in_shape=in_shape, outdims=n_neurons, **kwargs))
+        for i, (k, n_neurons) in enumerate(self.neurons.items()):
+            if i == 0 or clone_readout is False:
+                self.add_module(k, PointPooled2d(in_shape=in_shape, outdims=n_neurons, **kwargs))
+                original_readout = k
+            elif i > 0 and clone_readout is True:
+                self.add_module(k, ClonedReadout(self[original_readout], **kwargs))
 
     def initialize(self, mean_activity_dict):
         for k, mu in mean_activity_dict.items():
             self[k].initialize()
-            self[k].bias.data = mu.squeeze() - 1
+            if not isinstance(self[k], ClonedReadout):
+                self[k].bias.data = mu.squeeze() - 1
 
     def regularizer(self, readout_key):
         return self[readout_key].feature_l1() * self.gamma_readout
@@ -60,9 +101,9 @@ class PointPooled2d(nn.Module):
 
         if bias:
             bias = Parameter(torch.Tensor(outdims))
-            self.register_parameter('bias', bias)
+            self.register_parameter("bias", bias)
         else:
-            self.register_parameter('bias', None)
+            self.register_parameter("bias", None)
 
         self.pool_kern = pool_kern
         self.avg = nn.AvgPool2d((pool_kern, pool_kern), stride=pool_kern, count_include_pad=False)
@@ -75,9 +116,9 @@ class PointPooled2d(nn.Module):
 
     @pool_steps.setter
     def pool_steps(self, value):
-        assert value >= 0 and int(value) - value == 0, 'new pool steps must be a non-negative integer'
+        assert value >= 0 and int(value) - value == 0, "new pool steps must be a non-negative integer"
         if value != self._pool_steps:
-            print('Resizing readout features')
+            print("Resizing readout features")
             c, w, h = self.in_shape
             self._pool_steps = int(value)
             self.features = Parameter(torch.Tensor(1, c * (self._pool_steps + 1), 1, self.outdims))
@@ -131,20 +172,29 @@ class PointPooled2d(nn.Module):
 
     def __repr__(self):
         c, w, h = self.in_shape
-        r = self.__class__.__name__ + \
-            ' (' + '{} x {} x {}'.format(c, w, h) + ' -> ' + str(self.outdims) + ')'
+        r = self.__class__.__name__ + " (" + "{} x {} x {}".format(c, w, h) + " -> " + str(self.outdims) + ")"
         if self.bias is not None:
-            r += ' with bias'
-        r += ' and pooling for {} steps\n'.format(self.pool_steps)
+            r += " with bias"
+        r += " and pooling for {} steps\n".format(self.pool_steps)
         for ch in self.children():
-            r += '  -> ' + ch.__repr__() + '\n'
+            r += "  -> " + ch.__repr__() + "\n"
         return r
 
 
 class SpatialTransformerPooled3d(nn.Module):
-
-    def __init__(self, in_shape, outdims, pool_steps=1, positive=False, bias=True,
-                 init_range=.05, kernel_size=2, stride=2, grid=None, stop_grad=False):
+    def __init__(
+        self,
+        in_shape,
+        outdims,
+        pool_steps=1,
+        positive=False,
+        bias=True,
+        init_range=0.05,
+        kernel_size=2,
+        stride=2,
+        grid=None,
+        stop_grad=False,
+    ):
         super().__init__()
         self._pool_steps = pool_steps
         self.in_shape = in_shape
@@ -156,13 +206,13 @@ class SpatialTransformerPooled3d(nn.Module):
         else:
             self.grid = grid
         self.features = Parameter(torch.Tensor(1, c * (self._pool_steps + 1), 1, outdims))
-        self.register_buffer('mask', torch.ones_like(self.features))
+        self.register_buffer("mask", torch.ones_like(self.features))
 
         if bias:
             bias = Parameter(torch.Tensor(outdims))
-            self.register_parameter('bias', bias)
+            self.register_parameter("bias", bias)
         else:
-            self.register_parameter('bias', None)
+            self.register_parameter("bias", None)
 
         self.avg = nn.AvgPool2d(kernel_size, stride=stride, count_include_pad=False)
         self.init_range = init_range
@@ -175,9 +225,9 @@ class SpatialTransformerPooled3d(nn.Module):
 
     @pool_steps.setter
     def pool_steps(self, value):
-        assert value >= 0 and int(value) - value == 0, 'new pool steps must be a non-negative integer'
+        assert value >= 0 and int(value) - value == 0, "new pool steps must be a non-negative integer"
         if value != self._pool_steps:
-            print('Resizing readout features')
+            print("Resizing readout features")
             c, t, w, h = self.in_shape
             outdims = self.outdims
             self._pool_steps = int(value)
@@ -208,7 +258,7 @@ class SpatialTransformerPooled3d(nn.Module):
     def update_fisher_prune_scores(self):
         self._prune_n += 1
         if self.features.grad is None:
-            raise ValueError('You need to run backward first')
+            raise ValueError("You need to run backward first")
         self._prune_scores += (0.5 * self.features.grad.pow(2) * self.features.pow(2)).detach()
 
     @property
@@ -268,36 +318,36 @@ class SpatialTransformerPooled3d(nn.Module):
 
     def __repr__(self):
         c, _, w, h = self.in_shape
-        r = self.__class__.__name__ + \
-            ' (' + '{} x {} x {}'.format(c, w, h) + ' -> ' + str(self.outdims) + ')'
+        r = self.__class__.__name__ + " (" + "{} x {} x {}".format(c, w, h) + " -> " + str(self.outdims) + ")"
         if self.bias is not None:
-            r += ' with bias'
+            r += " with bias"
         if self.stop_grad:
-            r += ', stop_grad=True'
-        r += '\n'
+            r += ", stop_grad=True"
+        r += "\n"
 
         for ch in self.children():
-            r += '  -> ' + ch.__repr__() + '\n'
+            r += "  -> " + ch.__repr__() + "\n"
         return r
 
+
 ##############
-#Pyramid Readout
+# Pyramid Readout
 ##############
 
 
 class MultiplePointPyramid2d(Readout, ModuleDict):
     def __init__(self, in_shape, loaders, gamma_readout, positive, **kwargs):
-#        log.info('Ignoring input {} when creating {}'.format(repr(kwargs), self.__class__.__name__))
+        #        log.info('Ignoring input {} when creating {}'.format(repr(kwargs), self.__class__.__name__))
         super().__init__()
 
         self.in_shape = in_shape
         self.neurons = OrderedDict([(k, loader.dataset.n_neurons) for k, loader in loaders.items()])
-        self._positive = positive #kwargs['positive']
+        self._positive = positive  # kwargs['positive']
         self.gamma_readout = gamma_readout
         for k, n_neurons in self.neurons.items():
             if isinstance(self.in_shape, dict):
                 in_shape = self.in_shape[k]
-            self.add_module(k, PointPyramid2d(in_shape=in_shape, outdims=n_neurons, positive = positive, **kwargs))
+            self.add_module(k, PointPyramid2d(in_shape=in_shape, outdims=n_neurons, positive=positive, **kwargs))
 
     @property
     def positive(self):
@@ -310,7 +360,7 @@ class MultiplePointPyramid2d(Readout, ModuleDict):
             self[k].positive = value
 
     def initialize(self, mu_dict):
-#        log.info('Initializing with mu_dict: ' + ', '.join(['{}: {}'.format(k, len(m)) for k, m in mu_dict.items()]))
+        #        log.info('Initializing with mu_dict: ' + ', '.join(['{}: {}'.format(k, len(m)) for k, m in mu_dict.items()]))
 
         for k, mu in mu_dict.items():
             self[k].initialize()
@@ -320,25 +370,22 @@ class MultiplePointPyramid2d(Readout, ModuleDict):
         return self[readout_key].feature_l1() * self.gamma_readout
 
 
-
 class Pyramid(nn.Module):
     _filter_dict = {
-        'gauss5x5': np.float32([
-            [0.003765, 0.015019, 0.023792, 0.015019, 0.003765],
-            [0.015019, 0.059912, 0.094907, 0.059912, 0.015019],
-            [0.023792, 0.094907, 0.150342, 0.094907, 0.023792],
-            [0.015019, 0.059912, 0.094907, 0.059912, 0.015019],
-            [0.003765, 0.015019, 0.023792, 0.015019, 0.003765]]),
-        'gauss3x3': np.float32([
-            [1 / 16, 1 / 8, 1 / 16],
-            [1 / 8, 1 / 4, 1 / 8],
-            [1 / 16, 1 / 8, 1 / 16]]
+        "gauss5x5": np.float32(
+            [
+                [0.003765, 0.015019, 0.023792, 0.015019, 0.003765],
+                [0.015019, 0.059912, 0.094907, 0.059912, 0.015019],
+                [0.023792, 0.094907, 0.150342, 0.094907, 0.023792],
+                [0.015019, 0.059912, 0.094907, 0.059912, 0.015019],
+                [0.003765, 0.015019, 0.023792, 0.015019, 0.003765],
+            ]
         ),
-        'laplace5x5': np.outer(np.float32([1, 4, 6, 4, 1]), np.float32([1, 4, 6, 4, 1])) / 256,
-
+        "gauss3x3": np.float32([[1 / 16, 1 / 8, 1 / 16], [1 / 8, 1 / 4, 1 / 8], [1 / 16, 1 / 8, 1 / 16]]),
+        "laplace5x5": np.outer(np.float32([1, 4, 6, 4, 1]), np.float32([1, 4, 6, 4, 1])) / 256,
     }
 
-    def __init__(self, scale_n=4, type='gauss5x5', downsample=True):
+    def __init__(self, scale_n=4, type="gauss5x5", downsample=True):
         """
         Setup Laplace image pyramid
         Args:
@@ -350,7 +397,7 @@ class Pyramid(nn.Module):
         self.type = type
         self.downsample = downsample
         h = self._filter_dict[type]
-        self.register_buffer('filter', torch.from_numpy(h))
+        self.register_buffer("filter", torch.from_numpy(h))
         self.scale_n = scale_n
         self._kern = h.shape[0]
         self._pad = self._kern // 2
@@ -370,8 +417,9 @@ class Pyramid(nn.Module):
         smooth = F.conv2d(img, filter, padding=self._pad, groups=c)
         if self.downsample:
             lo = smooth[:, :, ::2, ::2]
-            lo2 = 4 * F.conv_transpose2d(lo, filter, stride=2, padding=self._pad, output_padding=output_padding,
-                                         groups=c)
+            lo2 = 4 * F.conv_transpose2d(
+                lo, filter, stride=2, padding=self._pad, output_padding=output_padding, groups=c
+            )
         else:
             lo = lo2 = smooth
 
@@ -389,12 +437,12 @@ class Pyramid(nn.Module):
 
     def __repr__(self):
         return "Pyramid(scale_n={scale_n}, padding={_pad}, downsample={downsample}, type={type})".format(
-            **self.__dict__)
+            **self.__dict__
+        )
 
 
 class PointPyramid2d(nn.Module):
-    def __init__(self, in_shape, outdims, scale_n, positive, bias,
-                 init_range, downsample, type, **kwargs):
+    def __init__(self, in_shape, outdims, scale_n, positive, bias, init_range, downsample, type, **kwargs):
         super().__init__()
         self.in_shape = in_shape
         c, w, h = in_shape
@@ -406,9 +454,9 @@ class PointPyramid2d(nn.Module):
 
         if bias:
             bias = Parameter(torch.Tensor(outdims))
-            self.register_parameter('bias', bias)
+            self.register_parameter("bias", bias)
         else:
-            self.register_parameter('bias', None)
+            self.register_parameter("bias", None)
         self.init_range = init_range
         self.initialize()
 
@@ -424,7 +472,7 @@ class PointPyramid2d(nn.Module):
         n = f // group_size
         ret = 0
         for chunk in range(0, f, group_size):
-            ret = ret + (self.features[:, chunk:chunk + group_size, ...].pow(2).mean(1) + 1e-12).sqrt().mean() / n
+            ret = ret + (self.features[:, chunk : chunk + group_size, ...].pow(2).mean(1) + 1e-12).sqrt().mean() / n
         return ret
 
     def feature_l1(self, average=True):
@@ -456,14 +504,10 @@ class PointPyramid2d(nn.Module):
 
     def __repr__(self):
         c, w, h = self.in_shape
-        r = self.__class__.__name__ + \
-            ' (' + '{} x {} x {}'.format(c, w, h) + ' -> ' + str(self.outdims) + ')'
+        r = self.__class__.__name__ + " (" + "{} x {} x {}".format(c, w, h) + " -> " + str(self.outdims) + ")"
         if self.bias is not None:
-            r += ' with bias'
+            r += " with bias"
 
         for ch in self.children():
-            r += '  -> ' + ch.__repr__() + '\n'
+            r += "  -> " + ch.__repr__() + "\n"
         return r
-
-
-

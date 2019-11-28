@@ -6,7 +6,6 @@ from torch.utils.data.sampler import Sampler
 
 
 class RepeatsBatchSampler(Sampler):
-
     def __init__(self, keys, subset_index=None):
         if subset_index is None:
             subset_index = np.arange(len(keys))
@@ -97,8 +96,7 @@ class SubSubsetRandomSequentialSampler(Sampler):
         self.subsubset_size = subsubset_size
 
     def __iter__(self):
-        subsubset_indices = np.random.choice(self.indices, size=self.subsubset_size,
-                                             replace=False)
+        subsubset_indices = np.random.choice(self.indices, size=self.subsubset_size, replace=False)
         return (subsubset_indices[i] for i in range(len(subsubset_indices)))
 
     def __len__(self):
@@ -112,13 +110,13 @@ class BalancedSubsetSampler(Sampler):
         indices (list): a list of indices
     """
 
-    def configure_sampler(self, indices, types, mode='shortest'):
+    def configure_sampler(self, indices, types, mode="shortest"):
         self.indices = indices
         c = Counter(types[indices])
-        if mode == 'longest':
+        if mode == "longest":
             self.num_samples = max(c.values())
             self.replacement = True
-        elif mode == 'shortest':
+        elif mode == "shortest":
             self.num_samples = min(c.values())
             self.replacement = False
 
@@ -127,12 +125,11 @@ class BalancedSubsetSampler(Sampler):
         self.types = types
         self.weights = torch.DoubleTensor([c[types[i]] for i in indices])
 
-    def __init__(self, indices, types, mode='shortest'):
+    def __init__(self, indices, types, mode="shortest"):
         self.configure_sampler(indices, types, mode)
 
     def __iter__(self):
-        selection = torch.multinomial(
-            self.weights, self.num_samples, self.replacement)
+        selection = torch.multinomial(self.weights, self.num_samples, self.replacement)
         # print(Counter(self.types[self.indices[i]] for i in selection), len(selection)))
         return (self.indices[i] for i in selection)
 

@@ -3,9 +3,8 @@ from torch.nn import functional as F
 import torch
 
 
-
 def elu1(x):
-    return F.elu(x, inplace=True) + 1.
+    return F.elu(x, inplace=True) + 1.0
 
 
 class Elu1(nn.Module):
@@ -20,10 +19,9 @@ class Elu1(nn.Module):
 
 
 def log1exp(x):
-    return torch.log(1. + torch.exp(x))
+    return torch.log(1.0 + torch.exp(x))
 
 
 class Log1Exp(nn.Module):
     def forward(self, x):
         return log1exp(x)
-

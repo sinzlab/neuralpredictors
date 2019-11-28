@@ -7,6 +7,7 @@ from torch.nn import functional as F
 # def laplace():
 #     return np.array([[0.25, 0.5, 0.25], [0.5, -3.0, 0.5], [0.25, 0.5, 0.25]]).astype(np.float32)[None, None, ...]
 
+
 def laplace():
     """
     Returns a 3x3 laplace filter.
@@ -17,14 +18,15 @@ def laplace():
 
 def laplace3d():
     l = np.zeros((3, 3, 3))
-    l[1, 1, 1] = -6.
-    l[1, 1, 2] = 1.
-    l[1, 1, 0] = 1.
-    l[1, 0, 1] = 1.
-    l[1, 2, 1] = 1.
-    l[0, 1, 1] = 1.
-    l[2, 1, 1] = 1.
+    l[1, 1, 1] = -6.0
+    l[1, 1, 2] = 1.0
+    l[1, 1, 0] = 1.0
+    l[1, 0, 1] = 1.0
+    l[1, 2, 1] = 1.0
+    l[0, 1, 1] = 1.0
+    l[2, 1, 1] = 1.0
     return l.astype(np.float32)[None, None, ...]
+
 
 def gaussian2d(size, sigma=5, gamma=1, theta=0, center=(0, 0), normalize=True):
     """
@@ -48,9 +50,9 @@ def gaussian2d(size, sigma=5, gamma=1, theta=0, center=(0, 0), normalize=True):
     sigma_y = sigma / gamma
 
     xmax, ymax = (size, size) if isinstance(size, int) else size
-    xmax, ymax = (xmax - 1)/2, (ymax - 1)/2
+    xmax, ymax = (xmax - 1) / 2, (ymax - 1) / 2
     xmin, ymin = -xmax, -ymax
-    (y, x) = np.meshgrid(np.arange(ymin, ymax+1), np.arange(xmin, xmax+1))
+    (y, x) = np.meshgrid(np.arange(ymin, ymax + 1), np.arange(xmin, xmax + 1))
 
     # shift the position
     y -= center[0]
@@ -60,7 +62,7 @@ def gaussian2d(size, sigma=5, gamma=1, theta=0, center=(0, 0), normalize=True):
     x_theta = x * np.cos(theta) + y * np.sin(theta)
     y_theta = -x * np.sin(theta) + y * np.cos(theta)
 
-    gaussian = np.exp(-.5 * (x_theta ** 2 / sigma_x ** 2 + y_theta ** 2 / sigma_y ** 2))
+    gaussian = np.exp(-0.5 * (x_theta ** 2 / sigma_x ** 2 + y_theta ** 2 / sigma_y ** 2))
 
     if normalize:
         gaussian -= gaussian.min()
@@ -73,6 +75,7 @@ class Laplace(nn.Module):
     """
     Laplace filter for a stack of data. Utilized as the input weight regularizer.
     """
+
     def __init__(self, padding=None):
         """
         Laplace filter for a stack of data.
@@ -87,7 +90,7 @@ class Laplace(nn.Module):
                 before convolution operation.
         """
         super().__init__()
-        self.register_buffer('filter', torch.from_numpy(laplace()))
+        self.register_buffer("filter", torch.from_numpy(laplace()))
         self.padding_size = self.filter.shape[-1] // 2 if padding is None else padding
 
     def forward(self, x):
@@ -107,6 +110,7 @@ class LaplaceL2(nn.Module):
                 convolving an input image with laplace filter.
 
     """
+
     def __init__(self, padding=None):
         super().__init__()
         self.laplace = Laplace(padding=padding)
@@ -122,14 +126,14 @@ class LaplaceL2norm(nn.Module):
     Normalized Laplace regularizer for a 2D convolutional layer.
         returns |laplace(filters)| / |filters|
     """
+
     def __init__(self, padding=None):
         super().__init__()
         self.laplace = Laplace(padding=padding)
 
     def forward(self, x):
         ic, oc, k1, k2 = x.size()
-        return self.laplace(x.view(ic * oc, 1, k1, k2)).pow(2).sum() \
-               / x.view(ic * oc, 1, k1, k2).pow(2).sum()
+        return self.laplace(x.view(ic * oc, 1, k1, k2)).pow(2).sum() / x.view(ic * oc, 1, k1, k2).pow(2).sum()
 
 
 class Laplace3d(nn.Module):
@@ -139,7 +143,7 @@ class Laplace3d(nn.Module):
 
     def __init__(self, padding=None):
         super().__init__()
-        self.register_buffer('filter', torch.from_numpy(laplace3d()))
+        self.register_buffer("filter", torch.from_numpy(laplace3d()))
 
     def forward(self, x):
         return F.conv3d(x, self.filter, bias=None)
@@ -170,7 +174,7 @@ class FlatLaplaceL23d(nn.Module):
 
     def forward(self, x):
         ic, oc, k1, k2, k3 = x.size()
-        assert k1 == 1, 'time dimension must be one'
+        assert k1 == 1, "time dimension must be one"
         return self.laplace(x.view(ic * oc, 1, k2, k3)).pow(2).mean() / 2
 
 
@@ -241,4 +245,3 @@ class GaussianLaplaceL2(nn.Module):
         out = out * (1 - self.gaussian2d.expand(1, 1, k1, k2).to(x.device))
 
         return out.pow(2).sum() / x.view(ic * oc, 1, k1, k2).pow(2).sum()
-

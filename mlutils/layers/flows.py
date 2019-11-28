@@ -24,11 +24,11 @@ class ResNet(nn.Module):
         """
         super().__init__()
         self.layers = nn.ModuleList(
-            [nn.Sequential(
-                nn.Linear(n_in if i == 0 else n_out, n_out),
-                nn.BatchNorm1d(n_out),
-                nn.ELU())
-                for i in range(layers)])
+            [
+                nn.Sequential(nn.Linear(n_in if i == 0 else n_out, n_out), nn.BatchNorm1d(n_out), nn.ELU())
+                for i in range(layers)
+            ]
+        )
 
     def forward(self, x):
         out = 0
@@ -39,7 +39,7 @@ class ResNet(nn.Module):
 
 
 class InvertibleLinear(nn.Module):
-    def __init__(self, pdims, bias=None, type='full', components=2):
+    def __init__(self, pdims, bias=None, type="full", components=2):
         """
         Invertible Linear Layer
 
@@ -67,14 +67,14 @@ class InvertibleLinear(nn.Module):
         self._type = type
         self._components = components
 
-        if type == 'full':
+        if type == "full":
             # Sample a random orthogonal matrix:
             self.register_parameter("weight", nn.Parameter(torch.Tensor(w_init)))
-        elif type == 'lowrank':
+        elif type == "lowrank":
             self.register_parameter("u", nn.Parameter(torch.zeros(pdims, components).normal_() * 1e-2))
             self.register_parameter("v", nn.Parameter(torch.zeros(components, pdims).normal_() * 1e-2))
             self.d = nn.Parameter(torch.ones(pdims))
-        elif type == 'LU':
+        elif type == "LU":
             np_p, np_l, np_u = linalg.lu(w_init)
             np_s = np.diag(np_u)
             np_sign_s = np.sign(np_s)
@@ -83,10 +83,10 @@ class InvertibleLinear(nn.Module):
             l_mask = np.tril(np.ones(w_shape, dtype=np.float32), -1)
             eye = np.eye(*w_shape, dtype=np.float32)
 
-            self.register_buffer('p', torch.Tensor(np_p.astype(np.float32)))
-            self.register_buffer('sign_s', torch.Tensor(np_sign_s.astype(np.float32)))
-            self.register_buffer('l_mask', torch.Tensor(l_mask))
-            self.register_buffer('I', torch.Tensor(eye))
+            self.register_buffer("p", torch.Tensor(np_p.astype(np.float32)))
+            self.register_buffer("sign_s", torch.Tensor(np_sign_s.astype(np.float32)))
+            self.register_buffer("l_mask", torch.Tensor(l_mask))
+            self.register_buffer("I", torch.Tensor(eye))
 
             self.l = nn.Parameter(torch.Tensor(np_l.astype(np.float32)))
             self.log_s = nn.Parameter(torch.Tensor(np_log_s.astype(np.float32)))
@@ -95,7 +95,7 @@ class InvertibleLinear(nn.Module):
     def get_weight(self, reverse, compute_logdet=False):
         dlogdet = None
 
-        if self._type == 'full':
+        if self._type == "full":
             if compute_logdet:
                 dlogdet = torch.slogdet(self.weight)[1]
 
@@ -104,7 +104,7 @@ class InvertibleLinear(nn.Module):
             else:
                 weight = torch.inverse(self.weight.double()).float()
 
-        elif self._type == 'LU':
+        elif self._type == "LU":
             l = self.l * self.l_mask + self.I
             u = self.u * self.l_mask.transpose(0, 1).contiguous() + torch.diag(self.sign_s * torch.exp(self.log_s))
             if compute_logdet:
@@ -116,7 +116,7 @@ class InvertibleLinear(nn.Module):
                 u = torch.inverse(u.double()).float()
                 weight = u @ l @ self.p.inverse()
 
-        elif self._type == 'lowrank':
+        elif self._type == "lowrank":
             weight = self.u @ self.v + torch.diag(self.d)
 
             if reverse:
@@ -130,14 +130,15 @@ class InvertibleLinear(nn.Module):
 
         return weight, dlogdet
 
-
     def forward(self, y, x=None, logdet=None, reverse=False):
 
         weight, dlogdet = self.get_weight(reverse, compute_logdet=logdet is not None)
         bias = self.bias if self.nonlinear_bias is None else self.bias(x)
 
         if not reverse:
-            z = F.linear(y, weight) - bias # <-- the minus is important if the bias is a nonelinear network with positive output
+            z = (
+                F.linear(y, weight) - bias
+            )  # <-- the minus is important if the bias is a nonelinear network with positive output
         else:
             z = F.linear(y + bias, weight)
 
@@ -183,8 +184,7 @@ class InvertibleLinear(nn.Module):
 
 
 class Anscombe(nn.Module):
-
-    def __init__(self, transform_x = False):
+    def __init__(self, transform_x=False):
         super().__init__()
         self.transform_x = transform_x
 
@@ -199,7 +199,7 @@ class Anscombe(nn.Module):
                 dlogdet = (-0.5 * torch.log(y + 3 / 8)).sum(dim=1)
                 logdet = logdet + dlogdet
         else:
-            raise NotImplementedError('Check above todo')
+            raise NotImplementedError("Check above todo")
             # z = (y / 2) ** 2 - 3 / 8
             # if logdet is not None:
             #     dlogdet = (y / 2).log().sum(dim=1)
@@ -208,12 +208,10 @@ class Anscombe(nn.Module):
         return z, x, logdet
 
     def __repr__(self):
-        return 'Anscombe(transform_x={})'.format(self.transform_x)
-
+        return "Anscombe(transform_x={})".format(self.transform_x)
 
 
 class Permute(nn.Module):
-
     def __init__(self, neurons, shuffle=True):
         super().__init__()
         self.neurons = neurons
@@ -225,8 +223,8 @@ class Permute(nn.Module):
 
         indices_inverse = np.argsort(indices)
 
-        self.register_buffer('indices', torch.LongTensor(indices))
-        self.register_buffer('indices_inverse', torch.LongTensor(indices_inverse))
+        self.register_buffer("indices", torch.LongTensor(indices))
+        self.register_buffer("indices_inverse", torch.LongTensor(indices_inverse))
 
     def forward(self, y, x=None, logdet=None, reverse=False):
         assert len(y.shape) == 2
@@ -244,14 +242,13 @@ def split(tensor, type="split"):
 
     C = tensor.size(1)
     if type == "middle":
-        return tensor[:, :C // 2], tensor[:, C // 2:]
+        return tensor[:, : C // 2], tensor[:, C // 2 :]
     elif type == "alternate":
         return tensor[:, 0::2], tensor[:, 1::2]
 
 
 class CouplingLayer(nn.Module):
-
-    def __init__(self, f, split_type='middle', affine=True):
+    def __init__(self, f, split_type="middle", affine=True):
         super().__init__()
         self.f = f
         self.split_type = split_type
@@ -275,7 +272,7 @@ class CouplingLayer(nn.Module):
             z = torch.cat((y1, y2), dim=1)
             return z, x, logdet
         else:
-            raise NotImplementedError('Inverse not implemented yet.')
+            raise NotImplementedError("Inverse not implemented yet.")
 
 
 # class PoissonPopulationFlow(nn.Module):

@@ -13,19 +13,23 @@ class AttributeHandler:
         self.h5_handle = h5_handle
 
     def __getattr__(self, item):
-        ret = self.h5_handle[self.name][item].value
-        if ret.dtype.char == "S":  # convert bytes to unicode
-            ret = ret.astype(str)
+        if item in self.h5_handle[self.name]:
+            ret = self.h5_handle[self.name][item].value
+            if ret.dtype.char == "S":  # convert bytes to unicode
+                ret = ret.astype(str)
+        else:
+            ret = getattr(super(), item)
+
         return ret
 
     def __getitem__(self, item):
-        return self.__getattr__(item)
+        return getattr(self, item) # __getattr__(item)
 
     def keys(self):
         return self.h5_handle[self.name].keys()
 
-    def __dir__(self):
-        return list(self.h5_handle[self.name].keys())
+    # def __dir__(self):
+    #     return list(self.h5_handle[self.name].keys())
 
 
 class AttributeTransformer(AttributeHandler):
@@ -259,15 +263,15 @@ class StaticImageSet(H5ArraySet):
     @property
     def n_neurons(self):
         return len(self[0].responses)
-
+    #
     @property
-    def neurons(self):
+    def columns(self):
         return AttributeTransformer("neurons", self._fid, self.transforms)
-
+    #
     @property
     def info(self):
         return AttributeHandler("item_info", self._fid)
-
+    #
     @property
     def img_shape(self):
         return (1,) + self[0].images.shape
@@ -284,3 +288,7 @@ class StaticImageSet(H5ArraySet):
         return super().__repr__() + (
             "\n\t[Stats source: {}]".format(self.stats_source) if self.stats_source is not None else ""
         )
+
+    # def __dir__(self):
+    #     print(self.__dict__)
+        # return [k for k in self.__dir__() if k[0] != '_'] + list(self._fid.keys())

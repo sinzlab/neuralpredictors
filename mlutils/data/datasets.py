@@ -13,12 +13,9 @@ class AttributeHandler:
         self.h5_handle = h5_handle
 
     def __getattr__(self, item):
-        if item in self.h5_handle[self.name]:
-            ret = self.h5_handle[self.name][item][()]
-            if ret.dtype.char == "S":  # convert bytes to unicode
-                ret = ret.astype(str)
-        else:
-            ret = getattr(super(), item)
+        ret = self.h5_handle[self.name][item][()]
+        if ret.dtype.char == "S":  # convert bytes to unicode
+            ret = ret.astype(str)
 
         return ret
 

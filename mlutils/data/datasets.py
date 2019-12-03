@@ -13,13 +13,14 @@ class AttributeHandler:
         self.h5_handle = h5_handle
 
     def __getattr__(self, item):
-        ret = self.h5_handle[self.name][item].value
+        ret = self.h5_handle[self.name][item][()]
         if ret.dtype.char == "S":  # convert bytes to unicode
             ret = ret.astype(str)
+
         return ret
 
     def __getitem__(self, item):
-        return self.__getattr__(item)
+        return getattr(self, item)
 
     def keys(self):
         return self.h5_handle[self.name].keys()
@@ -280,7 +281,14 @@ class StaticImageSet(H5ArraySet):
         return self.transform(self.data_point(*tmp))
 
     def __repr__(self):
-
         return super().__repr__() + (
             "\n\t[Stats source: {}]".format(self.stats_source) if self.stats_source is not None else ""
         )
+
+    def __getattr__(self, item):
+        if item in self._fid.keys():
+            return self._fid[item][()]
+
+    def __dir__(self):
+        attrs = set(self.__dict__).union(set(dir(type(self))))
+        return attrs.union(set(self._fid.keys()))

@@ -256,7 +256,7 @@ class LongCycler:
         self.max_batches = max([len(loader) for loader in self.loaders.values()])
 
     def __iter__(self):
-        cycles = [alternate(loader) for loader in self.loaders.values()]
+        cycles = [cycle(loader) for loader in self.loaders.values()]
         for k, loader, _ in zip(cycle(self.loaders.keys()), (cycle(cycles)), range(len(self.loaders) * self.max_batches)):
             yield k, next(loader)
 

@@ -23,7 +23,6 @@ def copy_state(model):
 
 
 class Tracker:
-
     def log_objective(self, obj):
         raise NotImplementedError()
 
@@ -37,15 +36,12 @@ class TimeObjectiveTracker(Tracker):
 
     def log_objective(self, obj):
         new_track_point = np.array([[time.time(), obj]])
-        self.tracker = np.concatenate(
-            (self.tracker, new_track_point), axis=0)
+        self.tracker = np.concatenate((self.tracker, new_track_point), axis=0)
 
     def finalize(self):
         self.tracker[:, 0] -= self.tracker[0, 0]
 
-
 class MultipleObjectiveTracker(Tracker):
-
     def __init__(self, **objectives):
         self.objectives = objectives
         self.log = defaultdict(list)
@@ -63,6 +59,7 @@ class MultipleObjectiveTracker(Tracker):
         for k, l in self.log.items():
             self.log[k] = np.array(l)
 
+
 @contextmanager
 def eval_state(model):
     training_status = model.training
@@ -74,9 +71,22 @@ def eval_state(model):
         model.train(training_status)
 
 
-def early_stopping(model, objective_closure, interval=5, patience=20, start=0, max_iter=1000,
-                   maximize=True, tolerance=1e-5, switch_mode=True, restore_best=True,
-                   tracker=None, scheduler=None, lr_decay_steps=1):
+def early_stopping(
+    model,
+    objective_closure,
+    interval=5,
+    patience=20,
+    start=0,
+    max_iter=1000,
+    maximize=True,
+    tolerance=1e-5,
+    switch_mode=True,
+    restore_best=True,
+    tracker=None,
+    scheduler=None,
+    lr_decay_steps=1,
+):
+
     """
     Early stopping iterator. Keeps track of the best model state during training. Resets the model to its
         best state, when either the number of maximum epochs or the patience [number of epochs without improvement)
@@ -125,20 +135,15 @@ def early_stopping(model, objective_closure, interval=5, patience=20, start=0, m
         old_objective = _objective()
         if restore_best:
             model.load_state_dict(best_state_dict)
-            print(
-                'Restoring best model after lr decay! {:.6f} ---> {:.6f}'.format(
-                    old_objective, _objective()))
+            print("Restoring best model after lr decay! {:.6f} ---> {:.6f}".format(old_objective, _objective()))
 
     def finalize(model, best_state_dict):
         old_objective = _objective()
         if restore_best:
             model.load_state_dict(best_state_dict)
-            print(
-                'Restoring best model! {:.6f} ---> {:.6f}'.format(
-                    old_objective, _objective()))
+            print("Restoring best model! {:.6f} ---> {:.6f}".format(old_objective, _objective()))
         else:
-            print('Final best model! objective {:.6f}'.format(
-                _objective()))
+            print("Final best model! objective {:.6f}".format(_objective()))
 
     epoch = start
     maximize = float(maximize)
@@ -155,7 +160,7 @@ def early_stopping(model, objective_closure, interval=5, patience=20, start=0, m
                 if tracker is not None:
                     tracker.log_objective(current_objective)
                 if (~np.isfinite(current_objective)).any():
-                    print('Objective is not Finite. Stopping training')
+                    print("Objective is not Finite. Stopping training")
                     finalize(model, best_state_dict)
                     return
                 yield epoch, current_objective
@@ -167,15 +172,19 @@ def early_stopping(model, objective_closure, interval=5, patience=20, start=0, m
                 scheduler.step(current_objective)
 
             if current_objective * (-1) ** maximize < best_objective * (-1) ** maximize - tolerance:
-                print('[{:03d}|{:02d}/{:02d}] ---> {}'.format(epoch, patience_counter, patience, current_objective),
-                      flush=True)
+                print(
+                    "[{:03d}|{:02d}/{:02d}] ---> {}".format(epoch, patience_counter, patience, current_objective),
+                    flush=True,
+                )
                 best_state_dict = copy_state(model)
                 best_objective = current_objective
                 patience_counter = 0
             else:
                 patience_counter += 1
-                print('[{:03d}|{:02d}/{:02d}] -/-> {}'.format(epoch, patience_counter, patience, current_objective),
-                      flush=True)
+                print(
+                    "[{:03d}|{:02d}/{:02d}] -/-> {}".format(epoch, patience_counter, patience, current_objective),
+                    flush=True,
+                )
 
         if (epoch < max_iter) & (lr_decay_steps > 1) & (repeat < lr_decay_steps):
             decay_lr(model, best_state_dict)
@@ -212,6 +221,7 @@ def cycle_datasets(loaders):
         readout key, input, targets
 
     """
+
     #assert isinstance(trainloaders, OrderedDict), 'trainloaders must be an ordered dict'
     keys = list(loaders.keys())
     ordered_loaders = [loaders[k] for k in keys]

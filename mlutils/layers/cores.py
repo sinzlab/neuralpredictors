@@ -51,10 +51,11 @@ class Stacked2dCore(Core2d, nn.Module):
         gamma_input=0.0,
         skip=0,
         final_nonlinearity=True,
-        bias=False,
+        bias=True,
         momentum=0.1,
         pad_input=True,
         batch_norm=True,
+        learn_batch_norm=False,
         hidden_dilation=1,
         laplace_padding=0,
         input_regularizer="LaplaceL2",
@@ -70,10 +71,11 @@ class Stacked2dCore(Core2d, nn.Module):
             gamma_input:    regularizer factor for the input weights (default: LaplaceL2, see mlutils.regularizers)
             skip:           Adds a skip connection
             final_nonlinearity: Boolean, if true, appends an ELU layer after the last BatchNorm (if BN=True)
-            bias:           Adds a bias layer. Note: bias and batch_norm can not both be true
+            bias:           Adds a bias layer. Note: bias and batch_norm and learn_batch_norm cannot all be true
             momentum:       BN momentum
             pad_input:      Boolean, if True, applies zero padding to all convolutions
-            batch_norm:     Boolean, if True appends a BN layer after each convolutional layer
+            batch_norm:     Boolean, if True, appends a BN layer after each convolutional layer
+            learn_batch_norm: Boolean, if True, allows batch_norm parameters to be learned
             hidden_dilation:    If set to > 1, will apply dilated convs for all hidden layers
             laplace_padding: Padding size for the laplace convolution. If padding = None, it defaults to half of
                 the kernel size (recommended). Setting Padding to 0 is not recommended and leads to artefacts,
@@ -86,7 +88,7 @@ class Stacked2dCore(Core2d, nn.Module):
 
         super().__init__()
 
-        assert not bias or not batch_norm, "bias and batch_norm should not both be true"
+        assert not (bias and batch_norm and learn_batch_norm), "bias and batch_norm and learn_batch_norm should not all be true"
 
         regularizer_config = (
             dict(padding=laplace_padding, kernel=input_kern)
@@ -109,7 +111,7 @@ class Stacked2dCore(Core2d, nn.Module):
             input_channels, hidden_channels, input_kern, padding=input_kern // 2 if pad_input else 0, bias=bias
         )
         if batch_norm:
-            layer["norm"] = nn.BatchNorm2d(hidden_channels, momentum=momentum)
+            layer["norm"] = nn.BatchNorm2d(hidden_channels, momentum=momentum, affine=learn_batch_norm)
         if layers > 1 or final_nonlinearity:
             layer["nonlin"] = nn.ELU(inplace=True)
         self.features.add_module("layer0", nn.Sequential(layer))
@@ -127,7 +129,7 @@ class Stacked2dCore(Core2d, nn.Module):
                 dilation=hidden_dilation,
             )
             if batch_norm:
-                layer["norm"] = nn.BatchNorm2d(hidden_channels, momentum=momentum)
+                layer["norm"] = nn.BatchNorm2d(hidden_channels, momentum=momentum, affine=learn_batch_norm)
             if final_nonlinearity or l < self.layers - 1:
                 layer["nonlin"] = nn.ELU(inplace=True)
             self.features.add_module("layer{}".format(l), nn.Sequential(layer))

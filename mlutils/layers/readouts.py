@@ -22,6 +22,39 @@ class Readout():
             ret.append('{} = {}'.format(attr, getattr(self, attr)))
         return s + '|'.join(ret) + ']\n'
 
+##############
+# Cloned Readout
+##############
+
+
+class ClonedReadout(nn.Module):
+    """
+    This readout clones another readout while applying a linear transformation on the output. Used for MultiDatasets
+    with matched neurons where the x-y positions in the grid stay the same but the predicted responses are rescaled due
+    to varying experimental conditions.
+    """
+
+    def __init__(self, original_readout, **kwargs):
+        super().__init__()
+
+        self._source = original_readout
+        self.alpha = Parameter(torch.ones(self._source.features.shape[-1]))
+        self.beta = Parameter(torch.zeros(self._source.features.shape[-1]))
+
+    def forward(self, x):
+        x = self._source(x) * self.alpha + self.beta
+        return x
+
+    def feature_l1(self, average=True):
+        """ Regularization is only applied on the scaled feature weights, not on the bias."""
+        if average:
+            return (self._source.features * self.alpha).abs().mean()
+        else:
+            return (self._source.features * self.alpha).abs().sum()
+
+    def initialize(self):
+        self.alpha.data.fill_(1.0)
+        self.beta.data.fill_(0.0)
 
 ##############
 # Point Pooled Readout

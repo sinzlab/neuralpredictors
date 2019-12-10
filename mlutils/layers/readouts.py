@@ -128,8 +128,8 @@ class PointPooled2d(nn.Module):
                                 [expected: positive value <=1]
         """
         super().__init__()
-        if init_range > 1.0 or init_range <= 0.0:
-            raise ValueError("init_range should be a positive number <=1")
+        if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma_range <= 0.0:
+            raise ValueError("init_mu_range or init_sigma_range is not within required limit!")
         self._pool_steps = pool_steps
         self.in_shape = in_shape
         c, w, h = in_shape
@@ -226,9 +226,9 @@ class PointPooled2d(nn.Module):
         else:
             # out_idx specifies the indices to subset of neurons
             feat = feat[:, :, out_idx]
-            grid = self.grid[:, out_idx]
-            if self.bias is not None:
-                bias = self.bias[out_idx]
+            grid = grid[:, out_idx]
+            if bias is not None:
+                bias = bias[out_idx]
             outdims = len(out_idx)
 
         if shift is None:
@@ -688,7 +688,7 @@ class MultipleGaussian2d(Readout, ModuleDict):
             [(k, loader.dataset.n_neurons) for k, loader in loaders.items()]
         )
 
-        self.gamma_readout = gamma_readout
+        self.gamma_readout = gamma_readout  # regularisation strength
 
         for k, n_neurons in self.neurons.items():
             self.add_module(
@@ -772,8 +772,7 @@ class Gaussian2d(nn.Module):
         """
         Initializes the mean, and sigma of the Gaussian readout along with the features weights
         """
-        self.mu.data.uniform_(-self.init_mu_range, self.init_mu_range)
-        self.sigma.data.uniform_(0, self.init_sigma_range)
+        self.grid.data.uniform_(-self.init_range, self.init_range)
         self.features.data.fill_(1 / self.in_shape[0])
         if self.bias is not None:
             self.bias.data.fill_(0)
@@ -817,6 +816,7 @@ class Gaussian2d(nn.Module):
         Returns the l1 regularization term either the mean or the sum of all weights
         Args:
             average(bool): if True, use mean of weights for regularization
+
         """
         if average:
             return self.features.abs().mean()

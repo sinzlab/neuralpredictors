@@ -191,6 +191,10 @@ class PointPooled2d(nn.Module):
             r += '  -> ' + ch.__repr__() + '\n'
         return r
 
+##############
+# Spatial Transformer Readout
+##############
+
 class SpatialTransformerPooled3d(nn.Module):
 
     def __init__(self, in_shape, outdims, pool_steps=1, positive=False, bias=True,

@@ -1,5 +1,6 @@
 import torch
 
+
 def train_step(model, loss_fn, optim, batch, device):
     # put model in train mode
     model.train()
@@ -43,8 +44,5 @@ def compare_vars(vars_change, model, loss_fn, optim, batch, device, params=None)
                 assert torch.equal(p0.to(device), p1.to(device))
         except AssertionError:
             raise ValueError(
-                "{var_name} {msg}".format(
-                    var_name=name,
-                    msg='did not change!' if vars_change else 'changed!'
-                )
+                "{var_name} {msg}".format(var_name=name, msg="did not change!" if vars_change else "changed!")
             )

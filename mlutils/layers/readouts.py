@@ -606,6 +606,7 @@ class Gaussian2d(nn.Module):
         with torch.no_grad():
             self.mu.clamp_(min=-1, max=1)  # at eval time, only self.mu is used so it must belong to [-1,1]
             self.sigma.clamp_(min=0)       # sigma/variance is always a positive quantity
+
         grid_shape = (batch_size,) + self.grid_shape[1:]
 
         if self.training and not force_eval_state:
@@ -632,7 +633,8 @@ class Gaussian2d(nn.Module):
         else:
             return self.features.abs().sum()
 
-    def forward(self, x, shift=None, out_idx=None):
+    def forward(self, x, force_eval_state=False, shift=None, out_idx=None):
+
         N, c, w, h = x.size()
         c_in, w_in, h_in = self.in_shape
         if (c_in, w_in, h_in) != (c, w, h):
@@ -642,9 +644,10 @@ class Gaussian2d(nn.Module):
         outdims = self.outdims
 
         if self.batch_sample:
-            grid = self.sample_grid(batch_size=N)
+            grid = self.sample_grid(batch_size=N,
+                                    force_eval_state=force_eval_state)  # force_eval_state set to True, disables sampling from Gaussian
         else:
-            grid = self.sample_grid(batch_size=1).expand(N, outdims, 1, 2)
+            grid = self.sample_grid(batch_size=1, force_eval_state=force_eval_state).expand(N, outdims, 1, 2)
 
         if out_idx is not None:
             if isinstance(out_idx, np.ndarray):

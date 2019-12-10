@@ -70,34 +70,30 @@ class ClonedReadout(nn.Module):
 
 class MultiplePointPooled2d(Readout, ModuleDict):
     """
-
-    "MultiplePointPool2d" instantiates multiple instances of PointPool2d Readouts
+    Instantiates multiple instances of PointPool2d Readouts
     usually used when dealing with more than one dataset sharing the same core.
-
     """
 
-    def __init__(self, in_shape, loaders, gamma_readout, **kwargs):
+    def __init__(self, in_shape, loaders, gamma_readout, clone_readout=False, **kwargs):
         super().__init__()
 
         self.in_shape = in_shape
-        self.neurons = OrderedDict(
-            [(k, loader.dataset.n_neurons) for k, loader in loaders.items()]
-        )
+        self.neurons = OrderedDict([(k, loader.dataset.n_neurons) for k, loader in loaders.items()])
 
         self.gamma_readout = gamma_readout  # regularisation strength
 
-        for (
-            k,
-            n_neurons,
-        ) in self.neurons.items():  # example: two areas correspond to two readouts
-            self.add_module(
-                k, PointPooled2d(in_shape=in_shape, outdims=n_neurons, **kwargs)
-            )
+        for i, (k, n_neurons) in enumerate(self.neurons.items()):
+            if i == 0 or clone_readout is False:
+                self.add_module(k, PointPooled2d(in_shape=in_shape, outdims=n_neurons, **kwargs))
+                original_readout = k
+            elif i > 0 and clone_readout is True:
+                self.add_module(k, ClonedReadout(self[original_readout], **kwargs))
 
     def initialize(self, mean_activity_dict):
         for k, mu in mean_activity_dict.items():
             self[k].initialize()
-            self[k].bias.data = mu.squeeze() - 1
+            if not isinstance(self[k], ClonedReadout):
+                self[k].bias.data = mu.squeeze() - 1
 
     def regularizer(self, readout_key):
         return self[readout_key].feature_l1() * self.gamma_readout
@@ -108,8 +104,7 @@ class PointPooled2d(nn.Module):
         self, in_shape, outdims, pool_steps, bias, pool_kern, init_range, **kwargs
     ):
         """
-
-        'PointPooled2d' function learns a point in the core feature space for each neuron, with help of torch.grid_sample, that best
+        This readout learns a point in the core feature space for each neuron, with help of torch.grid_sample, that best
         predicts its response. Multiple average pooling steps are applied to reduce search space in each stage and thereby, faster convergence to the best prediction point.
 
         The readout receives the shape of the core as 'in_shape', number of pooling stages to be performed as 'pool_steps', the kernel size and stride length
@@ -127,7 +122,6 @@ class PointPooled2d(nn.Module):
             pool_kern (int): filter size and stride length used for pooling the feature map
             init_range (float): intialises the grid with Uniform([-init_range, init_range])
                                 [expected: positive value <=1]
-
         """
         super().__init__()
         if init_range > 1.0 or init_range <= 0.0:
@@ -176,7 +170,7 @@ class PointPooled2d(nn.Module):
 
     def initialize(self):
         """
-        initialize function initialises the grid, features or weights and bias terms.
+        Initialize function initialises the grid, features or weights and bias terms.
         """
         self.grid.data.uniform_(-self.init_range, self.init_range)
         self.features.data.fill_(1 / self.in_shape[0])
@@ -186,7 +180,7 @@ class PointPooled2d(nn.Module):
 
     def feature_l1(self, average=True):
         """
-        feature_l1 function helps is applying l1 regularization.
+        Used for applying l1 regularization.
         Args:
             average(bool): if True, use mean of weights for regularization
 
@@ -197,6 +191,16 @@ class PointPooled2d(nn.Module):
             return self.features.abs().sum()
 
     def forward(self, x, shift=None, out_idx=None):
+        """
+        Propagates the input forwards through the readout
+        Args:
+            x: input data
+            shift: shifts the location of the grid (from eye-tracking data)
+            out_idx: index of neurons to be predicted
+
+        Returns:
+            y: neuronal activity
+        """
         self.grid.data = torch.clamp(self.grid.data, -1, 1)
         N, c, w, h = x.size()
         c_in, w_in, h_in = self.in_shape
@@ -211,12 +215,12 @@ class PointPooled2d(nn.Module):
         feat = self.features.view(1, m * c, self.outdims)
 
         if out_idx is None:
-            # predict all output units
+            # predict all output neurons
             grid = self.grid
             bias = self.bias
             outdims = self.outdims
         else:
-            # out_idx specifies the indices to subset of units
+            # out_idx specifies the indices to subset of neurons
             feat = feat[:, :, out_idx]
             grid = self.grid[:, out_idx]
             if self.bias is not None:
@@ -664,10 +668,13 @@ class PointPyramid2d(nn.Module):
 
 class MultipleGaussian2d(Readout, ModuleDict):
     """
-
-    "MultipleGaussian2d" instantiates multiple instances of PointPool2d Readouts
+    Instantiates multiple instances of Gaussian2d Readouts
     usually used when dealing with more than one dataset sharing the same core.
 
+    Args:
+        in_shape (list): shape of the input feature map [channels, width, height]
+        loaders (list):  a list of dataloaders
+        gamma_readout (float): regularizer for the readout
     """
 
     def __init__(self, in_shape, loaders, gamma_readout, **kwargs):
@@ -697,8 +704,7 @@ class MultipleGaussian2d(Readout, ModuleDict):
 
 class Gaussian2d(nn.Module):
     """
-
-    'Gaussian2d' class instantiates an object that can used to learn a point in the core feature space for each neuron,
+    Instantiates an object that can used to learn a point in the core feature space for each neuron,
     sampled from a Gaussian distribution with some mean and variance at train but set to mean at test time, that best predicts its response.
 
     The readout receives the shape of the core as 'in_shape', the number of units/neurons being predicted as 'outdims', 'bias' specifying whether
@@ -717,7 +723,6 @@ class Gaussian2d(nn.Module):
         init_sigma_range (float): initialises sigma with Uniform([0.0, init_sigma_range])
         batch_sample (bool): if True, samples a position for each image in the batch separately
                             [default: True as it decreases convergence time and performs just as well]
-
     """
 
     def __init__(
@@ -734,7 +739,7 @@ class Gaussian2d(nn.Module):
         super().__init__()
         if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma_range <= 0.0:
             raise ValueError(
-                "init_mu_range or init_sigma_range is not within required limit!"
+                "either init_mu_range doesn't belong to [0.0, 1.0] or init_sigma_range is non-positive"
             )
         self.in_shape = in_shape
         c, w, h = in_shape
@@ -749,7 +754,7 @@ class Gaussian2d(nn.Module):
         )  # standard deviation for gaussian for each neuron
         self.features = Parameter(
             torch.Tensor(1, c, 1, outdims)
-        )  # saliency  weights for each channel from core
+        )  # feature weights for each channel of the core
 
         if bias:
             bias = Parameter(torch.Tensor(outdims))
@@ -763,7 +768,7 @@ class Gaussian2d(nn.Module):
 
     def initialize(self):
         """
-        initialize function initializes the mean, sigma for the Gaussian readout and features weights
+        Initializes the mean, and sigma of the Gaussian readout along with the features weights
         """
         self.mu.data.uniform_(-self.init_mu_range, self.init_mu_range)
         self.sigma.data.uniform_(0, self.init_sigma_range)
@@ -772,8 +777,13 @@ class Gaussian2d(nn.Module):
         if self.bias is not None:
             self.bias.data.fill_(0)
 
-    def sample_grid(self, batch_size, force_eval_state=False):
-
+    def sample_grid(self, batch_size, sample=True):
+        """
+        Returns the grid locations from the core by sampling from a Gaussian distribution
+        Args:
+            batch_size (int): size of the batch
+            sample (bool): sample determines whether to draw a sample or use the mean of the Gaussian distribution per neuron.
+        """
         with torch.no_grad():
             self.mu.clamp_(
                 min=-1, max=1
@@ -782,24 +792,21 @@ class Gaussian2d(nn.Module):
 
         grid_shape = (batch_size,) + self.grid_shape[1:]
 
-        if self.training and not force_eval_state:
+        if self.training and sample:
             norm = self.mu.new(*grid_shape).normal_()
         else:
             norm = self.mu.new(*grid_shape).zero_()
 
-        z = (
-            norm * self.sigma + self.mu
-        )  # grid locations in feature space sampled randomly around the mean self.muq
-
-        return torch.clamp(z, min=-1, max=1)
+        return torch.clamp(norm * self.sigma + self.mu, min=-1,
+                           max=1)  # grid locations in feature space sampled randomly around the mean self.mu
 
     @property
     def grid(self):
-        return self.sample_grid(batch_size=1, force_eval_state=True)
+        return self.sample_grid(batch_size=1, sample=False)
 
     def feature_l1(self, average=True):
         """
-        feature_l1 function returns the l1 regularization term either the mean or just the sum of weights
+        returns the l1 regularization term either the mean or the sum of all weights
         Args:
             average(bool): if True, use mean of weights for regularization
         """
@@ -808,8 +815,18 @@ class Gaussian2d(nn.Module):
         else:
             return self.features.abs().sum()
 
-    def forward(self, x, force_eval_state=False, shift=None, out_idx=None):
+    def forward(self, x, sample=True, shift=None, out_idx=None):
+        """
+        Propagates the input forwards through the readout
+        Args:
+            x: input data
+            sample: sample determines whether to draw a sample or use the mean of the Gaussian distribution per neuron.
+            shift: shifts the location of the grid (from eye-tracking data)
+            out_idx: index of neurons to be predicted
 
+        Returns:
+            y: neuronal activity
+        """
         N, c, w, h = x.size()
         c_in, w_in, h_in = self.in_shape
         if (c_in, w_in, h_in) != (c, w, h):
@@ -821,13 +838,15 @@ class Gaussian2d(nn.Module):
         outdims = self.outdims
 
         if self.batch_sample:
+            # sample the grid_locations separately per image per batch
             grid = self.sample_grid(
-                batch_size=N, force_eval_state=force_eval_state
-            )  # force_eval_state set to True, disables sampling from Gaussian
+                batch_size=N, sample=sample
+            )  # sample determines sampling from Gaussian
         else:
-            grid = self.sample_grid(
-                batch_size=1, force_eval_state=force_eval_state
-            ).expand(N, outdims, 1, 2)
+            # use one sampled grid_locations for all images in the batch
+            grid = self.sample_grid(batch_size=1, sample=sample).expand(
+                N, outdims, 1, 2
+            )
 
         if out_idx is not None:
             if isinstance(out_idx, np.ndarray):

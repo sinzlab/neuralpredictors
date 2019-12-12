@@ -34,16 +34,25 @@ class MultipleGaussian2d(Readout, ModuleDict):
 
     """
 
-    def __init__(self, in_shape, loaders, gamma_readout, **kwargs):
+    def __init__(self, in_shape, loaders, gamma_readout,
+                 variance_weight, model_type='stochastic', **kwargs):
         super().__init__()
 
         self.in_shape = in_shape
-        self.neurons = OrderedDict([(k, loader.dataset.n_neurons) for k, loader in loaders.items()])
+        self.neurons = OrderedDict(
+            [(k, loader.dataset.n_neurons) for k, loader in loaders.items()])
+        self.model_type = model_type
 
         self.gamma_readout = gamma_readout
+        self.variance_weight = variance_weight
 
         for k, n_neurons in self.neurons.items():
-            self.add_module(k, Gaussian2d(in_shape=in_shape, outdims=n_neurons, **kwargs))
+            if self.model_type == 'stochastic':
+                self.add_module(k, Gaussian2d(
+                    in_shape=in_shape, outdims=n_neurons, **kwargs))
+            elif self.model_type == 'deterministic':
+                self.add_module(k, Gaussian2d_deterministic(
+                    in_shape=in_shape, outdims=n_neurons, **kwargs))
 
     def initialize(self, mean_activity_dict):
 
@@ -52,7 +61,10 @@ class MultipleGaussian2d(Readout, ModuleDict):
             self[k].bias.data = mu.squeeze() - 1
 
     def regularizer(self, readout_key):
-        return self[readout_key].feature_l1() * self.gamma_readout
+        reg = self[readout_key].feature_l1() * self.gamma_readout
+        if self.model_type == 'deterministic':
+            reg += self[readout_key].variance_l1() * self.variance_weight
+        return reg
 
 
 class Gaussian2d(nn.Module):
@@ -261,6 +273,18 @@ class Gaussian2d_deterministic(nn.Module):
             return self.features.abs().mean()
         else:
             return self.features.abs().sum()
+
+    def variance_l1(self, average=True):
+        """
+        feature_l1 function returns the l1 regularization term either the
+        mean or just the sum of variances
+        Args:
+            average(bool): if True, use mean of weights for regularization
+        """
+        if average:
+            return self.log_var.abs().mean()
+        else:
+            return self.log_var.abs().sum()
 
     def forward(self, x, shift=None, out_idx=None):
         N, c, w, h = x.size()

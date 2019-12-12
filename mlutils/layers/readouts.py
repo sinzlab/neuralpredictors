@@ -179,6 +179,128 @@ class Gaussian2d(nn.Module):
         return r
 
 
+class Gaussian2d_deterministic(nn.Module):
+    """
+
+    'Gaussian2d' class instantiates an object that can be used to learn a
+    Normal distribution in the core feature space for each neuron, this is
+    applied to the pixel grid to give a simple weighting.
+    The variance should be decreased over training to achieve localization.
+
+    The readout receives the shape of the core as 'in_shape', the number of units/neurons being predicted as 'outdims', 'bias' specifying whether
+    or not bias term is to be used.
+    The grid parameter contains the normalized locations (x, y coordinates in the core feature space) and is clipped to [-1.1] as it a
+    requirement of the torch.grid_sample function. The feature parameter learns the best linear mapping between the feature
+    map from a given location, and the unit's response with or without an additional elu non-linearity.
+
+    Args:
+        in_shape (list): shape of the input feature map [channels, width, height]
+        outdims (int): number of output units
+        bias (bool): adds a bias term
+
+
+    """
+
+    def __init__(self, in_shape, outdims, bias, **kwargs):
+
+        super().__init__()
+        self.in_shape = in_shape
+        c, w, h = in_shape
+        self.outdims = outdims
+
+        self.mu = Parameter(
+            data=torch.zeros(outdims, 2), requires_grad=True)
+        self.log_var = Parameter(
+            data=torch.zeros(outdims, 2), requires_grad=True)
+        self.grid = torch.nn.Parameter(
+            data=self.make_mask_grid(), requires_grad=False)
+
+        self.features = Parameter(torch.Tensor(1, c, 1, outdims))  # saliency  weights for each channel from core
+
+        if bias:
+            bias = Parameter(torch.Tensor(outdims))
+            self.register_parameter('bias', bias)
+        else:
+            self.register_parameter('bias', None)
+
+        self.initialize()
+
+    def make_mask_grid(self):
+        xx, yy = torch.meshgrid(
+            [torch.linspace(-1, 1, self.in_shape[1]),
+             torch.linspace(-1, 1, self.in_shape[2])])
+        grid = torch.stack([xx, yy], 2)[None, ...]
+        return grid.repeat([self.outdims, 1, 1, 1])
+
+    def mask(self, shift=(0, 0)):
+        variances = torch.exp(self.log_var).view(-1, 1, 1)
+        mean = (self.mu + shift[None, ...]).view(self.outdims, 1, 1, -1)
+        pdf = self.grid - mean
+        pdf = torch.sum(pdf**2, dim=-1) / variances
+        pdf = torch.exp(-.5 * pdf)
+        # normalize to sum=1
+        pdf = pdf / torch.sum(pdf, dim=(1, 2), keepdim=True)
+        return pdf
+
+    def initialize(self):
+        """
+        initialize function initializes the mean, sigma for the Gaussian readout and features weights
+        """
+        self.features.data.fill_(1 / self.in_shape[0])
+
+        if self.bias is not None:
+            self.bias.data.fill_(0)
+
+    def feature_l1(self, average=True):
+        """
+        feature_l1 function returns the l1 regularization term either the mean or just the sum of weights
+        Args:
+            average(bool): if True, use mean of weights for regularization
+        """
+        if average:
+            return self.features.abs().mean()
+        else:
+            return self.features.abs().sum()
+
+    def forward(self, x, shift=None, out_idx=None):
+        N, c, w, h = x.size()
+        feat = self.features.view(1, c, self.outdims)
+
+        if out_idx is None:
+            grid = self.grid
+            bias = self.bias
+            outdims = self.outdims
+        else:
+            feat = feat[:, :, out_idx]
+            grid = self.grid[:, out_idx]
+            if self.bias is not None:
+                bias = self.bias[out_idx]
+            outdims = len(out_idx)
+
+        if shift is None:
+            mask = self.mask()
+        else:
+            mask = self.mask(shift=shift)
+        # BxCxDxN for videos, adapt for images!
+        mask = mask.permute(1, 2, 0)[None, None, None, ...]
+        y = torch.sum(x * mask, dim=(3, 4))
+        y = (y.squeeze(-1) * feat).sum(1).view(N, outdims)
+
+        if self.bias is not None:
+            y = y + bias
+        return y
+
+    def __repr__(self):
+        c, w, h = self.in_shape
+        r = self.__class__.__name__ + \
+            ' (' + '{} x {} x {}'.format(c, w, h) + ' -> ' + str(self.outdims) + ')'
+        if self.bias is not None:
+            r += ' with bias'
+        for ch in self.children():
+            r += '  -> ' + ch.__repr__() + '\n'
+        return r
+
+
 ##############
 # Pyramid Readout
 ##############

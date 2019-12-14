@@ -107,7 +107,7 @@ class Stacked2dCore(Core2d, nn.Module):
         self.skip = skip
         self.features = nn.Sequential()
         if stack is None:
-            self.stack = range(layers)
+            self.stack = range(self.layers)
         else:
             self.stack = [range(self.layers)[stack]] if isinstance(stack, int) else stack
 

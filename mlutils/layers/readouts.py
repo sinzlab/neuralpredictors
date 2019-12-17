@@ -787,7 +787,7 @@ class Gaussian2d(nn.Module):
         Args:
             batch_size (int): size of the batch
             sample (bool): sample determines whether we draw a sample from Gaussian distribution, N(mu,sigma), defined per neuron
-                            or use the mean, mu, of the Normal distribution without sampling.
+                            or use the mean, mu, of the Gaussian distribution without sampling.
                            if sample is None (default), samples from the N(mu,sigma) during training phase and
                              fixes to the mean, mu, during evaluation phase.
                            if sample is True/False, overrides the model_state (i.e training or eval) and does as instructed
@@ -831,14 +831,13 @@ class Gaussian2d(nn.Module):
         Propagates the input forwards through the readout
         Args:
             x: input data
-            sample (bool): sample determines whether we draw a sample from Gaussian distribution, N(mu,sigma), defined per neuron or use the mean, mu, of the Normal
-                           distribution without sampling.
-                           sample: None (default)
-                             samples from the N(mu,sigma) during training phase and fixes to the mean, mu, during evaluation phase.
-                           sample: True/False
-                             overrides the model_state (i.e training or eval) and does as instructed
-            shift: shifts the location of the grid (from eye-tracking data)
-            out_idx: index of neurons to be predicted
+            sample (bool/None): sample determines whether we draw a sample from Gaussian distribution, N(mu,sigma), defined per neuron
+                            or use the mean, mu, of the Gaussian distribution without sampling.
+                           if sample is None (default), samples from the N(mu,sigma) during training phase and
+                             fixes to the mean, mu, during evaluation phase.
+                           if sample is True/False, overrides the model_state (i.e training or eval) and does as instructed
+            shift (bool): shifts the location of the grid (from eye-tracking data)
+            out_idx (bool): index of neurons to be predicted
 
         Returns:
             y: neuronal activity

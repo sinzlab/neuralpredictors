@@ -78,13 +78,17 @@ class MultiplePointPooled2d(Readout, ModuleDict):
         super().__init__()
 
         self.in_shape = in_shape
-        self.neurons = OrderedDict([(k, loader.dataset.n_neurons) for k, loader in loaders.items()])
+        self.neurons = OrderedDict(
+            [(k, loader.dataset.n_neurons) for k, loader in loaders.items()]
+        )
 
         self.gamma_readout = gamma_readout  # regularisation strength
 
         for i, (k, n_neurons) in enumerate(self.neurons.items()):
             if i == 0 or clone_readout is False:
-                self.add_module(k, PointPooled2d(in_shape=in_shape, outdims=n_neurons, **kwargs))
+                self.add_module(
+                    k, PointPooled2d(in_shape=in_shape, outdims=n_neurons, **kwargs)
+                )
                 original_readout = k
             elif i > 0 and clone_readout is True:
                 self.add_module(k, ClonedReadout(self[original_readout], **kwargs))
@@ -777,12 +781,17 @@ class Gaussian2d(nn.Module):
         if self.bias is not None:
             self.bias.data.fill_(0)
 
-    def sample_grid(self, batch_size, sample=True):
+    def sample_grid(self, batch_size, sample=None):
         """
         Returns the grid locations from the core by sampling from a Gaussian distribution
         Args:
             batch_size (int): size of the batch
-            sample (bool): sample determines whether to draw a sample or use the mean of the Gaussian distribution per neuron.
+            sample (bool): sample determines whether we draw a sample from Gaussian distribution, N(mu,sigma), defined per neuron or use the mean, mu, of the Normal
+                           distribution without sampling.
+                           sample: None (default)
+                             samples from the N(mu,sigma) during training phase and fixes to the mean, mu, during evaluation phase.
+                           sample: True/False
+                             overrides the model_state (i.e training or eval) and does as instructed
         """
         with torch.no_grad():
             self.mu.clamp_(
@@ -792,13 +801,16 @@ class Gaussian2d(nn.Module):
 
         grid_shape = (batch_size,) + self.grid_shape[1:]
 
-        if self.training and sample:
+        sample = self.training if sample is None else sample
+
+        if sample:
             norm = self.mu.new(*grid_shape).normal_()
         else:
-            norm = self.mu.new(*grid_shape).zero_()
+            norm = self.mu.new(*grid_shape).zero_()  # for consistency and CUDA capability
 
-        return torch.clamp(norm * self.sigma + self.mu, min=-1,
-                           max=1)  # grid locations in feature space sampled randomly around the mean self.mu
+        return torch.clamp(
+            norm * self.sigma + self.mu, min=-1, max=1
+        )  # grid locations in feature space sampled randomly around the mean self.mu
 
     @property
     def grid(self):
@@ -815,12 +827,17 @@ class Gaussian2d(nn.Module):
         else:
             return self.features.abs().sum()
 
-    def forward(self, x, sample=True, shift=None, out_idx=None):
+    def forward(self, x, sample=None, shift=None, out_idx=None):
         """
         Propagates the input forwards through the readout
         Args:
             x: input data
-            sample: sample determines whether to draw a sample or use the mean of the Gaussian distribution per neuron.
+            sample (bool): sample determines whether we draw a sample from Gaussian distribution, N(mu,sigma), defined per neuron or use the mean, mu, of the Normal
+                           distribution without sampling.
+                           sample: None (default)
+                             samples from the N(mu,sigma) during training phase and fixes to the mean, mu, during evaluation phase.
+                           sample: True/False
+                             overrides the model_state (i.e training or eval) and does as instructed
             shift: shifts the location of the grid (from eye-tracking data)
             out_idx: index of neurons to be predicted
 

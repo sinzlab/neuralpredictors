@@ -220,13 +220,10 @@ class PointPooled2d(nn.Module):
         )  # the input feature is considered the first pooling stage
         feat = self.features.view(1, m * c, self.outdims)
 
-        if out_idx is None:
-            # predict all output neurons
-            grid = self.grid
-            bias = self.bias
-            outdims = self.outdims
-        else:
-            # out_idx specifies the indices to subset of neurons
+        if out_idx is not None:
+            if isinstance(out_idx, np.ndarray):
+                if out_idx.dtype == bool:
+                    out_idx = np.where(out_idx)[0]
             feat = feat[:, :, out_idx]
             grid = grid[:, out_idx]
             if bias is not None:
@@ -480,6 +477,7 @@ class MultiplePointPyramid2d(Readout, ModuleDict):
             self[k].positive = value
 
     def initialize(self, mu_dict):
+
         for k, mu in mu_dict.items():
             self[k].initialize()
             self[k].bias.data = mu.squeeze() - 1

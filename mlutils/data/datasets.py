@@ -247,7 +247,7 @@ class H5ArraySet(TransformDataset):
                 return item
             return item
         else:
-            raise AttributeError("Item {} not found in {}".format(item, self.__class__.__name__))
+            return None
 
 
 class StaticImageSet(H5ArraySet):
@@ -284,13 +284,6 @@ class StaticImageSet(H5ArraySet):
         return super().__repr__() + (
             "\n\t[Stats source: {}]".format(self.stats_source) if self.stats_source is not None else ""
         )
-
-    def __getattr__(self, item):
-        try:
-            return super().__getattr__(item)
-        except AttributeError:
-            if item in self._fid.keys():
-                return self._fid[item][()]
 
     def __dir__(self):
         attrs = set(self.__dict__).union(set(dir(type(self))))

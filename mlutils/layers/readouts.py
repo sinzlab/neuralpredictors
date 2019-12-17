@@ -786,12 +786,11 @@ class Gaussian2d(nn.Module):
         Returns the grid locations from the core by sampling from a Gaussian distribution
         Args:
             batch_size (int): size of the batch
-            sample (bool): sample determines whether we draw a sample from Gaussian distribution, N(mu,sigma), defined per neuron or use the mean, mu, of the Normal
-                           distribution without sampling.
-                           sample: None (default)
-                             samples from the N(mu,sigma) during training phase and fixes to the mean, mu, during evaluation phase.
-                           sample: True/False
-                             overrides the model_state (i.e training or eval) and does as instructed
+            sample (bool): sample determines whether we draw a sample from Gaussian distribution, N(mu,sigma), defined per neuron
+                            or use the mean, mu, of the Normal distribution without sampling.
+                           if sample is None (default), samples from the N(mu,sigma) during training phase and
+                             fixes to the mean, mu, during evaluation phase.
+                           if sample is True/False, overrides the model_state (i.e training or eval) and does as instructed
         """
         with torch.no_grad():
             self.mu.clamp_(

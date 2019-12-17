@@ -246,8 +246,6 @@ class H5ArraySet(TransformDataset):
                     item = item.astype(str)
                 return item
             return item
-        else:
-            return None
 
 
 class StaticImageSet(H5ArraySet):

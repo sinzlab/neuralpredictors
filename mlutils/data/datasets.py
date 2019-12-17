@@ -288,7 +288,7 @@ class StaticImageSet(H5ArraySet):
     def __getattr__(self, item):
         try:
             return super().__getattr__(item)
-        except:
+        except AttributeError:
             if item in self._fid.keys():
                 return self._fid[item][()]
 

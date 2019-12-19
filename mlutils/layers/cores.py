@@ -134,12 +134,15 @@ class Stacked2dCore(Core2d, nn.Module):
         if not isinstance(hidden_padding, Iterable):
             hidden_padding = [hidden_padding] * (self.layers - 1)
 
+        if not isinstance(hidden_kern, Iterable):
+            hidden_kern = [hidden_kern] * (self.layers - 1)
+
         for l in range(1, self.layers):
             layer = OrderedDict()
             layer["conv"] = nn.Conv2d(
                 hidden_channels if not skip > 1 else min(skip, l) * hidden_channels,
                 hidden_channels,
-                hidden_kern,
+                hidden_kern[l-1],
                 padding=hidden_padding[l-1],
                 bias=bias,
                 dilation=hidden_dilation,

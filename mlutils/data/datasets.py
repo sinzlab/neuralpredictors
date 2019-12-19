@@ -241,13 +241,11 @@ class H5ArraySet(TransformDataset):
         if item in self._fid:
             item = self._fid[item]
             if isinstance(item, h5py._hl.dataset.Dataset):
-                item = item.value
+                item = item[()]
                 if item.dtype.char == "S":  # convert bytes to univcode
                     item = item.astype(str)
                 return item
             return item
-        else:
-            raise AttributeError("Item {} not found in {}".format(item, self.__class__.__name__))
 
 
 class StaticImageSet(H5ArraySet):
@@ -277,17 +275,13 @@ class StaticImageSet(H5ArraySet):
         if stats_source is None:
             stats_source = self.stats_source
 
-        tmp = [np.atleast_1d(self.statistics["{}/{}/mean".format(dk, stats_source)].value) for dk in self.data_keys]
+        tmp = [np.atleast_1d(self.statistics["{}/{}/mean".format(dk, stats_source)][()]) for dk in self.data_keys]
         return self.transform(self.data_point(*tmp))
 
     def __repr__(self):
         return super().__repr__() + (
             "\n\t[Stats source: {}]".format(self.stats_source) if self.stats_source is not None else ""
         )
-
-    def __getattr__(self, item):
-        if item in self._fid.keys():
-            return self._fid[item][()]
 
     def __dir__(self):
         attrs = set(self.__dict__).union(set(dir(type(self))))

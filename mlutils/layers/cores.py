@@ -161,7 +161,7 @@ class Stacked2dCore(Core2d, nn.Module):
         return torch.cat(ret, dim=1)
 
     def laplace(self, avg=False):
-        return self._input_weights_regularizer(self.features[0].conv.weight)
+        return self._input_weights_regularizer(self.features[0].conv.weight, avg=avg)
 
     def group_sparsity(self):
         ret = 0

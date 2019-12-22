@@ -62,6 +62,7 @@ class Stacked2dCore(Core2d, nn.Module):
         laplace_padding=0,
         input_regularizer="LaplaceL2",
         stack=None,
+        use_avg_reg=True,
     ):
         """
         Args:
@@ -91,6 +92,7 @@ class Stacked2dCore(Core2d, nn.Module):
                             default value will stack all layers on top of each other.
                             stack = -1 will only select the last layer as the readout layer
                             stack = 0  will only readout from the first layer
+            use_avg_reg:    bool. Whether to use the averaged value of regularizer(s) or the summed.
         """
 
         super().__init__()
@@ -110,6 +112,11 @@ class Stacked2dCore(Core2d, nn.Module):
         self.input_channels = input_channels
         self.hidden_channels = hidden_channels
         self.skip = skip
+        self.use_avg_reg = use_avg_reg
+
+        if use_avg_reg:
+            warnings.warn("The averaged value of regularizater will be used.", UserWarning)
+
         self.features = nn.Sequential()
         if stack is None:
             self.stack = range(self.layers)
@@ -160,8 +167,8 @@ class Stacked2dCore(Core2d, nn.Module):
                 ret.append(input_)
         return torch.cat(ret, dim=1)
 
-    def laplace(self, avg=True):
-        return self._input_weights_regularizer(self.features[0].conv.weight, avg=avg)
+    def laplace(self):
+        return self._input_weights_regularizer(self.features[0].conv.weight, avg=self.use_avg_reg)
 
     def group_sparsity(self):
         ret = 0
@@ -170,8 +177,7 @@ class Stacked2dCore(Core2d, nn.Module):
         return ret / ((self.layers - 1) if self.layers > 1 else 1)
 
     def regularizer(self, avg=True):
-        return (self.group_sparsity() * self.gamma_hidden + 
-                self.gamma_input * self.laplace(avg=avg))
+        return self.group_sparsity() * self.gamma_hidden + self.gamma_input * self.laplace()
 
     @property
     def outchannels(self):

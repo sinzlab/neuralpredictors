@@ -169,8 +169,9 @@ class Stacked2dCore(Core2d, nn.Module):
             ret = ret + self.features[l].conv.weight.pow(2).sum(3, keepdim=True).sum(2, keepdim=True).sqrt().mean()
         return ret / ((self.layers - 1) if self.layers > 1 else 1)
 
-    def regularizer(self):
-        return self.group_sparsity() * self.gamma_hidden + self.gamma_input * self.laplace()
+    def regularizer(self, avg=False):
+        return (self.group_sparsity() * self.gamma_hidden + 
+                self.gamma_input * self.laplace(avg=False))
 
     @property
     def outchannels(self):

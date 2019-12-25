@@ -1,7 +1,7 @@
 from collections import OrderedDict
 from torch import nn
 from .. import regularizers
-from ..layers.activations import ELU1
+from ..layers.activations import Elu1
 from ..layers.flows import Bias2DLayer
 import torch
 import torchvision

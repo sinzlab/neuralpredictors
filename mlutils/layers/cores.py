@@ -164,8 +164,7 @@ class Stacked2dCore(Core2d, nn.Module):
             do_skip = l >= 1 and self.skip > 1
             input_ = feat(input_ if not do_skip else torch.cat(ret[-min(self.skip, l):], dim=1))
             ret.append(input_)
-            # if l in self.stack:
-            #     ret.append(input_)
+
         return torch.cat([ret[ind] for ind in self.stack], dim=1)
 
     def laplace(self):

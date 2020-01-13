@@ -1,9 +1,11 @@
-from collections import OrderedDict
+import warnings
+from collections import OrderedDict, Iterable
+
 from torch import nn
-from .. import regularizers
 import torch
 import torchvision
-import warnings
+
+from .. import regularizers
 
 
 class Core:
@@ -54,10 +56,13 @@ class Stacked2dCore(Core2d, nn.Module):
         bias=False,
         momentum=0.1,
         pad_input=True,
+        hidden_padding=None,
         batch_norm=True,
         hidden_dilation=1,
         laplace_padding=0,
         input_regularizer="LaplaceL2",
+        stack=None,
+        use_avg_reg=True,
     ):
         """
         Args:
@@ -73,6 +78,8 @@ class Stacked2dCore(Core2d, nn.Module):
             bias:           Adds a bias layer. Note: bias and batch_norm can not both be true
             momentum:       BN momentum
             pad_input:      Boolean, if True, applies zero padding to all convolutions
+            hidden_padding: int or list of int. Padding for hidden layers. Note that this will apply to all the layers 
+                            except the first (input) layer.
             batch_norm:     Boolean, if True appends a BN layer after each convolutional layer
             hidden_dilation:    If set to > 1, will apply dilated convs for all hidden layers
             laplace_padding: Padding size for the laplace convolution. If padding = None, it defaults to half of
@@ -80,8 +87,12 @@ class Stacked2dCore(Core2d, nn.Module):
                 zero is the default however to recreate backwards compatibility.
             normalize_laplace_regularizer: Boolean, if set to True, will use the LaplaceL2norm function from
                 mlutils.regularizers, which returns the regularizer as |laplace(filters)| / |filters|
-
-            input_regularizer: String that must match one of the regularizers in ..regularizers
+            input_regularizer:  String that must match one of the regularizers in ..regularizers
+            stack:        Int or iterable. Selects which layers of the core should be stacked for the readout.
+                            default value will stack all layers on top of each other.
+                            stack = -1 will only select the last layer as the readout layer
+                            stack = 0  will only readout from the first layer
+            use_avg_reg:    bool. Whether to use the averaged value of regularizer(s) or the summed.
         """
 
         super().__init__()
@@ -101,7 +112,16 @@ class Stacked2dCore(Core2d, nn.Module):
         self.input_channels = input_channels
         self.hidden_channels = hidden_channels
         self.skip = skip
+        self.use_avg_reg = use_avg_reg
+
+        if use_avg_reg:
+            warnings.warn("The averaged value of regularizater will be used.", UserWarning)
+
         self.features = nn.Sequential()
+        if stack is None:
+            self.stack = range(self.layers)
+        else:
+            self.stack = [range(self.layers)[stack]] if isinstance(stack, int) else stack
 
         # --- first layer
         layer = OrderedDict()
@@ -115,14 +135,18 @@ class Stacked2dCore(Core2d, nn.Module):
         self.features.add_module("layer0", nn.Sequential(layer))
 
         # --- other layers
-        h_pad = ((hidden_kern - 1) * hidden_dilation + 1) // 2
+        if not isinstance(hidden_kern, Iterable):
+            hidden_kern = [hidden_kern] * (self.layers - 1)
+
         for l in range(1, self.layers):
             layer = OrderedDict()
+
+            hidden_padding = ((hidden_kern[l-1] - 1) * hidden_dilation + 1) // 2
             layer["conv"] = nn.Conv2d(
                 hidden_channels if not skip > 1 else min(skip, l) * hidden_channels,
                 hidden_channels,
-                hidden_kern,
-                padding=h_pad,
+                hidden_kern[l-1],
+                padding=hidden_padding,
                 bias=bias,
                 dilation=hidden_dilation,
             )
@@ -138,12 +162,13 @@ class Stacked2dCore(Core2d, nn.Module):
         ret = []
         for l, feat in enumerate(self.features):
             do_skip = l >= 1 and self.skip > 1
-            input_ = feat(input_ if not do_skip else torch.cat(ret[-min(self.skip, l) :], dim=1))
+            input_ = feat(input_ if not do_skip else torch.cat(ret[-min(self.skip, l):], dim=1))
             ret.append(input_)
-        return torch.cat(ret, dim=1)
+
+        return torch.cat([ret[ind] for ind in self.stack], dim=1)
 
     def laplace(self):
-        return self._input_weights_regularizer(self.features[0].conv.weight)
+        return self._input_weights_regularizer(self.features[0].conv.weight, avg=self.use_avg_reg)
 
     def group_sparsity(self):
         ret = 0
@@ -257,7 +282,7 @@ class DepthSeparableConv2d(nn.Sequential):
                 out_channels,
                 out_channels,
                 kernel_size,
-                stride=1,
+                stride=stride,
                 padding=padding,
                 dilation=dilation,
                 bias=bias,

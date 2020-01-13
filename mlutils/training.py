@@ -41,7 +41,6 @@ class TimeObjectiveTracker(Tracker):
     def finalize(self):
         self.tracker[:, 0] -= self.tracker[0, 0]
 
-
 class MultipleObjectiveTracker(Tracker):
     def __init__(self, **objectives):
         self.objectives = objectives
@@ -87,6 +86,7 @@ def early_stopping(
     scheduler=None,
     lr_decay_steps=1,
 ):
+
     """
     Early stopping iterator. Keeps track of the best model state during training. Resets the model to its
         best state, when either the number of maximum epochs or the patience [number of epochs without improvement)
@@ -210,19 +210,73 @@ def alternate(*args):
         yield from row
 
 
-def cycle_datasets(trainloaders):
+def cycle_datasets(loaders):
     """
     Cycles through datasets of train loaders.
 
     Args:
-        trainloaders: OrderedDict with trainloaders as values
+        loaders: OrderedDict with trainloaders as values
 
     Yields:
         readout key, input, targets
 
     """
-    # assert isinstance(trainloaders, OrderedDict), 'trainloaders must be an ordered dict'
-    keys = list(trainloaders.keys())
-    ordered_loaders = [trainloaders[k] for k in keys]
-    for readout_key, outputs in zip(cycle(trainloaders.keys()), alternate(*ordered_loaders)):
+
+    #assert isinstance(trainloaders, OrderedDict), 'trainloaders must be an ordered dict'
+    keys = list(loaders.keys())
+    ordered_loaders = [loaders[k] for k in keys]
+    for readout_key, outputs in zip(cycle(loaders.keys()), alternate(*ordered_loaders)):
         yield readout_key, outputs
+
+
+class Exhauster:
+    """
+    Cycles through loaders until they are exhausted. Needed for dataloaders that are of unequal size
+        (as in the monkey data)
+    """
+    def __init__(self, loaders):
+        self.loaders = loaders
+
+    def __iter__(self):
+        for data_key, loader in self.loaders.items():
+            for batch in loader:
+                yield data_key, batch
+
+    def __len__(self):
+        return sum([len(loader) for loader in self.loaders])
+
+
+class LongCycler:
+    """
+    Cycles through trainloaders until the loader with largest size is exhausted.
+        Needed for dataloaders of unequal size (as in the monkey data).
+    """
+    def __init__(self, loaders):
+        self.loaders = loaders
+        self.max_batches = max([len(loader) for loader in self.loaders.values()])
+
+    def __iter__(self):
+        cycles = [cycle(loader) for loader in self.loaders.values()]
+        for k, loader, _ in zip(cycle(self.loaders.keys()), (cycle(cycles)), range(len(self.loaders) * self.max_batches)):
+            yield k, next(loader)
+
+    def __len__(self):
+        return len(self.loaders) * self.max_batches
+
+
+class ShortCycler:
+    """
+    Cycles through trainloaders until the loader with smallest size is exhausted.
+        Needed for dataloaders of unequal size (as in the monkey data).
+    """
+    def __init__(self, loaders):
+        self.loaders = loaders
+        self.max_batches = min([len(loader) for loader in self.loaders.values()])
+
+    def __iter__(self):
+        cycles = [cycle(loader) for loader in self.loaders.values()]
+        for k, loader, _ in zip(cycle(self.loaders.keys()), (cycle(cycles)), range(len(self.loaders) * self.max_batches)):
+            yield k, next(loader)
+
+    def __len__(self):
+        return len(self.loaders) * self.max_batches

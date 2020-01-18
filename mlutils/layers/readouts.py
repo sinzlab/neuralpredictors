@@ -128,9 +128,9 @@ class PointPooled2d(nn.Module):
                                 [expected: positive value <=1]
         """
         super().__init__()
-        if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma_range <= 0.0:
+        if init_range > 1.0 or init_range <= 0.0:
             raise ValueError(
-                "init_mu_range or init_sigma_range is not within required limit!"
+                "init_range is not within required limit!"
             )
         self._pool_steps = pool_steps
         self.in_shape = in_shape
@@ -219,15 +219,18 @@ class PointPooled2d(nn.Module):
             self.pool_steps + 1
         )  # the input feature is considered the first pooling stage
         feat = self.features.view(1, m * c, self.outdims)
-
-        if out_idx is not None:
+        if out_idx is None:
+            grid = self.grid
+            bias = self.bias
+            outdims = self.outdims
+        else:
             if isinstance(out_idx, np.ndarray):
                 if out_idx.dtype == bool:
                     out_idx = np.where(out_idx)[0]
             feat = feat[:, :, out_idx]
-            grid = grid[:, out_idx]
-            if bias is not None:
-                bias = bias[out_idx]
+            grid = self.grid[:, out_idx]
+            if self.bias is not None:
+                bias = self.bias[out_idx]
             outdims = len(out_idx)
 
         if shift is None:

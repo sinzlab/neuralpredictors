@@ -1,8 +1,8 @@
 import h5py
 from torch.utils.data import Dataset
-from collections import namedtuple
+from collections import namedtuple, OrderedDict
 import numpy as np
-from .transforms import MovieTransform, StaticTransform, Invertible, Subsequence
+from .transforms import DataTransform, MovieTransform, StaticTransform, Invertible, Subsequence, Delay
 from scipy.signal import convolve2d
 
 
@@ -16,7 +16,6 @@ class AttributeHandler:
         ret = self.h5_handle[self.name][item][()]
         if ret.dtype.char == "S":  # convert bytes to unicode
             ret = ret.astype(str)
-
         return ret
 
     def __getitem__(self, item):
@@ -26,19 +25,26 @@ class AttributeHandler:
         return self.h5_handle[self.name].keys()
 
     def __dir__(self):
-        return list(self.h5_handle[self.name].keys())
+        attrs = set(super().__dir__())
+        return attrs.union(set(self.h5_handle[self.name].keys()))
 
 
 class AttributeTransformer(AttributeHandler):
-    def __init__(self, name, h5_handle, transforms):
+    """
+    Allows for id_transform of transforms to be applied to the
+    specified attribute.
+    """
+    def __init__(self, name, h5_handle, transforms, data_group):
         super().__init__(name, h5_handle)
         self.transforms = transforms
+        self.data_group = data_group
 
     def __getattr__(self, item):
-        ret = super().__getattr__(item)
+        ret = {self.data_group: super().__getattr__(item)}
         for tr in self.transforms:
-            ret = tr.column_transform(ret)
-        return ret
+            ret = tr.id_transform(ret)
+
+        return ret[self.data_group]
 
 
 class TransformDataset(Dataset):
@@ -59,8 +65,7 @@ class TransformDataset(Dataset):
     def __iter__(self):
         yield from map(self.__getitem__, range(len(self)))
 
-    def __len__(self):
-        return self._len
+ 
 
     def __repr__(self):
         return (
@@ -72,7 +77,16 @@ class TransformDataset(Dataset):
 
 
 class H5SequenceSet(TransformDataset):
-    def __init__(self, filename, *data_groups, transforms=None):
+
+    def __init__(self, filename, *data_groups, output_rename=None, transforms=None):
+        if output_rename is None:
+            output_rename = {}
+
+        # a flag that can be changed to turn renaming on/off
+        self.rename_output = True
+
+        self.output_rename = output_rename
+
         self._fid = h5py.File(filename, "r")
 
         m = None
@@ -84,24 +98,35 @@ class H5SequenceSet(TransformDataset):
             m = l
         self._len = m
 
-        self.data_groups = data_groups
+        # Specify which types of transforms are accepted
+        self._transform_set = DataTransform
 
+
+        self.data_groups = data_groups
         self.transforms = transforms or []
 
         self.data_point = namedtuple("DataPoint", data_groups)
+        self.output_point = namedtuple("OutputPoint", [output_rename.get(k, k) for k in data_groups])
+
+    def __len__(self):
+        return self._len
 
     def __getitem__(self, item):
         x = self.data_point(*(np.array(self._fid[g][str(item)]) for g in self.data_groups))
         for tr in self.transforms:
-            assert isinstance(tr, MovieTransform)
+            assert isinstance(tr, self._transform_set)
             x = tr(x)
+
+        # convert to output point
+        if self.rename_output:
+            x = self.output_point(*x)
         return x
 
     def __getattr__(self, item):
         if item in self._fid:
             item = self._fid[item]
             if isinstance(item, h5py._hl.dataset.Dataset):
-                item = item.value
+                item = item[()]
                 if item.dtype.char == "S":  # convert bytes to univcode
                     item = item.astype(str)
                 return item
@@ -109,31 +134,44 @@ class H5SequenceSet(TransformDataset):
         else:
             raise AttributeError("Item {} not found in {}".format(item, self.__class__.__name__))
 
+    def __repr__(self):
+        names = ['{} -> {}'.format(k, self.output_rename[k]) if k in self.output_rename else k for k in self.data_groups]
+        s = "{} m={}:\n\t({})".format(self.__class__.__name__, len(self), ", ".join(names))
+        if self.transforms is not None:
+            s += "\n\t[Transforms: " + "->".join([repr(tr) for tr in self.transforms]) + "]"
+        return s
+
 
 class MovieSet(H5SequenceSet):
-    def __init__(self, filename, *data_keys, transforms=None, stats_source=None):
-        super().__init__(filename, *data_keys, transforms=transforms)
+    def __init__(self, filename, *data_groups, output_rename=None, transforms=None,  stats_source=None):
+        super().__init__(filename, *data_groups, output_rename=output_rename, transforms=transforms)
         self.shuffle_dims = {}
         self.stats_source = stats_source if stats_source is not None else "all"
 
-    @property
-    def n_neurons(self):
-        return self[0].responses.shape[1]
+        # set to accept only MovieTransform
+        self._transform_set = MovieTransform
 
+    
     @property
     def neurons(self):
-        return AttributeTransformer("neurons", self._fid, self.transforms)
+        return AttributeTransformer("neurons", self._fid, self.transforms, data_group='responses')
+
 
     @property
-    def img_shape(self):
-        return (1,) + self[0].inputs.shape
+    def n_neurons(self):
+        return len(self.neurons.unit_ids)
+
+    @property
+    def input_shape(self):
+        return (1,) + getattr(self[0], self.output_rename.get('inputs', 'inputs')).shape
+
 
     def transformed_mean(self, stats_source=None):
         if stats_source is None:
             stats_source = self.stats_source
 
-        tmp = [np.atleast_1d(self.statistics["{}/{}/mean".format(dk, stats_source)][()]) for dk in self.data_groups]
-        return self.transform(self.data_point(*tmp), exclude=Subsequence)
+        tmp = [np.atleast_1d(self.statistics["{}/{}/mean".format(g, stats_source)][()]) for g in self.data_groups]
+        return self.transform(self.data_point(*tmp), exclude=(Subsequence, Delay))
 
     def rf_base(self, stats_source="all"):
         N, c, t, w, h = self.img_shape
@@ -145,7 +183,7 @@ class MovieSet(H5SequenceSet):
             behavior=np.ones((1, t, 1)) * mean("behavior")[None, None, :],
             responses=np.ones((1, t, 1)) * mean("responses")[None, None, :],
         )
-        return self.transform(self.data_point(*[d[dk] for dk in self.data_groups]), exclude=Subsequence)
+        return self.transform(self.data_point(*[d[dk] for dk in self.data_group]), exclude=Subsequence)
 
     def rf_noise_stim(self, m, t, stats_source="all"):
         """
@@ -184,21 +222,9 @@ class MovieSet(H5SequenceSet):
             responses=mean_resp.astype(np.float32),
         )
 
-        return self.transform(self.data_point(*[d[dk] for dk in self.data_groups]), exclude=Subsequence)
+        return self.transform(self.data_point(*[d[dk] for dk in self.data_groups.values()]), exclude=Subsequence)
 
-    def __getitem__(self, item):
-        x = self.data_point(*(np.array(self._fid[g][str(item)]) for g in self.data_groups))
-
-        for tr in self.transforms:
-            assert isinstance(tr, MovieTransform)
-            x = tr(x)
-        return x
-
-    def __repr__(self):
-        s = "MovieSet m={}:\n\t({})".format(len(self), ", ".join(self.data_groups))
-        if self.transforms is not None:
-            s += "\n\t[Transforms: " + "->".join([repr(tr) for tr in self.transforms]) + "]"
-        return s
+   
 
 
 class H5ArraySet(TransformDataset):

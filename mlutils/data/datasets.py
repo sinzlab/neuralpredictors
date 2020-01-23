@@ -244,8 +244,8 @@ class MovieSet(H5SequenceSet):
 class H5ArraySet(TransformDataset):
     def __init__(self, filename, *data_keys, transforms=None):
         self._fid = h5py.File(filename, "r")
-        self.data = _fid
-        self.data_loaded 
+        self.data = self._fid
+        self.data_loaded = False
         m = None
         for key in data_keys:
             assert key in self.data, "Could not find {} in file".format(key)
@@ -263,9 +263,11 @@ class H5ArraySet(TransformDataset):
 
     def load_content(self):
         self.data = recursively_load_dict_contents_from_group(self._fid)
+        self.data_loaded = True
 
     def unload_content(self):
         self.data = self._fid
+        self.data_loaded = False
     
 
     def __getitem__(self, item):

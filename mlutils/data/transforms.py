@@ -222,10 +222,10 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
 
         exclude = self.exclude = exclude or []
 
-        self._inputs_mean = data.statistics["inputs/{}/mean".format(stats_source)][()]
-        self._inputs_std = data.statistics["inputs/{}/std".format(stats_source)][()]
+        self._inputs_mean = data.statistics["inputs"][stats_source]["mean"][()]
+        self._inputs_std = data.statistics["inputs"][stats_source]["std"][()]
 
-        s = np.array(data.statistics["responses/{}/std".format(stats_source)])
+        s = np.array(data.statistics["responses"][stats_source]["std"])
 
         # TODO: consider other baselines
         threshold = 0.01 * s.mean()
@@ -245,13 +245,13 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
 
         if "eye_position" in data.data_groups:
             # -- eye position
-            self._eye_mean = np.array(data.statistics["eye_position/{}/mean".format(stats_source)])
-            self._eye_std = np.array(data.statistics["eye_position/{}/std".format(stats_source)])
+            self._eye_mean = np.array(data.statistics["eye_position"][stats_source]["mean"])
+            self._eye_std = np.array(data.statistics["eye_position"][stats_source]["std"])
             transforms["eye_position"] = lambda x: (x - self._eye_mean) / self._eye_std
             itransforms["eye_position"] = lambda x: x * self._eye_std + self._eye_mean
 
 
-            s = np.array(data.statistics["behavior/{}/std".format(stats_source)])
+            s = np.array(data.statistics["behavior"][stats_source]["std"])
 
             # TODO: same as above - consider other baselines
             threshold = 0.01 * s.mean()

@@ -4,6 +4,8 @@ from collections import namedtuple, OrderedDict
 import numpy as np
 from .transforms import DataTransform, MovieTransform, StaticTransform, Invertible, Subsequence, Delay
 from scipy.signal import convolve2d
+from ..utils import recursively_load_dict_contents_from_group
+
 
 
 class AttributeHandler:
@@ -88,11 +90,13 @@ class H5SequenceSet(TransformDataset):
         self.output_rename = output_rename
 
         self._fid = h5py.File(filename, "r")
+        self.data = self._fid
+        self.data_loaded = False
 
         m = None
         for key in data_groups:
-            assert key in self._fid, "Could not find {} in file".format(key)
-            l = len(self._fid[key])
+            assert key in self.data, "Could not find {} in file".format(key)
+            l = len(self.data[key])
             if m is not None and l != m:
                 raise ValueError("groups have different length")
             m = l
@@ -108,11 +112,19 @@ class H5SequenceSet(TransformDataset):
         self.data_point = namedtuple("DataPoint", data_groups)
         self.output_point = namedtuple("OutputPoint", [output_rename.get(k, k) for k in data_groups])
 
+    def load_content(self):
+        self.data = recursively_load_dict_contents_from_group(self._fid)
+        self.data_loaded = True
+
+    def unload_content(self):
+        self.data = self._fid
+        self.data_loaded = False
+
     def __len__(self):
         return self._len
 
     def __getitem__(self, item):
-        x = self.data_point(*(np.array(self._fid[g][str(item)]) for g in self.data_groups))
+        x = self.data_point(*(np.array(self.data[g][item if self.data_loaded else str(item)]) for g in self.data_groups))
         for tr in self.transforms:
             assert isinstance(tr, self._transform_set)
             x = tr(x)
@@ -123,16 +135,18 @@ class H5SequenceSet(TransformDataset):
         return x
 
     def __getattr__(self, item):
-        if item in self._fid:
-            item = self._fid[item]
-            if isinstance(item, h5py._hl.dataset.Dataset):
+        if item in self.data:
+            item = self.data[item]
+            if isinstance(item, h5py.Dataset):
+                dtype = item.dtype
                 item = item[()]
-                if item.dtype.char == "S":  # convert bytes to univcode
+                if dtype.char == "S":  # convert bytes to univcode
                     item = item.astype(str)
                 return item
             return item
         else:
             raise AttributeError("Item {} not found in {}".format(item, self.__class__.__name__))
+
 
     def __repr__(self):
         names = ['{} -> {}'.format(k, self.output_rename[k]) if k in self.output_rename else k for k in self.data_groups]
@@ -154,7 +168,7 @@ class MovieSet(H5SequenceSet):
     
     @property
     def neurons(self):
-        return AttributeTransformer("neurons", self._fid, self.transforms, data_group='responses')
+        return AttributeTransformer("neurons", self.data, self.transforms, data_group='responses')
 
 
     @property
@@ -230,13 +244,15 @@ class MovieSet(H5SequenceSet):
 class H5ArraySet(TransformDataset):
     def __init__(self, filename, *data_keys, transforms=None):
         self._fid = h5py.File(filename, "r")
+        self.data = _fid
+        self.data_loaded 
         m = None
         for key in data_keys:
-            assert key in self._fid, "Could not find {} in file".format(key)
+            assert key in self.data, "Could not find {} in file".format(key)
             if m is None:
-                m = len(self._fid[key])
+                m = len(self.data[key])
             else:
-                assert m == len(self._fid[key]), "Length of datasets do not match"
+                assert m == len(self.data[key]), "Length of datasets do not match"
         self._len = m
         self.data_keys = data_keys
 
@@ -244,8 +260,16 @@ class H5ArraySet(TransformDataset):
 
         self.data_point = namedtuple("DataPoint", data_keys)
 
+
+    def load_content(self):
+        self.data = recursively_load_dict_contents_from_group(self._fid)
+
+    def unload_content(self):
+        self.data = self._fid
+    
+
     def __getitem__(self, item):
-        x = self.data_point(*(self._fid[g][item] for g in self.data_keys))
+        x = self.data_point(*(self.data[g][item] for g in self.data_keys))
         for tr in self.transforms:
             assert isinstance(tr, StaticTransform)
             x = tr(x)
@@ -259,19 +283,23 @@ class H5ArraySet(TransformDataset):
 
     def __repr__(self):
         return "\n".join(
-            ["Tensor {}: {} ".format(key, self._fid[key].shape) for key in self.data_keys]
+            ["Tensor {}: {} ".format(key, self.data[key].shape) for key in self.data_keys]
             + ["Transforms: " + repr(self.transforms)]
         )
 
     def __getattr__(self, item):
-        if item in self._fid:
-            item = self._fid[item]
-            if isinstance(item, h5py._hl.dataset.Dataset):
+        if item in self.data:
+            item = self.data[item]
+            if isinstance(item, h5py.Dataset):
+                dtype = item.dtype
                 item = item[()]
-                if item.dtype.char == "S":  # convert bytes to univcode
+                if dtype.char == "S":  # convert bytes to univcode
                     item = item.astype(str)
                 return item
             return item
+        else:
+            raise AttributeError("Item {} not found in {}".format(item, self.__class__.__name__))
+
 
 
 class StaticImageSet(H5ArraySet):
@@ -287,11 +315,11 @@ class StaticImageSet(H5ArraySet):
 
     @property
     def neurons(self):
-        return AttributeTransformer("neurons", self._fid, self.transforms)
+        return AttributeTransformer("neurons", self.data, self.transforms)
 
     @property
     def info(self):
-        return AttributeHandler("item_info", self._fid)
+        return AttributeHandler("item_info", self.data)
 
     @property
     def img_shape(self):
@@ -311,4 +339,4 @@ class StaticImageSet(H5ArraySet):
 
     def __dir__(self):
         attrs = set(self.__dict__).union(set(dir(type(self))))
-        return attrs.union(set(self._fid.keys()))
+        return attrs.union(set(self.data.keys()))

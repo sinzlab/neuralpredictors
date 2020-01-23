@@ -184,13 +184,13 @@ class MovieSet(H5SequenceSet):
         if stats_source is None:
             stats_source = self.stats_source
 
-        tmp = [np.atleast_1d(self.statistics["{}/{}/mean".format(g, stats_source)][()]) for g in self.data_groups]
+        tmp = [np.atleast_1d(self.statistics[g][stats_source]["mean"][()]) for g in self.data_groups]
         return self.transform(self.data_point(*tmp), exclude=(Subsequence, Delay))
 
     def rf_base(self, stats_source="all"):
         N, c, t, w, h = self.img_shape
         t = min(t, 150)
-        mean = lambda dk: self.statistics["{}/{}/mean".format(dk, stats_source)][()]
+        mean = lambda dk: self.statistics[dk][stats_source]["mean"][()]
         d = dict(
             inputs=np.ones((1, c, t, w, h)) * np.array(mean("inputs")),
             eye_position=np.ones((1, t, 1)) * mean("eye_position")[None, None, :],
@@ -214,7 +214,7 @@ class MovieSet(H5SequenceSet):
 
         """
         N, c, _, w, h = self.img_shape
-        stat = lambda dk, what: self.statistics["{}/{}/{}".format(dk, stats_source, what)][()]
+        stat = lambda dk, what: self.statistics[dk][stats_source][what][()]
         mu, s = stat("inputs", "mean"), stat("inputs", "std")
         h_filt = np.float64([[1 / 16, 1 / 8, 1 / 16], [1 / 8, 1 / 4, 1 / 8], [1 / 16, 1 / 8, 1 / 16]])
         noise_input = (
@@ -329,7 +329,7 @@ class StaticImageSet(H5ArraySet):
         if stats_source is None:
             stats_source = self.stats_source
 
-        tmp = [np.atleast_1d(self.statistics["{}/{}/mean".format(dk, stats_source)][()]) for dk in self.data_keys]
+        tmp = [np.atleast_1d(self.statistics[dk][stats_source]["mean"][()]) for dk in self.data_keys]
         return self.transform(self.data_point(*tmp))
 
     def __repr__(self):

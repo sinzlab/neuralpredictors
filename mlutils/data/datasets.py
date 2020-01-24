@@ -317,7 +317,7 @@ class StaticImageSet(H5ArraySet):
 
     @property
     def neurons(self):
-        return AttributeTransformer("neurons", self.data, self.transforms)
+        return AttributeTransformer("neurons", self.data, self.transforms, data_group='responses')
 
     @property
     def info(self):

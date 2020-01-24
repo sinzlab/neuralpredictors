@@ -250,7 +250,7 @@ class GaussianLaplaceL2(nn.Module):
 
     def forward(self, x, avg=False):
         agg_fn = torch.mean if avg else torch.sum
-        
+
         ic, oc, k1, k2 = x.size()
         out = self.laplace(x.view(ic * oc, 1, k1, k2))
         out = out * (1 - self.gaussian2d.expand(1, 1, k1, k2).to(x.device))

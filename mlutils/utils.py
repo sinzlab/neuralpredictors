@@ -68,11 +68,11 @@ def load_dict_from_hdf5(filename):
     Returns:
         (nested) dictionary corresponding to the content of the HDF5 file.
     """
-    with h5py.File(filename, 'r') as h5file:
+    with h5py.File(filename, "r") as h5file:
         return recursively_load_dict_contents_from_group(h5file)
 
 
-def recursively_load_dict_contents_from_group(h5file, path='/'):
+def recursively_load_dict_contents_from_group(h5file, path="/"):
     """
     Given a `h5file` h5py object, loads the object at `path`
     as nested dictionary.
@@ -93,8 +93,8 @@ def recursively_load_dict_contents_from_group(h5file, path='/'):
                 v = v.astype(str)
             ans[key] = v
         elif isinstance(item, h5py.Group):
-            if item.attrs.get('_iterable', False):
+            if item.attrs.get("_iterable", False):
                 ans[key] = [item[str(i)][()] for i in range(len(item))]
             else:
-                ans[key] = recursively_load_dict_contents_from_group(h5file, path + key + '/')
+                ans[key] = recursively_load_dict_contents_from_group(h5file, path + key + "/")
     return ans

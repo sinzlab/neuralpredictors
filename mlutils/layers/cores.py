@@ -141,11 +141,11 @@ class Stacked2dCore(Core2d, nn.Module):
         for l in range(1, self.layers):
             layer = OrderedDict()
 
-            hidden_padding = ((hidden_kern[l-1] - 1) * hidden_dilation + 1) // 2
+            hidden_padding = ((hidden_kern[l - 1] - 1) * hidden_dilation + 1) // 2
             layer["conv"] = nn.Conv2d(
                 hidden_channels if not skip > 1 else min(skip, l) * hidden_channels,
                 hidden_channels,
-                hidden_kern[l-1],
+                hidden_kern[l - 1],
                 padding=hidden_padding,
                 bias=bias,
                 dilation=hidden_dilation,
@@ -162,7 +162,7 @@ class Stacked2dCore(Core2d, nn.Module):
         ret = []
         for l, feat in enumerate(self.features):
             do_skip = l >= 1 and self.skip > 1
-            input_ = feat(input_ if not do_skip else torch.cat(ret[-min(self.skip, l):], dim=1))
+            input_ = feat(input_ if not do_skip else torch.cat(ret[-min(self.skip, l) :], dim=1))
             ret.append(input_)
 
         return torch.cat([ret[ind] for ind in self.stack], dim=1)

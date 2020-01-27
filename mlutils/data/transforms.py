@@ -34,9 +34,9 @@ class StaticTransform(DataTransform):
 
 
 class Subsequence(MovieTransform):
-    def __init__(self, frames, channel_first=('inputs',)):
+    def __init__(self, frames, channel_first=("inputs",)):
         self.frames = frames
-        # for special group, the time slicing is applied on 
+        # for special group, the time slicing is applied on
         self.channel_first = channel_first
 
     def __call__(self, x):
@@ -59,7 +59,7 @@ class Subsequence(MovieTransform):
     def id_transform(self, id_map):
         # until a better solution is reached, skipping this
         return id_map
-        
+
         new_map = {}
         first_group = list(id_map.keys())[0]
         v_fg = id_map[first_group]
@@ -67,12 +67,11 @@ class Subsequence(MovieTransform):
         i = np.random.randint(0, t - self.frames)
         for k, v in id_map.items():
             if k in self.channel_first:
-                new_map[k] = v[:, i: i + self.frames]
+                new_map[k] = v[:, i : i + self.frames]
             else:
-                new_map[k] = v[i: i + self.frames]
+                new_map[k] = v[i : i + self.frames]
 
         return new_map
-                
 
     def __repr__(self):
         return self.__class__.__name__ + "({})".format(self.frames)
@@ -85,7 +84,8 @@ class Delay(MovieTransform):
     g(T:N-delay) will be returned with d(T+delay:N) where `delay` is the specified amount
     of delay, and N is the last frame in the dataset.
     """
-    def __init__(self, delay, delay_groups=("responses",), channel_first=('inputs',)):
+
+    def __init__(self, delay, delay_groups=("responses",), channel_first=("inputs",)):
         self.delay = delay
         self.delay_groups = delay_groups
         self.channel_first = channel_first
@@ -93,19 +93,18 @@ class Delay(MovieTransform):
     def __call__(self, x):
         first_group = x._fields[0]
         t = getattr(x, first_group).shape[int(first_group in self.channel_first)]
-        assert t > self.delay, 'The sequence length {} has to be longer than the delay {}'.format(t, self.delay)
+        assert t > self.delay, "The sequence length {} has to be longer than the delay {}".format(t, self.delay)
         key_entry = {}
         for k in x._fields:
             if k in self.delay_groups:
                 start, stop = self.delay, t
             else:
                 start = 0
-                stop = t - self.delay            
+                stop = t - self.delay
 
             key_entry[k] = getattr(x, k)[:, start:stop] if k in self.channel_first else getattr(x, k)[start:stop]
 
         return x.__class__(**key_entry)
-
 
     def id_transform(self, id_map):
         # until a better solution is reached, skipping this
@@ -115,7 +114,7 @@ class Delay(MovieTransform):
         first_group = list(id_map.keys())[0]
         v_fg = id_map[first_group]
         t = v_fg.shape[int(first_group in self.channel_first)]
-        assert t > self.delay, 'The sequence length {} has to be longer than the delay {}'.format(t, self.delay)
+        assert t > self.delay, "The sequence length {} has to be longer than the delay {}".format(t, self.delay)
 
         for k, v in id_map.items():
             if k in self.delay_groups:
@@ -126,8 +125,6 @@ class Delay(MovieTransform):
             new_map[k] = v[:, start:end] if k in self.channel_first else v[start:end]
 
         return new_map
-                
-                
 
     def __repr__(self):
         return self.__class__.__name__ + "({} on {})".format(self.delay, self.delay_groups)
@@ -148,7 +145,7 @@ class Subsample(MovieTransform, StaticTransform):
         return self.__class__.__name__ + "(n={})".format(len(self.idx))
 
     def id_transform(self, id_map):
-        return {k: v[self.idx] if k==self.target_group else v for k, v in id_map.items()}
+        return {k: v[self.idx] if k == self.target_group else v for k, v in id_map.items()}
 
 
 class ToTensor(MovieTransform, StaticTransform, Invertible):
@@ -199,9 +196,7 @@ class Rename(MovieTransform, StaticTransform, Invertible):
         return self.origin_tuple_class(*y)
 
     def id_transform(self, id_map):
-        return {self.name_map.get(k, k):v for k, v in id_map.items()}
-
-
+        return {self.name_map.get(k, k): v for k, v in id_map.items()}
 
 
 class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
@@ -250,7 +245,6 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
             transforms["eye_position"] = lambda x: (x - self._eye_mean) / self._eye_std
             itransforms["eye_position"] = lambda x: x * self._eye_std + self._eye_mean
 
-
             s = np.array(data.statistics["behavior"][stats_source]["std"])
 
             # TODO: same as above - consider other baselines
@@ -259,7 +253,6 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
             self._behavior_precision = np.ones_like(s) / threshold
             self._behavior_precision[idx] = 1 / s[idx]
 
-            
             # -- behavior
             transforms["behavior"] = lambda x: x * self._behavior_precision
             itransforms["behavior"] = lambda x: x / self._behavior_precision
@@ -275,12 +268,10 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
             **{k: (self._transforms[k](v) if k not in self.exclude else v) for k, v in zip(x._fields, x)}
         )
 
-
     def inv(self, x):
         return x.__class__(
             **{k: (self._itransforms[k](v) if k not in self.exclude else v) for k, v in zip(x._fields, x)}
         )
 
-  
     def __repr__(self):
         return super().__repr__() + ("(not {})".format(", ".join(self.exclude)) if self.exclude is not None else "")

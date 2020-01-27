@@ -7,7 +7,6 @@ from scipy.signal import convolve2d
 from ..utils import recursively_load_dict_contents_from_group
 
 
-
 class AttributeHandler:
     def __init__(self, name, h5_handle):
         assert name in h5_handle, "{} must be in {}".format(name, h5_handle)
@@ -36,6 +35,7 @@ class AttributeTransformer(AttributeHandler):
     Allows for id_transform of transforms to be applied to the
     specified attribute.
     """
+
     def __init__(self, name, h5_handle, transforms, data_group):
         super().__init__(name, h5_handle)
         self.transforms = transforms
@@ -67,8 +67,6 @@ class TransformDataset(Dataset):
     def __iter__(self):
         yield from map(self.__getitem__, range(len(self)))
 
- 
-
     def __repr__(self):
         return (
             "{} m={}:\n\t({})".format(self.__class__.__name__, len(self), ", ".join(self.data_groups))
@@ -79,7 +77,6 @@ class TransformDataset(Dataset):
 
 
 class H5SequenceSet(TransformDataset):
-
     def __init__(self, filename, *data_groups, output_rename=None, transforms=None):
         if output_rename is None:
             output_rename = {}
@@ -105,7 +102,6 @@ class H5SequenceSet(TransformDataset):
         # Specify which types of transforms are accepted
         self._transform_set = DataTransform
 
-
         self.data_groups = data_groups
         self.transforms = transforms or []
 
@@ -124,7 +120,9 @@ class H5SequenceSet(TransformDataset):
         return self._len
 
     def __getitem__(self, item):
-        x = self.data_point(*(np.array(self.data[g][item if self.data_loaded else str(item)]) for g in self.data_groups))
+        x = self.data_point(
+            *(np.array(self.data[g][item if self.data_loaded else str(item)]) for g in self.data_groups)
+        )
         for tr in self.transforms:
             assert isinstance(tr, self._transform_set)
             x = tr(x)
@@ -147,9 +145,10 @@ class H5SequenceSet(TransformDataset):
         else:
             raise AttributeError("Item {} not found in {}".format(item, self.__class__.__name__))
 
-
     def __repr__(self):
-        names = ['{} -> {}'.format(k, self.output_rename[k]) if k in self.output_rename else k for k in self.data_groups]
+        names = [
+            "{} -> {}".format(k, self.output_rename[k]) if k in self.output_rename else k for k in self.data_groups
+        ]
         s = "{} m={}:\n\t({})".format(self.__class__.__name__, len(self), ", ".join(names))
         if self.transforms is not None:
             s += "\n\t[Transforms: " + "->".join([repr(tr) for tr in self.transforms]) + "]"
@@ -157,7 +156,7 @@ class H5SequenceSet(TransformDataset):
 
 
 class MovieSet(H5SequenceSet):
-    def __init__(self, filename, *data_groups, output_rename=None, transforms=None,  stats_source=None):
+    def __init__(self, filename, *data_groups, output_rename=None, transforms=None, stats_source=None):
         super().__init__(filename, *data_groups, output_rename=output_rename, transforms=transforms)
         self.shuffle_dims = {}
         self.stats_source = stats_source if stats_source is not None else "all"
@@ -165,11 +164,9 @@ class MovieSet(H5SequenceSet):
         # set to accept only MovieTransform
         self._transform_set = MovieTransform
 
-    
     @property
     def neurons(self):
-        return AttributeTransformer("neurons", self.data, self.transforms, data_group='responses')
-
+        return AttributeTransformer("neurons", self.data, self.transforms, data_group="responses")
 
     @property
     def n_neurons(self):
@@ -177,8 +174,7 @@ class MovieSet(H5SequenceSet):
 
     @property
     def input_shape(self):
-        return (1,) + getattr(self[0], self.output_rename.get('inputs', 'inputs')).shape
-
+        return (1,) + getattr(self[0], self.output_rename.get("inputs", "inputs")).shape
 
     def transformed_mean(self, stats_source=None):
         if stats_source is None:
@@ -238,8 +234,6 @@ class MovieSet(H5SequenceSet):
 
         return self.transform(self.data_point(*[d[dk] for dk in self.data_groups.values()]), exclude=Subsequence)
 
-   
-
 
 class H5ArraySet(TransformDataset):
     def __init__(self, filename, *data_keys, transforms=None):
@@ -260,7 +254,6 @@ class H5ArraySet(TransformDataset):
 
         self.data_point = namedtuple("DataPoint", data_keys)
 
-
     def load_content(self):
         self.data = recursively_load_dict_contents_from_group(self._fid)
         self.data_loaded = True
@@ -268,7 +261,6 @@ class H5ArraySet(TransformDataset):
     def unload_content(self):
         self.data = self._fid
         self.data_loaded = False
-    
 
     def __getitem__(self, item):
         x = self.data_point(*(self.data[g][item] for g in self.data_keys))
@@ -303,7 +295,6 @@ class H5ArraySet(TransformDataset):
             raise AttributeError("Item {} not found in {}".format(item, self.__class__.__name__))
 
 
-
 class StaticImageSet(H5ArraySet):
     def __init__(self, filename, *data_keys, transforms=None, cache_raw=False, stats_source=None):
         super().__init__(filename, *data_keys, transforms=transforms)
@@ -317,7 +308,7 @@ class StaticImageSet(H5ArraySet):
 
     @property
     def neurons(self):
-        return AttributeTransformer("neurons", self.data, self.transforms, data_group='responses')
+        return AttributeTransformer("neurons", self.data, self.transforms, data_group="responses")
 
     @property
     def info(self):

@@ -235,6 +235,9 @@ class MovieSet(H5SequenceSet):
         return self.transform(self.data_point(*[d[dk] for dk in self.data_groups.values()]), exclude=Subsequence)
 
 
+default_datapoint = namedtuple("DefaultDataPoint", ["images", "responses"])
+
+
 class H5ArraySet(TransformDataset):
     def __init__(self, filename, *data_keys, transforms=None):
         self._fid = h5py.File(filename, "r")
@@ -252,7 +255,12 @@ class H5ArraySet(TransformDataset):
 
         self.transforms = transforms or []
 
-        self.data_point = namedtuple("DataPoint", data_keys)
+        if data_keys == ["images", "responses"]:
+            # this version IS serializable in pickle
+            self.data_point = default_datapoint
+        else:
+            # this version is NOT - you cannot use this with a dataloader with num_workers > 1
+            self.data_point = namedtuple("DataPoint", data_keys)
 
     def load_content(self):
         self.data = recursively_load_dict_contents_from_group(self._fid)

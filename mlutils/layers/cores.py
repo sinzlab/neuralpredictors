@@ -6,8 +6,8 @@ import torch
 import torchvision
 
 from .. import regularizers
-from ..layers.flows import Bias2DLayer, Scale2DLayer
-from ..layers.activations import ModularElu
+from .flows import Bias2DLayer, Scale2DLayer
+from .activations import ModularElu
 
 
 class Core:

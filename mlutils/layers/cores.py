@@ -77,7 +77,7 @@ class Stacked2dCore(Core2d, nn.Module):
             gamma_input:    regularizer factor for the input weights (default: LaplaceL2, see mlutils.regularizers)
             skip:           Adds a skip connection
             final_nonlinearity: Boolean, if true, appends an ELU layer after the last BatchNorm (if BN=True)
-            bias:           Adds a bias layer. Note: bias and batch_norm can not both be true
+            bias:           Adds a bias layer.
             momentum:       BN momentum
             pad_input:      Boolean, if True, applies zero padding to all convolutions
             hidden_padding: int or list of int. Padding for hidden layers. Note that this will apply to all the layers 
@@ -99,8 +99,6 @@ class Stacked2dCore(Core2d, nn.Module):
         """
 
         super().__init__()
-
-        assert not bias or not batch_norm, "bias and batch_norm should not both be true"
 
         regularizer_config = (
             dict(padding=laplace_padding, kernel=input_kern)
@@ -129,7 +127,7 @@ class Stacked2dCore(Core2d, nn.Module):
         # --- first layer
         layer = OrderedDict()
         layer["conv"] = nn.Conv2d(
-            input_channels, hidden_channels, input_kern, padding=input_kern // 2 if pad_input else 0, bias=bias
+            input_channels, hidden_channels, input_kern, padding=input_kern // 2 if pad_input else 0, bias=bias and not batch_norm
         )
         if batch_norm:
             layer["norm"] = nn.BatchNorm2d(hidden_channels, momentum=momentum, affine=bias and batch_norm_scale)
@@ -155,7 +153,7 @@ class Stacked2dCore(Core2d, nn.Module):
                 hidden_channels,
                 hidden_kern[l - 1],
                 padding=hidden_padding,
-                bias=bias,
+                bias=bias and not batch_norm,
                 dilation=hidden_dilation,
             )
             if batch_norm:

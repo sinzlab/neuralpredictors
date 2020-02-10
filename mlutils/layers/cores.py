@@ -57,7 +57,7 @@ class Stacked2dCore(Core2d, nn.Module):
         final_nonlinearity=True,
         elu_xshift=0.0,
         elu_yshift=0.0,
-        bias=False,
+        bias=True,
         momentum=0.1,
         pad_input=True,
         hidden_padding=None,

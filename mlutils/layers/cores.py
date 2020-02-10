@@ -6,6 +6,7 @@ import torch
 import torchvision
 
 from .. import regularizers
+from ..layers.flows import Bias2DLayer, Scale2DLayer
 
 
 class Core:
@@ -58,6 +59,7 @@ class Stacked2dCore(Core2d, nn.Module):
         pad_input=True,
         hidden_padding=None,
         batch_norm=True,
+        batch_norm_scale=True,
         hidden_dilation=1,
         laplace_padding=0,
         input_regularizer="LaplaceL2",
@@ -81,6 +83,7 @@ class Stacked2dCore(Core2d, nn.Module):
             hidden_padding: int or list of int. Padding for hidden layers. Note that this will apply to all the layers 
                             except the first (input) layer.
             batch_norm:     Boolean, if True appends a BN layer after each convolutional layer
+            batch_norm_scale: If True, a scaling factor after BN will be learned. Otherwise an additional bias layer may be added
             hidden_dilation:    If set to > 1, will apply dilated convs for all hidden layers
             laplace_padding: Padding size for the laplace convolution. If padding = None, it defaults to half of
                 the kernel size (recommended). Setting Padding to 0 is not recommended and leads to artefacts,
@@ -129,7 +132,12 @@ class Stacked2dCore(Core2d, nn.Module):
             input_channels, hidden_channels, input_kern, padding=input_kern // 2 if pad_input else 0, bias=bias
         )
         if batch_norm:
-            layer["norm"] = nn.BatchNorm2d(hidden_channels, momentum=momentum)
+            layer["norm"] = nn.BatchNorm2d(hidden_channels, momentum=momentum, affine=bias and batch_norm_scale)
+            if bias:
+                if not batch_norm_scale:
+                    layer["bias"] = Bias2DLayer(hidden_channels)
+            elif batch_norm_scale:
+                layer["scale"] = Scale2DLayer(hidden_channels)
         if layers > 1 or final_nonlinearity:
             layer["nonlin"] = nn.ELU(inplace=True)
         self.features.add_module("layer0", nn.Sequential(layer))
@@ -151,7 +159,12 @@ class Stacked2dCore(Core2d, nn.Module):
                 dilation=hidden_dilation,
             )
             if batch_norm:
-                layer["norm"] = nn.BatchNorm2d(hidden_channels, momentum=momentum)
+                layer["norm"] = nn.BatchNorm2d(hidden_channels, momentum=momentum, affine=bias and batch_norm_scale)
+                if bias:
+                    if not batch_norm_scale:
+                        layer["bias"] = Bias2DLayer(hidden_channels)
+                elif batch_norm_scale:
+                    layer["scale"] = Scale2DLayer(hidden_channels)
             if final_nonlinearity or l < self.layers - 1:
                 layer["nonlin"] = nn.ELU(inplace=True)
             self.features.add_module("layer{}".format(l), nn.Sequential(layer))

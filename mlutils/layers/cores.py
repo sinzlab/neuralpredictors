@@ -7,6 +7,7 @@ import torchvision
 
 from .. import regularizers
 from ..layers.flows import Bias2DLayer, Scale2DLayer
+from ..layers.activations import ModularElu
 
 
 class Core:
@@ -54,6 +55,8 @@ class Stacked2dCore(Core2d, nn.Module):
         gamma_input=0.0,
         skip=0,
         final_nonlinearity=True,
+        elu_xshift=0.0,
+        elu_yshift=0.0,
         bias=False,
         momentum=0.1,
         pad_input=True,
@@ -77,6 +80,7 @@ class Stacked2dCore(Core2d, nn.Module):
             gamma_input:    regularizer factor for the input weights (default: LaplaceL2, see mlutils.regularizers)
             skip:           Adds a skip connection
             final_nonlinearity: Boolean, if true, appends an ELU layer after the last BatchNorm (if BN=True)
+            elu_xshift, elu_yshift: final_nonlinearity(x) = Elu(x - elu_xshift) + elu_yshift    
             bias:           Adds a bias layer.
             momentum:       BN momentum
             pad_input:      Boolean, if True, applies zero padding to all convolutions
@@ -137,7 +141,7 @@ class Stacked2dCore(Core2d, nn.Module):
             elif batch_norm_scale:
                 layer["scale"] = Scale2DLayer(hidden_channels)
         if layers > 1 or final_nonlinearity:
-            layer["nonlin"] = nn.ELU(inplace=True)
+            layer["nonlin"] = ModularElu(elu_xshift, elu_yshift)
         self.features.add_module("layer0", nn.Sequential(layer))
 
         # --- other layers
@@ -164,7 +168,7 @@ class Stacked2dCore(Core2d, nn.Module):
                 elif batch_norm_scale:
                     layer["scale"] = Scale2DLayer(hidden_channels)
             if final_nonlinearity or l < self.layers - 1:
-                layer["nonlin"] = nn.ELU(inplace=True)
+                layer["nonlin"] = ModularElu(elu_xshift, elu_yshift)
             self.features.add_module("layer{}".format(l), nn.Sequential(layer))
 
         self.apply(self.init_conv)

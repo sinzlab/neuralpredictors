@@ -25,3 +25,20 @@ def log1exp(x):
 class Log1Exp(nn.Module):
     def forward(self, x):
         return log1exp(x)
+
+
+def modularelu(x,xshift,yshift):
+    return F.elu(x - xshift, inplace=True) + yshift
+
+class ModularElu(nn.Module):
+    """
+    Elu shifted by defined values. This may ensure the output to stay positive.
+    """
+    def __init__(self,xshift,yshift,**kwargs):
+        super(ModularElu, self).__init__(**kwargs)
+        
+        self.xshift = xshift
+        self.yshift = yshift
+        
+    def forward(self, x):
+        return modularelu(y, self.xshift, self.yshift)

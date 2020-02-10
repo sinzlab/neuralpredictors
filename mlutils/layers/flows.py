@@ -313,3 +313,14 @@ class ConditionalFlow(nn.ModuleList):
             return -(target_density.log_prob(z).mean() + ld.mean()) / self.output_dim / self.LOG2
         else:
             return -(target_density.log_prob(z) + ld) / self.output_dim / self.LOG2
+
+
+
+class Bias2DLayer(nn.Module):
+    def __init__(self,channels,initial=0,**kwargs):
+        super(Bias2DLayer, self).__init__(**kwargs)
+
+        self.bias = torch.nn.Parameter(torch.empty((1,channels,1,1)).fill_(initial))
+
+    def forward(self,x):
+        return x + self.bias

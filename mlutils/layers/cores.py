@@ -7,7 +7,7 @@ import torchvision
 
 from .. import regularizers
 from .flows import Bias2DLayer, Scale2DLayer
-from .activations import ModularElu
+from .activations import AdaptiveELU
 
 
 class Core:
@@ -87,7 +87,7 @@ class Stacked2dCore(Core2d, nn.Module):
             hidden_padding: int or list of int. Padding for hidden layers. Note that this will apply to all the layers 
                             except the first (input) layer.
             batch_norm:     Boolean, if True appends a BN layer after each convolutional layer
-            batch_norm_scale: If True, a scaling factor after BN will be learned. Otherwise an additional bias layer may be added
+            batch_norm_scale: If True, a scaling factor after BN will be learned.
             hidden_dilation:    If set to > 1, will apply dilated convs for all hidden layers
             laplace_padding: Padding size for the laplace convolution. If padding = None, it defaults to half of
                 the kernel size (recommended). Setting Padding to 0 is not recommended and leads to artefacts,
@@ -100,6 +100,12 @@ class Stacked2dCore(Core2d, nn.Module):
                             stack = -1 will only select the last layer as the readout layer
                             stack = 0  will only readout from the first layer
             use_avg_reg:    bool. Whether to use the averaged value of regularizer(s) or the summed.
+            
+            To enable learning batch_norms bias and scale independently, the arguments bias, batch_norm and batch_norm_scale 
+            work together: By default, all are true. In this case there won't be a bias learned in the convolutional layer, but 
+            batch_norm will learn both its bias and scale. If batch_norm is false, but bias true, a bias will be learned in the 
+            convolutional layer. If batch_norm and bias are true, but batch_norm_scale is false, batch_norm won't have learnable
+            parameters and a BiasLayer will be added after the batch_norm layer.
         """
 
         super().__init__()
@@ -141,7 +147,7 @@ class Stacked2dCore(Core2d, nn.Module):
             elif batch_norm_scale:
                 layer["scale"] = Scale2DLayer(hidden_channels)
         if layers > 1 or final_nonlinearity:
-            layer["nonlin"] = ModularElu(elu_xshift, elu_yshift)
+            layer["nonlin"] = AdaptiveELU(elu_xshift, elu_yshift)
         self.features.add_module("layer0", nn.Sequential(layer))
 
         # --- other layers
@@ -168,7 +174,7 @@ class Stacked2dCore(Core2d, nn.Module):
                 elif batch_norm_scale:
                     layer["scale"] = Scale2DLayer(hidden_channels)
             if final_nonlinearity or l < self.layers - 1:
-                layer["nonlin"] = ModularElu(elu_xshift, elu_yshift)
+                layer["nonlin"] = AdaptiveELU(elu_xshift, elu_yshift)
             self.features.add_module("layer{}".format(l), nn.Sequential(layer))
 
         self.apply(self.init_conv)

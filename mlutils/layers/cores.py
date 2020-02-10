@@ -35,7 +35,7 @@ class Core2d(Core):
         if isinstance(m, nn.Conv2d):
             nn.init.xavier_normal_(m.weight.data)
             if m.bias is not None:
-                m.bias.fill_(0)
+                m.bias.data.fill_(0)
 
 
 # ---------------------- Conv2d Cores -----------------------------

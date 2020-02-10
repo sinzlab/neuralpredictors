@@ -41,4 +41,4 @@ class AdaptiveELU(nn.Module):
         self.yshift = yshift
         
     def forward(self, x):
-        return adaptiveelu(y, self.xshift, self.yshift)
+        return adaptiveelu(x, self.xshift, self.yshift)

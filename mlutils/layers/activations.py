@@ -27,7 +27,7 @@ class Log1Exp(nn.Module):
         return log1exp(x)
 
 
-def adaptiveelu(x, xshift, yshift):
+def adaptive_elu(x, xshift, yshift):
     return F.elu(x - xshift, inplace=True) + yshift
 
 class AdaptiveELU(nn.Module):
@@ -41,4 +41,4 @@ class AdaptiveELU(nn.Module):
         self.yshift = yshift
         
     def forward(self, x):
-        return adaptiveelu(x, self.xshift, self.yshift)
+        return adaptive_elu(x, self.xshift, self.yshift)

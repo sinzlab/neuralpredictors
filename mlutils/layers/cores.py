@@ -6,7 +6,7 @@ import torch
 import torchvision
 
 from .. import regularizers
-from .flows import Bias2DLayer, Scale2DLayer
+from . import Bias2DLayer, Scale2DLayer
 from .activations import AdaptiveELU
 
 

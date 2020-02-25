@@ -638,12 +638,16 @@ class Gaussian2d(nn.Module):
         bias (bool): adds a bias term
         init_mu_range (float): initialises the the mean with Uniform([-init_range, init_range])
                             [expected: positive value <=1]
-        init_sigma_range (float): initialises sigma with Uniform([0.0, init_sigma_range])
+        init_sigma_range (float): initialises sigma with Uniform([0.0, init_sigma_range]).
+                It is recommended however to use a fixed initialization, for faster convergence.
+                For this, set fixed_sigma to True.
         batch_sample (bool): if True, samples a position for each image in the batch separately
                             [default: True as it decreases convergence time and performs just as well]
         align_corners (bool): Keyword agrument to gridsample for bilinear interpolation.
                 It changed behavior in PyTorch 1.3. The default of align_corners = True is setting the
                 behavior to pre PyTorch 1.3 functionality for comparability.
+        fixed_sigma (bool). Recommended behavior: True. But set to false for backwards compatibility.
+                If true, initialized the sigma not in a range, but with the exact value given for all neurons.
     """
 
     def __init__(self, in_shape, outdims, bias, init_mu_range=0.5, init_sigma_range=0.5, batch_sample=True, align_corners=True, fixed_sigma=False, **kwargs):
@@ -849,13 +853,16 @@ class Gaussian3d(nn.Module):
         bias (bool): adds a bias term
         init_mu_range (float): initialises the the mean with Uniform([-init_range, init_range])
                             [expected: positive value <=1]
-        init_sigma_range (float): initialises sigma with Uniform([0.0, init_sigma_range])
+        init_sigma_range (float): initialises sigma with Uniform([0.0, init_sigma_range]).
+                It is recommended however to use a fixed initialization, for faster convergence.
+                For this, set fixed_sigma to True.
         batch_sample (bool): if True, samples a position for each image in the batch separately
                             [default: True as it decreases convergence time and performs just as well]
         align_corners (bool): Keyword agrument to gridsample for bilinear interpolation.
                 It changed behavior in PyTorch 1.3. The default of align_corners = True is setting the
                 behavior to pre PyTorch 1.3 functionality for comparability.
-
+        fixed_sigma (bool). Recommended behavior: True. But set to false for backwards compatibility.
+                If true, initialized the sigma not in a range, but with the exact value given for all neurons.
     """
 
     def __init__(self, in_shape, outdims, bias, init_mu_range=0.5, init_sigma_range=0.5, batch_sample=True, align_corners=True, fixed_sigma=False, **kwargs):

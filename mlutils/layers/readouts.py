@@ -646,7 +646,7 @@ class Gaussian2d(nn.Module):
                 behavior to pre PyTorch 1.3 functionality for comparability.
     """
 
-    def __init__(self, in_shape, outdims, bias, init_mu_range=0.5, init_sigma_range=0.5, batch_sample=True, align_corners=True, **kwargs):
+    def __init__(self, in_shape, outdims, bias, init_mu_range=0.5, init_sigma_range=0.5, batch_sample=True, align_corners=True, fixed_sigma=False, **kwargs):
 
         super().__init__()
         if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma_range <= 0.0:
@@ -669,14 +669,21 @@ class Gaussian2d(nn.Module):
         self.init_mu_range = init_mu_range
         self.init_sigma_range = init_sigma_range
         self.align_corners = align_corners
+        self.fixed_sigma = fixed_sigma
         self.initialize()
+
 
     def initialize(self):
         """
         Initializes the mean, and sigma of the Gaussian readout along with the features weights
         """
         self.mu.data.uniform_(-self.init_mu_range, self.init_mu_range)
-        self.sigma.data.uniform_(self.init_sigma_range, self.init_sigma_range)
+        if self.fixed_sigma:
+            self.sigma.data.uniform_(self.init_sigma_range, self.init_sigma_range)
+        else:
+            self.sigma.data.uniform_(0, self.init_sigma_range)
+            warnings.warn("sigma is sampled from uniform distribuiton, instead of a fixed value. Consider setting "
+                          "fixed_sigma to True")
         self.features.data.fill_(1 / self.in_shape[0])
 
         if self.bias is not None:
@@ -851,7 +858,7 @@ class Gaussian3d(nn.Module):
 
     """
 
-    def __init__(self, in_shape, outdims, bias, init_mu_range=0.5, init_sigma_range=0.5, batch_sample=True, align_corners=True, **kwargs):
+    def __init__(self, in_shape, outdims, bias, init_mu_range=0.5, init_sigma_range=0.5, batch_sample=True, align_corners=True, fixed_sigma=False, **kwargs):
         super().__init__()
         if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma_range <= 0.0:
             raise ValueError("init_mu_range or init_sigma_range is not within required limit!")
@@ -873,6 +880,7 @@ class Gaussian3d(nn.Module):
         self.init_mu_range = init_mu_range
         self.init_sigma_range = init_sigma_range
         self.align_corners = align_corners
+        self.fixed_sigma = fixed_sigma
         self.initialize()
 
     def sample_grid(self, batch_size, sample=None):
@@ -910,7 +918,12 @@ class Gaussian3d(nn.Module):
 
     def initialize(self):
         self.mu.data.uniform_(-self.init_mu_range, self.init_mu_range)
-        self.sigma.data.uniform_(self.init_sigma_range, self.init_sigma_range)
+        if self.fixed_sigma:
+            self.sigma.data.uniform_(self.init_sigma_range, self.init_sigma_range)
+        else:
+            self.sigma.data.uniform_(0, self.init_sigma_range)
+            warnings.warn("sigma is sampled from uniform distribuiton, instead of a fixed value. Consider setting "
+                          "fixed_sigma to True")
         self.features.data.fill_(1 / self.in_shape[0])
 
         if self.bias is not None:

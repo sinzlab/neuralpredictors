@@ -116,6 +116,9 @@ class PointPooled2d(nn.Module):
             pool_kern (int): filter size and stride length used for pooling the feature map
             init_range (float): intialises the grid with Uniform([-init_range, init_range])
                                 [expected: positive value <=1]
+            align_corners (bool): Keyword agrument to gridsample for bilinear interpolation.
+                It changed behavior in PyTorch 1.3. The default of align_corners = True is setting the
+                behavior to pre PyTorch 1.3 functionality for comparability.
         """
         super().__init__()
         if init_range > 1.0 or init_range <= 0.0:
@@ -638,6 +641,9 @@ class Gaussian2d(nn.Module):
         init_sigma_range (float): initialises sigma with Uniform([0.0, init_sigma_range])
         batch_sample (bool): if True, samples a position for each image in the batch separately
                             [default: True as it decreases convergence time and performs just as well]
+        align_corners (bool): Keyword agrument to gridsample for bilinear interpolation.
+                It changed behavior in PyTorch 1.3. The default of align_corners = True is setting the
+                behavior to pre PyTorch 1.3 functionality for comparability.
     """
 
     def __init__(self, in_shape, outdims, bias, init_mu_range, init_sigma_range, batch_sample=True, align_corners=True, **kwargs):
@@ -838,6 +844,9 @@ class Gaussian3d(nn.Module):
         init_sigma_range (float): initialises sigma with Uniform([0.0, init_sigma_range])
         batch_sample (bool): if True, samples a position for each image in the batch separately
                             [default: True as it decreases convergence time and performs just as well]
+        align_corners (bool): Keyword agrument to gridsample for bilinear interpolation.
+                It changed behavior in PyTorch 1.3. The default of align_corners = True is setting the
+                behavior to pre PyTorch 1.3 functionality for comparability.
 
     """
 
@@ -1022,6 +1031,10 @@ class UltraSparse(nn.Module):
                            [default: 1, an instance of sparsest readout]
         shared_mean (bool): if True, the mean in the x-y plane (image-plane) is shared across all channels
                            [default: False]
+
+        align_corners (bool): Keyword agrument to gridsample for bilinear interpolation.
+                It changed behavior in PyTorch 1.3. The default of align_corners = True is setting the
+                behavior to pre PyTorch 1.3 functionality for comparability.
     """
 
     def __init__(

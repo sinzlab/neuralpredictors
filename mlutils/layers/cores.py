@@ -132,10 +132,11 @@ class Stacked2dCore(Core2d, nn.Module):
             warnings.warn("The averaged value of regularizater will be used.", UserWarning)
 
         self.features = nn.Sequential()
+        print(stack)
         if stack is None:
             self.stack = range(self.layers)
         else:
-            self.stack = [range(self.layers)[stack:]] if isinstance(stack, int) else stack
+            self.stack = [*range(self.layers)[stack:]] if isinstance(stack, int) else stack
 
         # --- first layer
         layer = OrderedDict()

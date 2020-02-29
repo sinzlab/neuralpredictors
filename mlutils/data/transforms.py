@@ -275,3 +275,25 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
 
     def __repr__(self):
         return super().__repr__() + ("(not {})".format(", ".join(self.exclude)) if self.exclude is not None else "")
+
+
+class AddBehaviorAsChannels(MovieTransform, StaticTransform, Invertible):
+    """
+    Given a StaticImage object that includes "images", "responses", and "behavior", it returns three variables:
+        - input image concatinated with behavior as new channel(s)
+        - responses
+        - behavior
+    """    
+    def __init__(self):
+        self.transforms, self.itransforms = {}, {}
+        self.transforms['images'] = lambda img, behavior: np.concatenate((img, np.ones((1, *img.shape[-2:])) * np.expand_dims(behavior, axis=(1, 2))), axis=0)
+        self.transforms["responses"] = lambda x: x
+        self.transforms["behavior"] = lambda x: x
+        
+    def __call__(self, x):
+
+        key_vals = {k: v for k, v in zip(x._fields, x)}        
+        dd = {'images': self.transforms['images'](key_vals['images'], key_vals['behavior']), 
+              'responses': self.transforms['responses'](key_vals['responses']), 
+              'behavior': self.transforms['behavior'](key_vals['behavior'])}
+        return x.__class__(**dd)

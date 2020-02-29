@@ -97,8 +97,11 @@ class Stacked2dCore(Core2d, nn.Module):
             input_regularizer:  String that must match one of the regularizers in ..regularizers
             stack:        Int or iterable. Selects which layers of the core should be stacked for the readout.
                             default value will stack all layers on top of each other.
-                            stack = -1 will only select the last layer as the readout layer
-                            stack = 0  will only readout from the first layer
+                            Implemented as layers_to_stack = layers[stack:]. thus:
+                                stack = -1 will only select the last layer as the readout layer.
+                                stack of -2 will read out from the last two layers.
+                                And stack of 1 will read out from layer 1 (0 indexed) until the last layer.
+
             use_avg_reg:    bool. Whether to use the averaged value of regularizer(s) or the summed.
             
             To enable learning batch_norms bias and scale independently, the arguments bias, batch_norm and batch_norm_scale 
@@ -132,7 +135,7 @@ class Stacked2dCore(Core2d, nn.Module):
         if stack is None:
             self.stack = range(self.layers)
         else:
-            self.stack = [range(self.layers)[stack:]] if isinstance(stack, int) else stack
+            self.stack = [*range(self.layers)[stack:]] if isinstance(stack, int) else stack
 
         # --- first layer
         layer = OrderedDict()

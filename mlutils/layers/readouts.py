@@ -1023,7 +1023,7 @@ class MultipleUltraSparse(Readout, ModuleDict):
             self[k].bias.data = mu.squeeze() - 1
 
     def regularizer(self, readout_key):
-        return self.gamma_readout
+        return self[readout_key].feature_l1() * self.gamma_readout
 
 
 class UltraSparse(nn.Module):
@@ -1056,6 +1056,8 @@ class UltraSparse(nn.Module):
         align_corners (bool): Keyword agrument to gridsample for bilinear interpolation.
                 It changed behavior in PyTorch 1.3. The default of align_corners = True is setting the
                 behavior to pre PyTorch 1.3 functionality for comparability.
+        fixed_sigma (bool). Recommended behavior: True. But set to false for backwards compatibility.
+                If true, initialized the sigma not in a range, but with the exact value given for all neurons.
     """
 
     def __init__(
@@ -1069,6 +1071,7 @@ class UltraSparse(nn.Module):
         num_filters=1,
         shared_mean=False,
         align_corners=True,
+        fixed_sigma=False,
         **kwargs
     ):
 
@@ -1116,6 +1119,7 @@ class UltraSparse(nn.Module):
         self.init_mu_range = init_mu_range
         self.init_sigma_range = init_sigma_range
         self.align_corners = align_corners
+        self.fixed_sigma = fixed_sigma
         self.initialize()
 
     def sample_grid(self, batch_size, sample=None):
@@ -1160,14 +1164,32 @@ class UltraSparse(nn.Module):
     def grid(self):
         return self.sample_grid(batch_size=1, sample=False)
 
+    def feature_l1(self, average=True):
+        """
+        Returns the l1 regularization term either the mean or the sum of all weights
+        Args:
+            average(bool): if True, use mean of weights for regularization
+        """
+        if average:
+            return self.features.abs().mean()
+        else:
+            return self.features.abs().sum()
+
     def initialize(self):
 
         if self.shared_mean:
             # initialise mu and sigma separately for xy and channel dimension.
             self.mu_ch.data.uniform_(-1, 1)
-            self.sigma_ch.data.uniform_(0, self.init_sigma_range)
             self.mu_xy.data.uniform_(-self.init_mu_range, self.init_mu_range)
-            self.sigma_xy.data.uniform_(0, self.init_sigma_range)
+
+            if self.fixed_sigma:
+                self.sigma_ch.data.uniform_(self.init_sigma_range, self.init_sigma_range)
+                self.sigma_xy.data.uniform_(self.init_sigma_range, self.init_sigma_range)
+            else:
+                self.sigma_ch.data.uniform_(0, self.init_sigma_range)
+                self.sigma_xy.data.uniform_(0, self.init_sigma_range)
+                warnings.warn("sigma is sampled from uniform distribuiton, instead of a fixed value. Consider setting "
+                              "fixed_sigma to True")
 
         else:
             # initialise mu and sigma for x,y and channel dimensions.

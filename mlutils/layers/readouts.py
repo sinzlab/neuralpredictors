@@ -1023,7 +1023,7 @@ class MultipleUltraSparse(Readout, ModuleDict):
             self[k].bias.data = mu.squeeze() - 1
 
     def regularizer(self, readout_key):
-        return self.gamma_readout
+        return self[readout_key].feature_l1() * self.gamma_readout
 
 
 class UltraSparse(nn.Module):
@@ -1163,6 +1163,17 @@ class UltraSparse(nn.Module):
     @property
     def grid(self):
         return self.sample_grid(batch_size=1, sample=False)
+
+    def feature_l1(self, average=True):
+        """
+        Returns the l1 regularization term either the mean or the sum of all weights
+        Args:
+            average(bool): if True, use mean of weights for regularization
+        """
+        if average:
+            return self.features.abs().mean()
+        else:
+            return self.features.abs().sum()
 
     def initialize(self):
 

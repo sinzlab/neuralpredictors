@@ -217,8 +217,10 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
 
         exclude = self.exclude = exclude or []
 
-        self._inputs_mean = data.statistics["inputs"][stats_source]["mean"][()]
-        self._inputs_std = data.statistics["inputs"][stats_source]["std"][()]
+        in_name = 'images' if 'images' in data.statistics.keys() else 'inputs'
+
+        self._inputs_mean = data.statistics[in_name][stats_source]["mean"][()]
+        self._inputs_std = data.statistics[in_name][stats_source]["std"][()]
 
         s = np.array(data.statistics["responses"][stats_source]["std"])
 
@@ -231,14 +233,14 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
         transforms, itransforms = {}, {}
 
         # -- inputs
-        transforms["inputs"] = lambda x: (x - self._inputs_mean) / self._inputs_std
-        itransforms["inputs"] = lambda x: x * self._inputs_std + self._inputs_mean
+        transforms[in_name] = lambda x: (x - self._inputs_mean) / self._inputs_std
+        itransforms[in_name] = lambda x: x * self._inputs_std + self._inputs_mean
 
         # -- responses
         transforms["responses"] = lambda x: x * self._response_precision
         itransforms["responses"] = lambda x: x / self._response_precision
 
-        if "eye_position" in data.data_groups:
+        if "eye_position" in data.data_keys:
             # -- eye position
             self._eye_mean = np.array(data.statistics["eye_position"][stats_source]["mean"])
             self._eye_std = np.array(data.statistics["eye_position"][stats_source]["std"])
@@ -275,3 +277,25 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
 
     def __repr__(self):
         return super().__repr__() + ("(not {})".format(", ".join(self.exclude)) if self.exclude is not None else "")
+
+
+class AddBehaviorAsChannels(MovieTransform, StaticTransform, Invertible):
+    """
+    Given a StaticImage object that includes "images", "responses", and "behavior", it returns three variables:
+        - input image concatinated with behavior as new channel(s)
+        - responses
+        - behavior
+    """    
+    def __init__(self):
+        self.transforms, self.itransforms = {}, {}
+        self.transforms['images'] = lambda img, behavior: np.concatenate((img, np.ones((1, *img.shape[-2:])) * np.expand_dims(behavior, axis=(1, 2))), axis=0)
+        self.transforms["responses"] = lambda x: x
+        self.transforms["behavior"] = lambda x: x
+        
+    def __call__(self, x):
+
+        key_vals = {k: v for k, v in zip(x._fields, x)}        
+        dd = {'images': self.transforms['images'](key_vals['images'], key_vals['behavior']), 
+              'responses': self.transforms['responses'](key_vals['responses']), 
+              'behavior': self.transforms['behavior'](key_vals['behavior'])}
+        return x.__class__(**dd)

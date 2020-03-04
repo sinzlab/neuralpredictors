@@ -96,7 +96,7 @@ class MultiplePointPooled2d(Readout, ModuleDict):
 
 
 class PointPooled2d(nn.Module):
-    def __init__(self, in_shape, outdims, pool_steps, bias, pool_kern, init_range, **kwargs):
+    def __init__(self, in_shape, outdims, pool_steps, bias, pool_kern, init_range, align_corners=True, **kwargs):
         """
         This readout learns a point in the core feature space for each neuron, with help of torch.grid_sample, that best
         predicts its response. Multiple average pooling steps are applied to reduce search space in each stage and thereby, faster convergence to the best prediction point.
@@ -116,6 +116,9 @@ class PointPooled2d(nn.Module):
             pool_kern (int): filter size and stride length used for pooling the feature map
             init_range (float): intialises the grid with Uniform([-init_range, init_range])
                                 [expected: positive value <=1]
+            align_corners (bool): Keyword agrument to gridsample for bilinear interpolation.
+                It changed behavior in PyTorch 1.3. The default of align_corners = True is setting the
+                behavior to pre PyTorch 1.3 functionality for comparability.
         """
         super().__init__()
         if init_range > 1.0 or init_range <= 0.0:
@@ -140,6 +143,7 @@ class PointPooled2d(nn.Module):
             (pool_kern, pool_kern), stride=pool_kern, count_include_pad=False
         )  # setup kernel of size=[pool_kern,pool_kern] with stride=pool_kern
         self.init_range = init_range
+        self.align_corners = align_corners
         self.initialize()
 
     @property
@@ -217,13 +221,13 @@ class PointPooled2d(nn.Module):
             # shift grid based on shifter network's prediction
             grid = grid.expand(N, outdims, 1, 2) + shift[:, None, None, :]
 
-        pools = [F.grid_sample(x, grid)]
+        pools = [F.grid_sample(x, grid, align_corners=self.align_corners)]
         for _ in range(self.pool_steps):
             _, _, w_pool, h_pool = x.size()
             if w_pool * h_pool == 1:
                 warnings.warn("redundant pooling steps: pooled feature map size is already 1X1, consider reducing it")
             x = self.avg(x)
-            pools.append(F.grid_sample(x, grid))
+            pools.append(F.grid_sample(x, grid, align_corners=self.align_corners))
         y = torch.cat(pools, dim=1)
         y = (y.squeeze(-1) * feat).sum(1).view(N, outdims)
 
@@ -260,6 +264,7 @@ class SpatialTransformerPooled3d(nn.Module):
         stride=2,
         grid=None,
         stop_grad=False,
+        align_corners=True,
     ):
         super().__init__()
         self._pool_steps = pool_steps
@@ -284,6 +289,7 @@ class SpatialTransformerPooled3d(nn.Module):
         self.init_range = init_range
         self.initialize()
         self.stop_grad = stop_grad
+        self.align_corners = align_corners
 
     @property
     def pool_steps(self):
@@ -367,10 +373,10 @@ class SpatialTransformerPooled3d(nn.Module):
             grid = torch.stack([grid + shift[:, i, :][:, None, None, :] for i in range(t)], 1)
             grid = grid.contiguous().view(-1, outdims, 1, 2)
         z = x.contiguous().transpose(2, 1).contiguous().view(-1, c, w, h)
-        pools = [F.grid_sample(z, grid)]
+        pools = [F.grid_sample(z, grid, align_corners=self.align_corners)]
         for i in range(self._pool_steps):
             z = self.avg(z)
-            pools.append(F.grid_sample(z, grid))
+            pools.append(F.grid_sample(z, grid, align_corners=self.align_corners))
         y = torch.cat(pools, dim=1)
         y = (y.squeeze(-1) * feat).sum(1).view(N, t, outdims)
 
@@ -506,7 +512,7 @@ class Pyramid(nn.Module):
 
 
 class PointPyramid2d(nn.Module):
-    def __init__(self, in_shape, outdims, scale_n, positive, bias, init_range, downsample, type, **kwargs):
+    def __init__(self, in_shape, outdims, scale_n, positive, bias, init_range, downsample, type, align_corners=True, **kwargs):
         super().__init__()
         self.in_shape = in_shape
         c, w, h = in_shape
@@ -522,6 +528,7 @@ class PointPyramid2d(nn.Module):
         else:
             self.register_parameter("bias", None)
         self.init_range = init_range
+        self.align_corners = align_corners
         self.initialize()
 
     def initialize(self):
@@ -558,7 +565,7 @@ class PointPyramid2d(nn.Module):
         else:
             grid = self.grid.expand(N, self.outdims, 1, 2) + shift[:, None, None, :]
 
-        pools = [F.grid_sample(xx, grid) for xx in self.gauss_pyramid(x)]
+        pools = [F.grid_sample(xx, grid, align_corners=self.align_corners) for xx in self.gauss_pyramid(x)]
         y = torch.cat(pools, dim=1).squeeze(-1)
         y = (y * feat).sum(1).view(N, self.outdims)
 
@@ -631,12 +638,19 @@ class Gaussian2d(nn.Module):
         bias (bool): adds a bias term
         init_mu_range (float): initialises the the mean with Uniform([-init_range, init_range])
                             [expected: positive value <=1]
-        init_sigma_range (float): initialises sigma with Uniform([0.0, init_sigma_range])
+        init_sigma_range (float): initialises sigma with Uniform([0.0, init_sigma_range]).
+                It is recommended however to use a fixed initialization, for faster convergence.
+                For this, set fixed_sigma to True.
         batch_sample (bool): if True, samples a position for each image in the batch separately
                             [default: True as it decreases convergence time and performs just as well]
+        align_corners (bool): Keyword agrument to gridsample for bilinear interpolation.
+                It changed behavior in PyTorch 1.3. The default of align_corners = True is setting the
+                behavior to pre PyTorch 1.3 functionality for comparability.
+        fixed_sigma (bool). Recommended behavior: True. But set to false for backwards compatibility.
+                If true, initialized the sigma not in a range, but with the exact value given for all neurons.
     """
 
-    def __init__(self, in_shape, outdims, bias, init_mu_range, init_sigma_range, batch_sample=True, **kwargs):
+    def __init__(self, in_shape, outdims, bias, init_mu_range=0.5, init_sigma_range=0.5, batch_sample=True, align_corners=True, fixed_sigma=False, **kwargs):
 
         super().__init__()
         if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma_range <= 0.0:
@@ -658,15 +672,24 @@ class Gaussian2d(nn.Module):
 
         self.init_mu_range = init_mu_range
         self.init_sigma_range = init_sigma_range
+        self.align_corners = align_corners
+        self.fixed_sigma = fixed_sigma
         self.initialize()
+
 
     def initialize(self):
         """
         Initializes the mean, and sigma of the Gaussian readout along with the features weights
         """
         self.mu.data.uniform_(-self.init_mu_range, self.init_mu_range)
-        self.sigma.data.uniform_(0, self.init_sigma_range)
+        if self.fixed_sigma:
+            self.sigma.data.uniform_(self.init_sigma_range, self.init_sigma_range)
+        else:
+            self.sigma.data.uniform_(0, self.init_sigma_range)
+            warnings.warn("sigma is sampled from uniform distribuiton, instead of a fixed value. Consider setting "
+                          "fixed_sigma to True")
         self.features.data.fill_(1 / self.in_shape[0])
+
         if self.bias is not None:
             self.bias.data.fill_(0)
 
@@ -758,7 +781,7 @@ class Gaussian2d(nn.Module):
         if shift is not None:
             grid = grid + shift[:, None, None, :]
 
-        y = F.grid_sample(x, grid)
+        y = F.grid_sample(x, grid, align_corners=self.align_corners)
         y = (y.squeeze(-1) * feat).sum(1).view(N, outdims)
 
         if self.bias is not None:
@@ -830,13 +853,19 @@ class Gaussian3d(nn.Module):
         bias (bool): adds a bias term
         init_mu_range (float): initialises the the mean with Uniform([-init_range, init_range])
                             [expected: positive value <=1]
-        init_sigma_range (float): initialises sigma with Uniform([0.0, init_sigma_range])
+        init_sigma_range (float): initialises sigma with Uniform([0.0, init_sigma_range]).
+                It is recommended however to use a fixed initialization, for faster convergence.
+                For this, set fixed_sigma to True.
         batch_sample (bool): if True, samples a position for each image in the batch separately
                             [default: True as it decreases convergence time and performs just as well]
-
+        align_corners (bool): Keyword agrument to gridsample for bilinear interpolation.
+                It changed behavior in PyTorch 1.3. The default of align_corners = True is setting the
+                behavior to pre PyTorch 1.3 functionality for comparability.
+        fixed_sigma (bool). Recommended behavior: True. But set to false for backwards compatibility.
+                If true, initialized the sigma not in a range, but with the exact value given for all neurons.
     """
 
-    def __init__(self, in_shape, outdims, bias, init_mu_range, init_sigma_range, batch_sample, **kwargs):
+    def __init__(self, in_shape, outdims, bias, init_mu_range=0.5, init_sigma_range=0.5, batch_sample=True, align_corners=True, fixed_sigma=False, **kwargs):
         super().__init__()
         if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma_range <= 0.0:
             raise ValueError("init_mu_range or init_sigma_range is not within required limit!")
@@ -857,6 +886,8 @@ class Gaussian3d(nn.Module):
 
         self.init_mu_range = init_mu_range
         self.init_sigma_range = init_sigma_range
+        self.align_corners = align_corners
+        self.fixed_sigma = fixed_sigma
         self.initialize()
 
     def sample_grid(self, batch_size, sample=None):
@@ -894,7 +925,12 @@ class Gaussian3d(nn.Module):
 
     def initialize(self):
         self.mu.data.uniform_(-self.init_mu_range, self.init_mu_range)
-        self.sigma.data.uniform_(0, self.init_sigma_range)
+        if self.fixed_sigma:
+            self.sigma.data.uniform_(self.init_sigma_range, self.init_sigma_range)
+        else:
+            self.sigma.data.uniform_(0, self.init_sigma_range)
+            warnings.warn("sigma is sampled from uniform distribuiton, instead of a fixed value. Consider setting "
+                          "fixed_sigma to True")
         self.features.data.fill_(1 / self.in_shape[0])
 
         if self.bias is not None:
@@ -946,7 +982,7 @@ class Gaussian3d(nn.Module):
         if shift is not None:
             grid = grid + shift[:, None, None, :]
 
-        y = F.grid_sample(x, grid)
+        y = F.grid_sample(x, grid, align_corners=self.align_corners)
         y = (y.squeeze(-1) * feat).sum(1).view(N, outdims)
 
         if self.bias is not None:
@@ -987,7 +1023,7 @@ class MultipleUltraSparse(Readout, ModuleDict):
             self[k].bias.data = mu.squeeze() - 1
 
     def regularizer(self, readout_key):
-        return self.gamma_readout
+        return self[readout_key].feature_l1() * self.gamma_readout
 
 
 class UltraSparse(nn.Module):
@@ -1016,6 +1052,12 @@ class UltraSparse(nn.Module):
                            [default: 1, an instance of sparsest readout]
         shared_mean (bool): if True, the mean in the x-y plane (image-plane) is shared across all channels
                            [default: False]
+
+        align_corners (bool): Keyword agrument to gridsample for bilinear interpolation.
+                It changed behavior in PyTorch 1.3. The default of align_corners = True is setting the
+                behavior to pre PyTorch 1.3 functionality for comparability.
+        fixed_sigma (bool). Recommended behavior: True. But set to false for backwards compatibility.
+                If true, initialized the sigma not in a range, but with the exact value given for all neurons.
     """
 
     def __init__(
@@ -1028,6 +1070,8 @@ class UltraSparse(nn.Module):
         batch_sample=True,
         num_filters=1,
         shared_mean=False,
+        align_corners=True,
+        fixed_sigma=False,
         **kwargs
     ):
 
@@ -1074,6 +1118,8 @@ class UltraSparse(nn.Module):
 
         self.init_mu_range = init_mu_range
         self.init_sigma_range = init_sigma_range
+        self.align_corners = align_corners
+        self.fixed_sigma = fixed_sigma
         self.initialize()
 
     def sample_grid(self, batch_size, sample=None):
@@ -1118,14 +1164,32 @@ class UltraSparse(nn.Module):
     def grid(self):
         return self.sample_grid(batch_size=1, sample=False)
 
+    def feature_l1(self, average=True):
+        """
+        Returns the l1 regularization term either the mean or the sum of all weights
+        Args:
+            average(bool): if True, use mean of weights for regularization
+        """
+        if average:
+            return self.features.abs().mean()
+        else:
+            return self.features.abs().sum()
+
     def initialize(self):
 
         if self.shared_mean:
             # initialise mu and sigma separately for xy and channel dimension.
             self.mu_ch.data.uniform_(-1, 1)
-            self.sigma_ch.data.uniform_(0, self.init_sigma_range)
             self.mu_xy.data.uniform_(-self.init_mu_range, self.init_mu_range)
-            self.sigma_xy.data.uniform_(0, self.init_sigma_range)
+
+            if self.fixed_sigma:
+                self.sigma_ch.data.uniform_(self.init_sigma_range, self.init_sigma_range)
+                self.sigma_xy.data.uniform_(self.init_sigma_range, self.init_sigma_range)
+            else:
+                self.sigma_ch.data.uniform_(0, self.init_sigma_range)
+                self.sigma_xy.data.uniform_(0, self.init_sigma_range)
+                warnings.warn("sigma is sampled from uniform distribuiton, instead of a fixed value. Consider setting "
+                              "fixed_sigma to True")
 
         else:
             # initialise mu and sigma for x,y and channel dimensions.
@@ -1184,7 +1248,7 @@ class UltraSparse(nn.Module):
         if shift is not None:  # it might not be valid now but have kept it for future devop.
             grid = grid + shift[:, None, None, :]
 
-        y = F.grid_sample(x, grid).squeeze(-1)
+        y = F.grid_sample(x, grid, align_corners=self.align_corners).squeeze(-1)
         z = y.view((N, 1, self.num_filters, outdims)).permute(0, 1, 3, 2)  # reorder the dims
         z = torch.einsum(
             "nkpf,mkpf->np", z, feat

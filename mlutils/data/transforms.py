@@ -80,7 +80,7 @@ class Subsequence(MovieTransform):
 class Delay(MovieTransform):
     """
     Delay the specified target gorups by delay frames. In other words,
-    given non-delayed group g(t) and delayed group d(t), 
+    given non-delayed group g(t) and delayed group d(t),
     g(T:N-delay) will be returned with d(T+delay:N) where `delay` is the specified amount
     of delay, and N is the last frame in the dataset.
     """
@@ -217,8 +217,8 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
 
         exclude = self.exclude = exclude or []
 
-        self._inputs_mean = data.statistics["inputs"][stats_source]["mean"][()]
-        self._inputs_std = data.statistics["inputs"][stats_source]["std"][()]
+        self._inputs_mean = data.statistics["images"][stats_source]["mean"][()]
+        self._inputs_std = data.statistics["images"][stats_source]["std"][()]
 
         s = np.array(data.statistics["responses"][stats_source]["std"])
 
@@ -231,31 +231,12 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
         transforms, itransforms = {}, {}
 
         # -- inputs
-        transforms["inputs"] = lambda x: (x - self._inputs_mean) / self._inputs_std
-        itransforms["inputs"] = lambda x: x * self._inputs_std + self._inputs_mean
+        transforms["images"] = lambda x: (x - self._inputs_mean) / self._inputs_std
+        itransforms["images"] = lambda x: x * self._inputs_std + self._inputs_mean
 
         # -- responses
         transforms["responses"] = lambda x: x * self._response_precision
         itransforms["responses"] = lambda x: x / self._response_precision
-
-        if "eye_position" in data.data_groups:
-            # -- eye position
-            self._eye_mean = np.array(data.statistics["eye_position"][stats_source]["mean"])
-            self._eye_std = np.array(data.statistics["eye_position"][stats_source]["std"])
-            transforms["eye_position"] = lambda x: (x - self._eye_mean) / self._eye_std
-            itransforms["eye_position"] = lambda x: x * self._eye_std + self._eye_mean
-
-            s = np.array(data.statistics["behavior"][stats_source]["std"])
-
-            # TODO: same as above - consider other baselines
-            threshold = 0.01 * s.mean()
-            idx = s > threshold
-            self._behavior_precision = np.ones_like(s) / threshold
-            self._behavior_precision[idx] = 1 / s[idx]
-
-            # -- behavior
-            transforms["behavior"] = lambda x: x * self._behavior_precision
-            itransforms["behavior"] = lambda x: x / self._behavior_precision
 
         self._transforms = transforms
         self._itransforms = itransforms

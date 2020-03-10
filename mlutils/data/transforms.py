@@ -291,7 +291,7 @@ class AddBehaviorAsChannels(MovieTransform, StaticTransform, Invertible):
         self.transforms['images'] = lambda img, behavior: np.concatenate((img,
                                                                           np.ones((1, *img.shape[-(len(img.shape)-1):])) *
                                                                           np.expand_dims(behavior, axis=((len(img.shape)-2), (len(img.shape)-1)))),
-                                                                         axis=len(img.shape)-3)
+                                                                          axis=len(img.shape)-3)
         self.transforms["responses"] = lambda x: x
         self.transforms["behavior"] = lambda x: x
     def __call__(self, x):

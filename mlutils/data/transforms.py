@@ -215,7 +215,7 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
 
     def __init__(self, data, stats_source="all", exclude=None):
 
-        exclude = self.exclude = exclude or []
+        self.exclude = exclude or []
 
         in_name = 'images' if 'images' in data.statistics.keys() else 'inputs'
 
@@ -298,4 +298,25 @@ class AddBehaviorAsChannels(MovieTransform, StaticTransform, Invertible):
         dd = {'images': self.transforms['images'](key_vals['images'], key_vals['behavior']), 
               'responses': self.transforms['responses'](key_vals['responses']), 
               'behavior': self.transforms['behavior'](key_vals['behavior'])}
+        return x.__class__(**dd)
+
+
+class SelectInputChannel(MovieTransform, StaticTransform, Invertible):
+    """
+    Given a StaticImage object that includes "images", "responses", and "behavior", it returns three variables:
+        - input image concatinated with behavior as new channel(s)
+        - responses
+        - behavior
+    """
+
+    def __init__(self, grab_channel):
+        self.grab_channel = grab_channel
+        self.transforms, self.itransforms = {}, {}
+        self.transforms['images'] = lambda img: img[:, self.grab_channel, ::][:,None,::] if len(img.shape) == 4 else img[self.grab_channel,::][None,::]
+
+    def __call__(self, x):
+        key_vals = {k: v for k, v in zip(x._fields, x)}
+        dd = {'images': self.transforms['images'](key_vals['images']),
+              'responses': key_vals['responses']
+              }
         return x.__class__(**dd)

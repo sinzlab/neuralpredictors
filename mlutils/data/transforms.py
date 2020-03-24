@@ -302,22 +302,17 @@ class AddBehaviorAsChannels(MovieTransform, StaticTransform, Invertible):
         return x.__class__(**dd)
 
 
-class SelectInputChannel(MovieTransform, StaticTransform, Invertible):
+class SelectInputChannel(StaticTransform):
     """
-    Given a StaticImage object that includes "images", "responses", and "behavior", it returns three variables:
-        - input image concatinated with behavior as new channel(s)
-        - responses
-        - behavior
+    Given a StaticImage object that includes "images", it will select a particular input channel.
     """
 
     def __init__(self, grab_channel):
         self.grab_channel = grab_channel
-        self.transforms, self.itransforms = {}, {}
-        self.transforms['images'] = lambda img: img[:, self.grab_channel, ::][:,None,::] if len(img.shape) == 4 else img[self.grab_channel,::][None,::]
 
     def __call__(self, x):
         key_vals = {k: v for k, v in zip(x._fields, x)}
-        dd = {'images': self.transforms['images'](key_vals['images']),
+        dd = {'images': (lambda img: img[:, (self.grab_channel,)] if len(img.shape) == 4 else img[(self.grab_channel,)])(key_vals['images']),
               'responses': key_vals['responses']
               }
         return x.__class__(**dd)

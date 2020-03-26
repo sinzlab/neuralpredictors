@@ -1,10 +1,25 @@
+from collections import namedtuple
+from pathlib import Path
+
 import h5py
-from torch.utils.data import Dataset
-from collections import namedtuple, OrderedDict
 import numpy as np
-from .transforms import DataTransform, MovieTransform, StaticTransform, Invertible, Subsequence, Delay
 from scipy.signal import convolve2d
+from torch.utils.data import Dataset
+
+from .transforms import DataTransform, MovieTransform, StaticTransform, Invertible, Subsequence, Delay
 from ..utils import recursively_load_dict_contents_from_group
+
+
+class InconsistentDataException(Exception):
+    """
+    Raised when (parts of) a Dataset is inconsistent
+    """
+
+
+class DoesNotExistException(Exception):
+    """
+    Raised when (parts of) a Dataset does not exist
+    """
 
 
 class AttributeHandler:
@@ -50,6 +65,10 @@ class AttributeTransformer(AttributeHandler):
 
 
 class TransformDataset(Dataset):
+
+    def __init__(self, transforms=None):
+        self.transforms = transforms or []
+
     def transform(self, x, exclude=None):
         for tr in self.transforms:
             if exclude is None or not isinstance(tr, exclude):
@@ -69,10 +88,10 @@ class TransformDataset(Dataset):
 
     def __repr__(self):
         return (
-            "{} m={}:\n\t({})".format(self.__class__.__name__, len(self), ", ".join(self.data_groups))
-            + "\n\t[Transforms: "
-            + "->".join([repr(tr) for tr in self.transforms])
-            + "]"
+                "{} m={}:\n\t({})".format(self.__class__.__name__, len(self), ", ".join(self.data_groups))
+                + "\n\t[Transforms: "
+                + "->".join([repr(tr) for tr in self.transforms])
+                + "]"
         )
 
 
@@ -214,11 +233,11 @@ class MovieSet(H5SequenceSet):
         mu, s = stat("inputs", "mean"), stat("inputs", "std")
         h_filt = np.float64([[1 / 16, 1 / 8, 1 / 16], [1 / 8, 1 / 4, 1 / 8], [1 / 16, 1 / 8, 1 / 16]])
         noise_input = (
-            np.stack([convolve2d(np.random.randn(w, h), h_filt, mode="same") for _ in range(m * t * c)]).reshape(
-                (m, c, t, w, h)
-            )
-            * s
-            + mu
+                np.stack([convolve2d(np.random.randn(w, h), h_filt, mode="same") for _ in range(m * t * c)]).reshape(
+                    (m, c, t, w, h)
+                )
+                * s
+                + mu
         )
 
         mean_beh = np.ones((m, t, 1)) * stat("behavior", "mean")[None, None, :]
@@ -238,8 +257,23 @@ class MovieSet(H5SequenceSet):
 default_datapoint = namedtuple("DefaultDataPoint", ["images", "responses"])
 
 
-class H5ArraySet(TransformDataset):
+class StaticSet(TransformDataset):
+    def __init__(self, *data_keys, transforms=None):
+        super().__init__(transforms=transforms)
+
+        self.data_keys = data_keys
+        if set(data_keys) == {"images", "responses"}:
+            # this version IS serializable in pickle
+            self.data_point = default_datapoint
+        else:
+            # this version is NOT - you cannot use this with a dataloader with num_workers > 1
+            self.data_point = namedtuple("DataPoint", data_keys)
+
+
+class H5ArraySet(StaticSet):
     def __init__(self, filename, *data_keys, transforms=None):
+        super().__init__(*data_keys, transforms=transforms)
+
         self._fid = h5py.File(filename, "r")
         self.data = self._fid
         self.data_loaded = False
@@ -251,16 +285,7 @@ class H5ArraySet(TransformDataset):
             else:
                 assert m == len(self.data[key]), "Length of datasets do not match"
         self._len = m
-        self.data_keys = data_keys
 
-        self.transforms = transforms or []
-
-        if data_keys == ["images", "responses"]:
-            # this version IS serializable in pickle
-            self.data_point = default_datapoint
-        else:
-            # this version is NOT - you cannot use this with a dataloader with num_workers > 1
-            self.data_point = namedtuple("DataPoint", data_keys)
 
     def load_content(self):
         self.data = recursively_load_dict_contents_from_group(self._fid)
@@ -341,3 +366,110 @@ class StaticImageSet(H5ArraySet):
     def __dir__(self):
         attrs = set(self.__dict__).union(set(dir(type(self))))
         return attrs.union(set(self.data.keys()))
+
+class DirectoryAttributeHandler:
+    def __init__(self, path):
+        self.path = path
+        self._cache = {}
+
+    def __getattr__(self, item):
+        if item in self._cache:
+            return self._cache['item']
+        else:
+            val = np.load(self.path / '{}.npy'.format(item))
+            self._cache[item] = val
+            return val
+
+    def __getitem__(self, item):
+        return getattr(self, item)
+
+    def keys(self):
+        return [e.stem for e in self.path.glob('*.npy')]
+
+    def __dir__(self):
+        attrs = set(super().__dir__())
+        return attrs.union(set(self.keys()))
+
+
+class DirectoryAttributeTransformer(DirectoryAttributeHandler):
+    """
+    Allows for id_transform of transforms to be applied to the
+    specified attribute.
+    """
+
+    def __init__(self, path, transforms, data_group):
+        super().__init__(path)
+        self.transforms = transforms
+        self.data_group = data_group
+
+    def __getattr__(self, item):
+        ret = {self.data_group: super().__getattr__(item)}
+        for tr in self.transforms:
+            ret = tr.id_transform(ret)
+        return ret[self.data_group]
+
+
+
+class FileTreeDataset(StaticSet):
+    def __init__(self, dirname, *data_keys, transforms=None):
+        super().__init__(*data_keys, transforms=transforms)
+
+        number_of_files = []
+
+        basepath = self.basepath = Path(dirname)
+
+        for data_key in data_keys:
+            datapath = basepath / 'data' / data_key
+            if not datapath.exists():
+                raise DoesNotExistException("{} does not exist.".format(datapath))
+            number_of_files.append(len(list(datapath.glob('*'))))
+        if not np.all(np.diff(number_of_files) == 0):
+            raise InconsistentDataException("Number of data points is not equal")
+        else:
+            self._len = number_of_files[0]
+
+        self._cache = {data_key: {} for data_key in data_keys}
+
+    def __len__(self):
+        return self._len
+
+    def __getitem__(self, item):
+        # load data from cache or disk
+        ret = []
+        for data_key in self.data_keys:
+            if item in self._cache[data_key]:
+                ret.append(self._cache[data_key][item])
+            else:
+                val = np.load(self.basepath / 'data' / data_key / '{}.npy'.format(item))
+                self._cache[data_key][item] = val
+                ret.append(val)
+
+        # create data point and transform
+        x = self.data_point(*ret)
+        for tr in self.transforms:
+            assert isinstance(tr, StaticTransform)
+            x = tr(x)
+        return x
+
+    @property
+    def n_neurons(self):
+        return len(self[0].responses)
+
+    @property
+    def neurons(self):
+        return DirectoryAttributeTransformer(self.basepath / 'meta/neurons',
+                                             self.transforms,
+                                             data_group="responses")
+
+    @property
+    def trial_info(self):
+        return DirectoryAttributeHandler(self.basepath / 'meta/trials')
+
+
+    @property
+    def img_shape(self):
+        return (1,) + self[0].images.shape
+
+
+    def __repr__(self):
+        return "{} {} (n={} items)".format(self.__class__.__name__, self.basepath, self._len)

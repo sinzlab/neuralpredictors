@@ -1,6 +1,7 @@
 from collections import OrderedDict
 import numpy as np
 import torch
+import warnings
 from torch import nn as nn
 from torch.nn import Parameter
 from torch.nn import functional as F
@@ -59,18 +60,23 @@ class ClonedReadout(nn.Module):
 
 
 ##############
-# Pooled Readout
+# Point Pooled Readout
 ##############
 
 
 class MultiplePointPooled2d(Readout, ModuleDict):
+    """
+    Instantiates multiple instances of PointPool2d Readouts
+    usually used when dealing with more than one dataset sharing the same core.
+    """
+
     def __init__(self, in_shape, loaders, gamma_readout, clone_readout=False, **kwargs):
         super().__init__()
 
         self.in_shape = in_shape
         self.neurons = OrderedDict([(k, loader.dataset.n_neurons) for k, loader in loaders.items()])
 
-        self.gamma_readout = gamma_readout
+        self.gamma_readout = gamma_readout  # regularisation strength
 
         for i, (k, n_neurons) in enumerate(self.neurons.items()):
             if i == 0 or clone_readout is False:
@@ -90,14 +96,41 @@ class MultiplePointPooled2d(Readout, ModuleDict):
 
 
 class PointPooled2d(nn.Module):
-    def __init__(self, in_shape, outdims, pool_steps, bias, pool_kern, init_range, **kwargs):
+    def __init__(self, in_shape, outdims, pool_steps, bias, pool_kern, init_range, align_corners=True, **kwargs):
+        """
+        This readout learns a point in the core feature space for each neuron, with help of torch.grid_sample, that best
+        predicts its response. Multiple average pooling steps are applied to reduce search space in each stage and thereby, faster convergence to the best prediction point.
+
+        The readout receives the shape of the core as 'in_shape', number of pooling stages to be performed as 'pool_steps', the kernel size and stride length
+        to be used for pooling as 'pool_kern', the number of units/neurons being predicted as 'outdims', 'bias' specifying whether
+        or not bias term is to be used and 'init_range' range for initialising the grid with uniform distribution, U(-init_range,init_range).
+        The grid parameter contains the normalized locations (x, y coordinates in the core feature space) and is clipped to [-1.1] as it a
+        requirement of the torch.grid_sample function. The feature parameter learns the best linear mapping from the pooled feature
+        map from a given location to a unit's response with or without an additional elu non-linearity.
+
+        Args:
+            in_shape (list): shape of the input feature map [channels, width, height]
+            outdims (int): number of output units
+            pool_steps (int): number of pooling stages
+            bias (bool): adds a bias term
+            pool_kern (int): filter size and stride length used for pooling the feature map
+            init_range (float): intialises the grid with Uniform([-init_range, init_range])
+                                [expected: positive value <=1]
+            align_corners (bool): Keyword agrument to gridsample for bilinear interpolation.
+                It changed behavior in PyTorch 1.3. The default of align_corners = True is setting the
+                behavior to pre PyTorch 1.3 functionality for comparability.
+        """
         super().__init__()
+        if init_range > 1.0 or init_range <= 0.0:
+            raise ValueError("init_range is not within required limit!")
         self._pool_steps = pool_steps
         self.in_shape = in_shape
         c, w, h = in_shape
         self.outdims = outdims
-        self.grid = Parameter(torch.Tensor(1, outdims, 1, 2))
-        self.features = Parameter(torch.Tensor(1, c * (self._pool_steps + 1), 1, outdims))
+        self.grid = Parameter(torch.Tensor(1, outdims, 1, 2))  # x-y coordinates for each neuron
+        self.features = Parameter(
+            torch.Tensor(1, c * (self._pool_steps + 1), 1, outdims)
+        )  # weight matrix mapping the core features to the output units
 
         if bias:
             bias = Parameter(torch.Tensor(outdims))
@@ -106,8 +139,11 @@ class PointPooled2d(nn.Module):
             self.register_parameter("bias", None)
 
         self.pool_kern = pool_kern
-        self.avg = nn.AvgPool2d((pool_kern, pool_kern), stride=pool_kern, count_include_pad=False)
+        self.avg = nn.AvgPool2d(
+            (pool_kern, pool_kern), stride=pool_kern, count_include_pad=False
+        )  # setup kernel of size=[pool_kern,pool_kern] with stride=pool_kern
         self.init_range = init_range
+        self.align_corners = align_corners
         self.initialize()
 
     @property
@@ -125,6 +161,9 @@ class PointPooled2d(nn.Module):
             self.features.data.fill_(1 / self.in_shape[0])
 
     def initialize(self):
+        """
+        Initialize function initialises the grid, features or weights and bias terms.
+        """
         self.grid.data.uniform_(-self.init_range, self.init_range)
         self.features.data.fill_(1 / self.in_shape[0])
 
@@ -132,22 +171,44 @@ class PointPooled2d(nn.Module):
             self.bias.data.fill_(0)
 
     def feature_l1(self, average=True):
+        """
+        Returns l1 regularization term for features.
+        Args:
+            average(bool): if True, use mean of weights for regularization
+
+        """
         if average:
             return self.features.abs().mean()
         else:
             return self.features.abs().sum()
 
     def forward(self, x, shift=None, out_idx=None):
+        """
+        Propagates the input forwards through the readout
+        Args:
+            x: input data
+            shift: shifts the location of the grid (from eye-tracking data)
+            out_idx: index of neurons to be predicted
+
+        Returns:
+            y: neuronal activity
+        """
         self.grid.data = torch.clamp(self.grid.data, -1, 1)
         N, c, w, h = x.size()
-        m = self.pool_steps + 1
-        feat = self.features.view(1, m * c, self.outdims)
+        c_in, w_in, h_in = self.in_shape
+        if [c_in, w_in, h_in] != [c, w, h]:
+            raise ValueError("the specified feature map dimension is not the readout's expected input dimension")
 
+        m = self.pool_steps + 1  # the input feature is considered the first pooling stage
+        feat = self.features.view(1, m * c, self.outdims)
         if out_idx is None:
             grid = self.grid
             bias = self.bias
             outdims = self.outdims
         else:
+            if isinstance(out_idx, np.ndarray):
+                if out_idx.dtype == bool:
+                    out_idx = np.where(out_idx)[0]
             feat = feat[:, :, out_idx]
             grid = self.grid[:, out_idx]
             if self.bias is not None:
@@ -157,12 +218,16 @@ class PointPooled2d(nn.Module):
         if shift is None:
             grid = grid.expand(N, outdims, 1, 2)
         else:
+            # shift grid based on shifter network's prediction
             grid = grid.expand(N, outdims, 1, 2) + shift[:, None, None, :]
 
-        pools = [F.grid_sample(x, grid)]
+        pools = [F.grid_sample(x, grid, align_corners=self.align_corners)]
         for _ in range(self.pool_steps):
+            _, _, w_pool, h_pool = x.size()
+            if w_pool * h_pool == 1:
+                warnings.warn("redundant pooling steps: pooled feature map size is already 1X1, consider reducing it")
             x = self.avg(x)
-            pools.append(F.grid_sample(x, grid))
+            pools.append(F.grid_sample(x, grid, align_corners=self.align_corners))
         y = torch.cat(pools, dim=1)
         y = (y.squeeze(-1) * feat).sum(1).view(N, outdims)
 
@@ -181,6 +246,11 @@ class PointPooled2d(nn.Module):
         return r
 
 
+##############
+# Spatial Transformer Readout
+##############
+
+
 class SpatialTransformerPooled3d(nn.Module):
     def __init__(
         self,
@@ -194,6 +264,7 @@ class SpatialTransformerPooled3d(nn.Module):
         stride=2,
         grid=None,
         stop_grad=False,
+        align_corners=True,
     ):
         super().__init__()
         self._pool_steps = pool_steps
@@ -218,6 +289,7 @@ class SpatialTransformerPooled3d(nn.Module):
         self.init_range = init_range
         self.initialize()
         self.stop_grad = stop_grad
+        self.align_corners = align_corners
 
     @property
     def pool_steps(self):
@@ -301,10 +373,10 @@ class SpatialTransformerPooled3d(nn.Module):
             grid = torch.stack([grid + shift[:, i, :][:, None, None, :] for i in range(t)], 1)
             grid = grid.contiguous().view(-1, outdims, 1, 2)
         z = x.contiguous().transpose(2, 1).contiguous().view(-1, c, w, h)
-        pools = [F.grid_sample(z, grid)]
+        pools = [F.grid_sample(z, grid, align_corners=self.align_corners)]
         for i in range(self._pool_steps):
             z = self.avg(z)
-            pools.append(F.grid_sample(z, grid))
+            pools.append(F.grid_sample(z, grid, align_corners=self.align_corners))
         y = torch.cat(pools, dim=1)
         y = (y.squeeze(-1) * feat).sum(1).view(N, t, outdims)
 
@@ -337,12 +409,11 @@ class SpatialTransformerPooled3d(nn.Module):
 
 class MultiplePointPyramid2d(Readout, ModuleDict):
     def __init__(self, in_shape, loaders, gamma_readout, positive, **kwargs):
-        #        log.info('Ignoring input {} when creating {}'.format(repr(kwargs), self.__class__.__name__))
         super().__init__()
 
         self.in_shape = in_shape
         self.neurons = OrderedDict([(k, loader.dataset.n_neurons) for k, loader in loaders.items()])
-        self._positive = positive  # kwargs['positive']
+        self._positive = positive
         self.gamma_readout = gamma_readout
         for k, n_neurons in self.neurons.items():
             if isinstance(self.in_shape, dict):
@@ -360,7 +431,6 @@ class MultiplePointPyramid2d(Readout, ModuleDict):
             self[k].positive = value
 
     def initialize(self, mu_dict):
-        #        log.info('Initializing with mu_dict: ' + ', '.join(['{}: {}'.format(k, len(m)) for k, m in mu_dict.items()]))
 
         for k, mu in mu_dict.items():
             self[k].initialize()
@@ -442,7 +512,7 @@ class Pyramid(nn.Module):
 
 
 class PointPyramid2d(nn.Module):
-    def __init__(self, in_shape, outdims, scale_n, positive, bias, init_range, downsample, type, **kwargs):
+    def __init__(self, in_shape, outdims, scale_n, positive, bias, init_range, downsample, type, align_corners=True, **kwargs):
         super().__init__()
         self.in_shape = in_shape
         c, w, h = in_shape
@@ -458,6 +528,7 @@ class PointPyramid2d(nn.Module):
         else:
             self.register_parameter("bias", None)
         self.init_range = init_range
+        self.align_corners = align_corners
         self.initialize()
 
     def initialize(self):
@@ -494,7 +565,7 @@ class PointPyramid2d(nn.Module):
         else:
             grid = self.grid.expand(N, self.outdims, 1, 2) + shift[:, None, None, :]
 
-        pools = [F.grid_sample(xx, grid) for xx in self.gauss_pyramid(x)]
+        pools = [F.grid_sample(xx, grid, align_corners=self.align_corners) for xx in self.gauss_pyramid(x)]
         y = torch.cat(pools, dim=1).squeeze(-1)
         y = (y * feat).sum(1).view(N, self.outdims)
 
@@ -508,6 +579,690 @@ class PointPyramid2d(nn.Module):
         if self.bias is not None:
             r += " with bias"
 
+        for ch in self.children():
+            r += "  -> " + ch.__repr__() + "\n"
+        return r
+
+
+##############
+# Gaussian Readout
+##############
+
+
+class MultipleGaussian2d(Readout, ModuleDict):
+    """
+    Instantiates multiple instances of Gaussian2d Readouts
+    usually used when dealing with more than one dataset sharing the same core.
+
+    Args:
+        in_shape (list): shape of the input feature map [channels, width, height]
+        loaders (list):  a list of dataloaders
+        gamma_readout (float): regularizer for the readout
+    """
+
+    def __init__(self, in_shape, loaders, gamma_readout, **kwargs):
+        super().__init__()
+
+        self.in_shape = in_shape
+        self.neurons = OrderedDict([(k, loader.dataset.n_neurons) for k, loader in loaders.items()])
+
+        self.gamma_readout = gamma_readout  # regularisation strength
+
+        for k, n_neurons in self.neurons.items():
+            self.add_module(k, Gaussian2d(in_shape=in_shape, outdims=n_neurons, **kwargs))
+
+    def initialize(self, mean_activity_dict):
+        for k, mu in mean_activity_dict.items():
+            self[k].initialize()
+            self[k].bias.data = mu.squeeze() - 1
+
+    def regularizer(self, readout_key):
+        return self[readout_key].feature_l1() * self.gamma_readout
+
+
+class Gaussian2d(nn.Module):
+    """
+    Instantiates an object that can used to learn a point in the core feature space for each neuron,
+    sampled from a Gaussian distribution with some mean and variance at train but set to mean at test time, that best predicts its response.
+
+    The readout receives the shape of the core as 'in_shape', the number of units/neurons being predicted as 'outdims', 'bias' specifying whether
+    or not bias term is to be used and 'init_range' range for initialising the mean and variance of the gaussian distribution from which we sample to
+    uniform distribution, U(-init_range,init_range) and  uniform distribution, U(0.0, 3*init_range) respectively.
+    The grid parameter contains the normalized locations (x, y coordinates in the core feature space) and is clipped to [-1.1] as it a
+    requirement of the torch.grid_sample function. The feature parameter learns the best linear mapping between the feature
+    map from a given location, sample from Gaussian at train time but set to mean at eval time, and the unit's response with or without an additional elu non-linearity.
+
+    Args:
+        in_shape (list): shape of the input feature map [channels, width, height]
+        outdims (int): number of output units
+        bias (bool): adds a bias term
+        init_mu_range (float): initialises the the mean with Uniform([-init_range, init_range])
+                            [expected: positive value <=1]
+        init_sigma_range (float): initialises sigma with Uniform([0.0, init_sigma_range]).
+                It is recommended however to use a fixed initialization, for faster convergence.
+                For this, set fixed_sigma to True.
+        batch_sample (bool): if True, samples a position for each image in the batch separately
+                            [default: True as it decreases convergence time and performs just as well]
+        align_corners (bool): Keyword agrument to gridsample for bilinear interpolation.
+                It changed behavior in PyTorch 1.3. The default of align_corners = True is setting the
+                behavior to pre PyTorch 1.3 functionality for comparability.
+        fixed_sigma (bool). Recommended behavior: True. But set to false for backwards compatibility.
+                If true, initialized the sigma not in a range, but with the exact value given for all neurons.
+    """
+
+    def __init__(self, in_shape, outdims, bias, init_mu_range=0.5, init_sigma_range=0.5, batch_sample=True, align_corners=True, fixed_sigma=False, **kwargs):
+
+        super().__init__()
+        if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma_range <= 0.0:
+            raise ValueError("either init_mu_range doesn't belong to [0.0, 1.0] or init_sigma_range is non-positive")
+        self.in_shape = in_shape
+        c, w, h = in_shape
+        self.outdims = outdims
+        self.batch_sample = batch_sample
+        self.grid_shape = (1, outdims, 1, 2)
+        self.mu = Parameter(torch.Tensor(*self.grid_shape))  # mean location of gaussian for each neuron
+        self.sigma = Parameter(torch.Tensor(*self.grid_shape))  # standard deviation for gaussian for each neuron
+        self.features = Parameter(torch.Tensor(1, c, 1, outdims))  # feature weights for each channel of the core
+
+        if bias:
+            bias = Parameter(torch.Tensor(outdims))
+            self.register_parameter("bias", bias)
+        else:
+            self.register_parameter("bias", None)
+
+        self.init_mu_range = init_mu_range
+        self.init_sigma_range = init_sigma_range
+        self.align_corners = align_corners
+        self.fixed_sigma = fixed_sigma
+        self.initialize()
+
+
+    def initialize(self):
+        """
+        Initializes the mean, and sigma of the Gaussian readout along with the features weights
+        """
+        self.mu.data.uniform_(-self.init_mu_range, self.init_mu_range)
+        if self.fixed_sigma:
+            self.sigma.data.uniform_(self.init_sigma_range, self.init_sigma_range)
+        else:
+            self.sigma.data.uniform_(0, self.init_sigma_range)
+            warnings.warn("sigma is sampled from uniform distribuiton, instead of a fixed value. Consider setting "
+                          "fixed_sigma to True")
+        self.features.data.fill_(1 / self.in_shape[0])
+
+        if self.bias is not None:
+            self.bias.data.fill_(0)
+
+    def sample_grid(self, batch_size, sample=None):
+        """
+        Returns the grid locations from the core by sampling from a Gaussian distribution
+        Args:
+            batch_size (int): size of the batch
+            sample (bool/None): sample determines whether we draw a sample from Gaussian distribution, N(mu,sigma), defined per neuron
+                            or use the mean, mu, of the Gaussian distribution without sampling.
+                           if sample is None (default), samples from the N(mu,sigma) during training phase and
+                             fixes to the mean, mu, during evaluation phase.
+                           if sample is True/False, overrides the model_state (i.e training or eval) and does as instructed
+        """
+        with torch.no_grad():
+            self.mu.clamp_(min=-1, max=1)  # at eval time, only self.mu is used so it must belong to [-1,1]
+            self.sigma.clamp_(min=0)  # sigma/variance is always a positive quantity
+
+        grid_shape = (batch_size,) + self.grid_shape[1:]
+
+        sample = self.training if sample is None else sample
+
+        if sample:
+            norm = self.mu.new(*grid_shape).normal_()
+        else:
+            norm = self.mu.new(*grid_shape).zero_()  # for consistency and CUDA capability
+
+        return torch.clamp(
+            norm * self.sigma + self.mu, min=-1, max=1
+        )  # grid locations in feature space sampled randomly around the mean self.mu
+
+    @property
+    def grid(self):
+        return self.sample_grid(batch_size=1, sample=False)
+
+    def feature_l1(self, average=True):
+        """
+        Returns the l1 regularization term either the mean or the sum of all weights
+        Args:
+            average(bool): if True, use mean of weights for regularization
+
+        """
+        if average:
+            return self.features.abs().mean()
+        else:
+            return self.features.abs().sum()
+
+    def forward(self, x, sample=None, shift=None, out_idx=None):
+        """
+        Propagates the input forwards through the readout
+        Args:
+            x: input data
+            sample (bool/None): sample determines whether we draw a sample from Gaussian distribution, N(mu,sigma), defined per neuron
+                            or use the mean, mu, of the Gaussian distribution without sampling.
+                           if sample is None (default), samples from the N(mu,sigma) during training phase and
+                             fixes to the mean, mu, during evaluation phase.
+                           if sample is True/False, overrides the model_state (i.e training or eval) and does as instructed
+            shift (bool): shifts the location of the grid (from eye-tracking data)
+            out_idx (bool): index of neurons to be predicted
+
+        Returns:
+            y: neuronal activity
+        """
+        N, c, w, h = x.size()
+        c_in, w_in, h_in = self.in_shape
+        if (c_in, w_in, h_in) != (c, w, h):
+            raise ValueError("the specified feature map dimension is not the readout's expected input dimension")
+        feat = self.features.view(1, c, self.outdims)
+        bias = self.bias
+        outdims = self.outdims
+
+        if self.batch_sample:
+            # sample the grid_locations separately per image per batch
+            grid = self.sample_grid(batch_size=N, sample=sample)  # sample determines sampling from Gaussian
+        else:
+            # use one sampled grid_locations for all images in the batch
+            grid = self.sample_grid(batch_size=1, sample=sample).expand(N, outdims, 1, 2)
+
+        if out_idx is not None:
+            if isinstance(out_idx, np.ndarray):
+                if out_idx.dtype == bool:
+                    out_idx = np.where(out_idx)[0]
+            feat = feat[:, :, out_idx]
+            grid = grid[:, out_idx]
+            if bias is not None:
+                bias = bias[out_idx]
+            outdims = len(out_idx)
+
+        if shift is not None:
+            grid = grid + shift[:, None, None, :]
+
+        y = F.grid_sample(x, grid, align_corners=self.align_corners)
+        y = (y.squeeze(-1) * feat).sum(1).view(N, outdims)
+
+        if self.bias is not None:
+            y = y + bias
+        return y
+
+    def __repr__(self):
+        c, w, h = self.in_shape
+        r = self.__class__.__name__ + " (" + "{} x {} x {}".format(c, w, h) + " -> " + str(self.outdims) + ")"
+        if self.bias is not None:
+            r += " with bias"
+        for ch in self.children():
+            r += "  -> " + ch.__repr__() + "\n"
+        return r
+
+
+##############
+# Gaussian3d Readout
+##############
+
+
+class MultipleGaussian3d(Readout, ModuleDict):
+    """
+    Instantiates multiple instances of Gaussian3d Readouts
+    usually used when dealing with different datasets or areas sharing the same core.
+    Args:
+        in_shape (list): shape of the input feature map [channels, width, height]
+        loaders (list):  a list of dataset objects
+        gamma_readout (float): regularisation term for the readout which is usally set to 0.0 for gaussian3d readout
+                               as it contains one dimensional weight
+
+    """
+
+    def __init__(self, in_shape, loaders, gamma_readout, **kwargs):
+        super().__init__()
+
+        self.in_shape = in_shape
+        self.neurons = OrderedDict([(k, loader.dataset.n_neurons) for k, loader in loaders.items()])
+
+        self.gamma_readout = gamma_readout
+
+        for k, n_neurons in self.neurons.items():
+            self.add_module(k, Gaussian3d(in_shape=in_shape, outdims=n_neurons, **kwargs))
+
+    def initialize(self, mean_activity_dict):
+        for k, mu in mean_activity_dict.items():
+            self[k].initialize()
+            self[k].bias.data = mu.squeeze() - 1
+
+    def regularizer(self, readout_key):
+        return self.gamma_readout
+
+
+class Gaussian3d(nn.Module):
+    """
+    This readout instantiates an object that can used to learn a point in the core feature space for each neuron,
+    sampled from a Gaussian distribution with some mean and variance at train but set to mean at test time, that best predicts its response.
+
+    The readout receives the shape of the core as 'in_shape', the number of units/neurons being predicted as 'outdims', 'bias' specifying whether
+    or not bias term is to be used and 'init_range' range for initialising the mean and variance of the gaussian distribution from which we sample to
+    uniform distribution, U(-init_mu_range,init_mu_range) and  uniform distribution, U(0.0, init_sigma_range) respectively.
+    The grid parameter contains the normalized locations (x, y coordinates in the core feature space) and is clipped to [-1.1] as it a
+    requirement of the torch.grid_sample function. The feature parameter learns the best linear mapping between the feature
+    map from a given location, sample from Gaussian at train time but set to mean at eval time, and the unit's response with or without an additional elu non-linearity.
+
+    Args:
+        in_shape (list): shape of the input feature map [channels, width, height]
+        outdims (int): number of output units
+        bias (bool): adds a bias term
+        init_mu_range (float): initialises the the mean with Uniform([-init_range, init_range])
+                            [expected: positive value <=1]
+        init_sigma_range (float): initialises sigma with Uniform([0.0, init_sigma_range]).
+                It is recommended however to use a fixed initialization, for faster convergence.
+                For this, set fixed_sigma to True.
+        batch_sample (bool): if True, samples a position for each image in the batch separately
+                            [default: True as it decreases convergence time and performs just as well]
+        align_corners (bool): Keyword agrument to gridsample for bilinear interpolation.
+                It changed behavior in PyTorch 1.3. The default of align_corners = True is setting the
+                behavior to pre PyTorch 1.3 functionality for comparability.
+        fixed_sigma (bool). Recommended behavior: True. But set to false for backwards compatibility.
+                If true, initialized the sigma not in a range, but with the exact value given for all neurons.
+    """
+
+    def __init__(self, in_shape, outdims, bias, init_mu_range=0.5, init_sigma_range=0.5, batch_sample=True, align_corners=True, fixed_sigma=False, **kwargs):
+        super().__init__()
+        if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma_range <= 0.0:
+            raise ValueError("init_mu_range or init_sigma_range is not within required limit!")
+        self.in_shape = in_shape
+        c, w, h = in_shape
+        self.outdims = outdims
+        self.batch_sample = batch_sample
+        self.grid_shape = (1, 1, outdims, 1, 3)
+        self.mu = Parameter(torch.Tensor(*self.grid_shape))  # mean location of gaussian for each neuron
+        self.sigma = Parameter(torch.Tensor(*self.grid_shape))  # standard deviation for gaussian for each neuron
+        self.features = Parameter(torch.Tensor(1, 1, 1, outdims))  # saliency weights for each channel from core
+
+        if bias:
+            bias = Parameter(torch.Tensor(outdims))
+            self.register_parameter("bias", bias)
+        else:
+            self.register_parameter("bias", None)
+
+        self.init_mu_range = init_mu_range
+        self.init_sigma_range = init_sigma_range
+        self.align_corners = align_corners
+        self.fixed_sigma = fixed_sigma
+        self.initialize()
+
+    def sample_grid(self, batch_size, sample=None):
+        """
+        Returns the grid locations from the core by sampling from a Gaussian distribution
+        Args:
+            batch_size (int): size of the batch
+            sample (bool/None): sample determines whether we draw a sample from Gaussian distribution, N(mu,sigma), defined per neuron
+                            or use the mean, mu, of the Gaussian distribution without sampling.
+                           if sample is None (default), samples from the N(mu,sigma) during training phase and
+                             fixes to the mean, mu, during evaluation phase.
+                           if sample is True/False, overrides the model_state (i.e training or eval) and does as instructed
+        """
+
+        with torch.no_grad():
+            self.mu.clamp_(min=-1, max=1)  # at eval time, only self.mu is used so it must belong to [-1,1]
+            self.sigma.clamp_(min=0)  # sigma/variance is always a positive quantity
+
+        grid_shape = (batch_size,) + self.grid_shape[1:]
+
+        sample = self.training if sample is None else sample
+
+        if sample:
+            norm = self.mu.new(*grid_shape).normal_()
+        else:
+            norm = self.mu.new(*grid_shape).zero_()  # for consistency and CUDA capability
+
+        return torch.clamp(
+            norm * self.sigma + self.mu, min=-1, max=1
+        )  # grid locations in feature space sampled randomly around the mean self.mu
+
+    @property
+    def grid(self):
+        return self.sample_grid(batch_size=1, sample=False)
+
+    def initialize(self):
+        self.mu.data.uniform_(-self.init_mu_range, self.init_mu_range)
+        if self.fixed_sigma:
+            self.sigma.data.uniform_(self.init_sigma_range, self.init_sigma_range)
+        else:
+            self.sigma.data.uniform_(0, self.init_sigma_range)
+            warnings.warn("sigma is sampled from uniform distribuiton, instead of a fixed value. Consider setting "
+                          "fixed_sigma to True")
+        self.features.data.fill_(1 / self.in_shape[0])
+
+        if self.bias is not None:
+            self.bias.data.fill_(0)
+
+    def forward(self, x, sample=None, shift=None, out_idx=None):
+        """
+        Propagates the input forwards through the readout
+        Args:
+            x: input data
+            sample (bool/None): sample determines whether we draw a sample from Gaussian distribution, N(mu,sigma), defined per neuron
+                            or use the mean, mu, of the Gaussian distribution without sampling.
+                           if sample is None (default), samples from the N(mu,sigma) during training phase and
+                             fixes to the mean, mu, during evaluation phase.
+                           if sample is True/False, overrides the model_state (i.e training or eval) and does as instructed
+            shift (bool): shifts the location of the grid (from eye-tracking data)
+            out_idx (bool): index of neurons to be predicted
+
+        Returns:
+            y: neuronal activity
+        """
+        N, c, w, h = x.size()
+        c_in, w_in, h_in = self.in_shape
+        if (c_in, w_in, h_in) != (c, w, h):
+            raise ValueError("the specified feature map dimension is not the readout's expected input dimension")
+        x = x.view(N, 1, c, w, h)
+        feat = self.features
+        bias = self.bias
+        outdims = self.outdims
+
+        if self.batch_sample:
+            # sample the grid_locations separately per image per batch
+            grid = self.sample_grid(batch_size=N, sample=sample)  # sample determines sampling from Gaussian
+        else:
+            # use one sampled grid_locations for all images in the batch
+            grid = self.sample_grid(batch_size=1, sample=sample).expand(N, outdims, 1, 3)
+
+        if out_idx is not None:
+            # out_idx specifies the indices to subset of neurons for training/testing
+            if isinstance(out_idx, np.ndarray):
+                if out_idx.dtype == bool:
+                    out_idx = np.where(out_idx)[0]
+            feat = feat[:, :, :, out_idx]
+            grid = grid[:, :, out_idx]
+            if bias is not None:
+                bias = bias[out_idx]
+            outdims = len(out_idx)
+
+        if shift is not None:
+            grid = grid + shift[:, None, None, :]
+
+        y = F.grid_sample(x, grid, align_corners=self.align_corners)
+        y = (y.squeeze(-1) * feat).sum(1).view(N, outdims)
+
+        if self.bias is not None:
+            y = y + bias
+        return y
+
+
+#############
+# UltraSparse Readout
+#############
+
+
+class MultipleUltraSparse(Readout, ModuleDict):
+    """
+    This class instantiates multiple instances of UltraSparseReadout
+    useful when dealing with multiple datasets
+    Args:
+        in_shape (list): shape of the input feature map [channels, width, height]
+        loaders (list):  a list of dataset objects
+        gamma_readout (float): regularisation term for the readout which is usally set to 0.0 for UltraSparseReadout readout
+                               as it contains one dimensional weight
+    """
+
+    def __init__(self, in_shape, loaders, gamma_readout, **kwargs):
+        super().__init__()
+
+        self.in_shape = in_shape
+        self.neurons = OrderedDict([(k, loader.dataset.n_neurons) for k, loader in loaders.items()])
+
+        self.gamma_readout = gamma_readout
+
+        for k, n_neurons in self.neurons.items():
+            self.add_module(k, UltraSparse(in_shape=in_shape, outdims=n_neurons, **kwargs))
+
+    def initialize(self, mean_activity_dict):
+        for k, mu in mean_activity_dict.items():
+            self[k].initialize()
+            self[k].bias.data = mu.squeeze() - 1
+
+    def regularizer(self, readout_key):
+        return self[readout_key].feature_l1() * self.gamma_readout
+
+
+class UltraSparse(nn.Module):
+    """
+    This readout instantiates an object that can used to learn one or more features (with or without
+    a shared mean in the x-y plane) in the core feature space for each neuron, sampled from a Gaussian distribution
+    with some mean and variance at training but set to mean at test time, that best predicts its response.
+
+    The readout receives the shape of the core as 'in_shape', the number of units/neurons being predicted as 'outdims', 'bias' specifying whether
+    or not bias term is to be used and 'init_range' range for initialising the mean and variance of the gaussian distribution from which we sample to
+    uniform distribution, U(-init_mu_range,init_mu_range) and  uniform distribution, U(0.0, init_sigma_range) respectively.
+    The grid parameter contains the normalized locations (x, y coordinates in the core feature space) and is clipped to [-1.1] as it a
+    requirement of the torch.grid_sample function. The feature parameter learns the best linear mapping between the feature
+    map from a given location, sample from Gaussian at train time but set to mean at eval time, and the unit's response with or without an additional elu non-linearity.
+
+    Args:
+        in_shape (list): shape of the input feature map [channels, width, height]
+        outdims (int): number of output units
+        bias (bool): adds a bias term
+        init_mu_range (float): initialises the the mean with Uniform([-init_range, init_range])
+                            [expected: positive value <=1]
+        init_sigma_range (float): initialises sigma with Uniform([0.0, init_sigma_range])
+        batch_sample (bool): if True, samples a position for each image in the batch separately
+                            [default: True as it decreases convergence time and performs just as well]
+        num_filters (int): number of points in the core-features to be learned for each neuron
+                           [default: 1, an instance of sparsest readout]
+        shared_mean (bool): if True, the mean in the x-y plane (image-plane) is shared across all channels
+                           [default: False]
+
+        align_corners (bool): Keyword agrument to gridsample for bilinear interpolation.
+                It changed behavior in PyTorch 1.3. The default of align_corners = True is setting the
+                behavior to pre PyTorch 1.3 functionality for comparability.
+        fixed_sigma (bool). Recommended behavior: True. But set to false for backwards compatibility.
+                If true, initialized the sigma not in a range, but with the exact value given for all neurons.
+    """
+
+    def __init__(
+        self,
+        in_shape,
+        outdims,
+        bias,
+        init_mu_range,
+        init_sigma_range,
+        batch_sample=True,
+        num_filters=1,
+        shared_mean=False,
+        align_corners=True,
+        fixed_sigma=False,
+        **kwargs
+    ):
+
+        super().__init__()
+        if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma_range <= 0.0:
+            raise ValueError("either init_mu_range doesn't belong to [0.0, 1.0] or init_sigma_range is non-positive!")
+        self.in_shape = in_shape
+        c, w, h = in_shape
+        self.outdims = outdims
+        self.batch_sample = batch_sample
+        self.num_filters = num_filters
+        self.shared_mean = shared_mean
+        self.grid_shape = (1, 1, outdims * num_filters, 1, 3)
+
+        if shared_mean:
+
+            self.gridxy_shape = (1, 1, outdims, 1, 2)
+            self.gridch_shape = (1, 1, outdims * num_filters, 1, 1)
+            self.mu_xy = Parameter(
+                torch.Tensor(*self.gridxy_shape)
+            )  # mean location (in xy dim) of gaussian for each neuron
+            self.mu_ch = Parameter(
+                torch.Tensor(*self.gridch_shape)
+            )  # mean location (in ch dim) of gaussian for each neuron
+            self.sigma_xy = Parameter(
+                torch.Tensor(*self.gridxy_shape)
+            )  # standard deviation for gaussian for each neuron
+            self.sigma_ch = Parameter(torch.Tensor(*self.gridch_shape))
+
+        else:
+
+            self.mu = Parameter(torch.Tensor(*self.grid_shape))  # mean location of gaussian for each neuron
+            self.sigma = Parameter(torch.Tensor(*self.grid_shape))  # standard deviation for gaussian for each neuron
+
+        self.features = Parameter(
+            torch.Tensor(1, 1, outdims, num_filters)
+        )  # saliency  weights for each channel from core
+
+        if bias:
+            bias = Parameter(torch.Tensor(outdims))
+            self.register_parameter("bias", bias)
+        else:
+            self.register_parameter("bias", None)
+
+        self.init_mu_range = init_mu_range
+        self.init_sigma_range = init_sigma_range
+        self.align_corners = align_corners
+        self.fixed_sigma = fixed_sigma
+        self.initialize()
+
+    def sample_grid(self, batch_size, sample=None):
+        """
+        Returns the grid locations from the core by sampling from a Gaussian distribution
+        Args:
+            batch_size (int): size of the batch
+            sample (bool/None): sample determines whether we draw a sample from Gaussian distribution, N(mu,sigma), defined per neuron
+                            or use the mean, mu, of the Gaussian distribution without sampling.
+                           if sample is None (default), samples from the N(mu,sigma) during training phase and
+                             fixes to the mean, mu, during evaluation phase.
+                           if sample is True/False, overrides the model_state (i.e training or eval) and does as instructed
+        """
+
+        if self.shared_mean:
+            # sample an xy location and keep it same across all filter channels
+            # explicit clamping of mu and sigma along the channel dimension was needed as the clamping post cat was not working
+            with torch.no_grad():
+                self.mu_ch.clamp_(min=-1, max=1)  # at eval time, only self.mu is used so it must belong to [-1,1]
+                self.sigma_ch.clamp_(min=0)  # sigma/variance is always a positive quantity
+            self.mu = torch.cat((self.mu_xy.repeat(1, 1, self.num_filters, 1, 1), self.mu_ch), 4)
+            self.sigma = torch.cat((self.sigma_xy.repeat(1, 1, self.num_filters, 1, 1), self.sigma_ch), 4)
+
+        with torch.no_grad():
+            self.mu.clamp_(min=-1, max=1)
+            self.sigma.clamp_(min=0)
+
+        grid_shape = (batch_size,) + self.grid_shape[1:]
+
+        sample = self.training if sample is None else sample
+
+        if sample:
+            norm = self.mu.new(*grid_shape).normal_()
+        else:
+            norm = self.mu.new(*grid_shape).zero_()  # for consistency and CUDA capability
+
+        return torch.clamp(
+            norm * self.sigma + self.mu, min=-1, max=1
+        )  # grid locations in feature space sampled randomly around the mean self.mu
+
+    @property
+    def grid(self):
+        return self.sample_grid(batch_size=1, sample=False)
+
+    def feature_l1(self, average=True):
+        """
+        Returns the l1 regularization term either the mean or the sum of all weights
+        Args:
+            average(bool): if True, use mean of weights for regularization
+        """
+        if average:
+            return self.features.abs().mean()
+        else:
+            return self.features.abs().sum()
+
+    def initialize(self):
+
+        if self.shared_mean:
+            # initialise mu and sigma separately for xy and channel dimension.
+            self.mu_ch.data.uniform_(-1, 1)
+            self.mu_xy.data.uniform_(-self.init_mu_range, self.init_mu_range)
+
+            if self.fixed_sigma:
+                self.sigma_ch.data.uniform_(self.init_sigma_range, self.init_sigma_range)
+                self.sigma_xy.data.uniform_(self.init_sigma_range, self.init_sigma_range)
+            else:
+                self.sigma_ch.data.uniform_(0, self.init_sigma_range)
+                self.sigma_xy.data.uniform_(0, self.init_sigma_range)
+                warnings.warn("sigma is sampled from uniform distribuiton, instead of a fixed value. Consider setting "
+                              "fixed_sigma to True")
+
+        else:
+            # initialise mu and sigma for x,y and channel dimensions.
+            self.mu.data.uniform_(-self.init_mu_range, self.init_mu_range)
+            self.sigma.data.uniform_(0, self.init_sigma_range)
+
+        self.features.data.fill_(1 / self.in_shape[0])
+
+        if self.bias is not None:
+            self.bias.data.fill_(0)
+
+    def forward(self, x, sample=True, shift=None, out_idx=None):
+        """
+        Propagates the input forwards through the readout
+        Args:
+            x: input data
+            sample (bool/None): sample determines whether we draw a sample from Gaussian distribution, N(mu,sigma), defined per neuron
+                            or use the mean, mu, of the Gaussian distribution without sampling.
+                           if sample is None (default), samples from the N(mu,sigma) during training phase and
+                             fixes to the mean, mu, during evaluation phase.
+                           if sample is True/False, overrides the model_state (i.e training or eval) and does as instructed
+            shift (bool): shifts the location of the grid (from eye-tracking data)
+            out_idx (bool): index of neurons to be predicted
+
+        Returns:
+            y: neuronal activity
+        """
+
+        N, c, w, h = x.size()
+        c_in, w_in, h_in = self.in_shape
+        if (c_in, w_in, h_in) != (c, w, h):
+            raise ValueError("the specified feature map dimension is not the readout's expected input dimension")
+        x = x.view(N, 1, c, w, h)
+        feat = self.features
+        bias = self.bias
+        outdims = self.outdims
+
+        if self.batch_sample:
+            # sample the grid_locations separately per image per batch
+            grid = self.sample_grid(batch_size=N, sample=sample)  # sample determines sampling from Gaussian
+        else:
+            # use one sampled grid_locations for all images in the batch
+            grid = self.sample_grid(batch_size=1, sample=sample).expand(N, 1, outdims * self.num_filters, 1, 3)
+
+        if out_idx is not None:
+            # predict output only for neurons given by out_idx
+            if isinstance(out_idx, np.ndarray):
+                if out_idx.dtype == bool:
+                    out_idx = np.where(out_idx)[0]
+            feat = feat[:, :, :, out_idx]
+            grid = grid[:, :, out_idx]
+            if bias is not None:
+                bias = bias[out_idx]
+            outdims = len(out_idx)
+
+        if shift is not None:  # it might not be valid now but have kept it for future devop.
+            grid = grid + shift[:, None, None, :]
+
+        y = F.grid_sample(x, grid, align_corners=self.align_corners).squeeze(-1)
+        z = y.view((N, 1, self.num_filters, outdims)).permute(0, 1, 3, 2)  # reorder the dims
+        z = torch.einsum(
+            "nkpf,mkpf->np", z, feat
+        )  # dim: batch_size, 1, num_neurons, num_filters -> batch_size, num_neurons
+
+        if self.bias is not None:
+            z = z + bias
+        return z
+
+    def __repr__(self):
+        c, w, h = self.in_shape
+        r = self.__class__.__name__ + " (" + "{} x {} x {}".format(c, w, h) + " -> " + str(self.outdims) + ")"
+        if self.bias is not None:
+            r += " with bias"
         for ch in self.children():
             r += "  -> " + ch.__repr__() + "\n"
         return r

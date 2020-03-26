@@ -117,9 +117,11 @@ class LaplaceL2(nn.Module):
         self.laplace = Laplace(padding=padding)
         warnings.warn("LaplaceL2 Regularizer is deprecated. Use LaplaceL2norm instead.")
 
-    def forward(self, x):
-        ic, oc, k1, k2 = x.size()
-        return self.laplace(x.view(ic * oc, 1, k1, k2)).pow(2).mean() / 2
+    def forward(self, x, avg=True):
+        agg_fn = torch.mean if avg else torch.sum
+
+        oc, ic, k1, k2 = x.size()
+        return agg_fn(self.laplace(x.view(oc * ic, 1, k1, k2)).pow(2)) / 2
 
 
 class LaplaceL2norm(nn.Module):
@@ -132,9 +134,11 @@ class LaplaceL2norm(nn.Module):
         super().__init__()
         self.laplace = Laplace(padding=padding)
 
-    def forward(self, x):
-        ic, oc, k1, k2 = x.size()
-        return self.laplace(x.view(ic * oc, 1, k1, k2)).pow(2).sum() / x.view(ic * oc, 1, k1, k2).pow(2).sum()
+    def forward(self, x, avg=False):
+        agg_fn = torch.mean if avg else torch.sum
+
+        oc, ic, k1, k2 = x.size()
+        return agg_fn(self.laplace(x.view(oc * ic, 1, k1, k2)).pow(2)) / agg_fn(x.view(oc * ic, 1, k1, k2).pow(2))
 
 
 class Laplace3d(nn.Module):
@@ -160,8 +164,8 @@ class LaplaceL23d(nn.Module):
         self.laplace = Laplace3d()
 
     def forward(self, x):
-        ic, oc, k1, k2, k3 = x.size()
-        return self.laplace(x.view(ic * oc, 1, k1, k2, k3)).pow(2).mean() / 2
+        oc, ic, k1, k2, k3 = x.size()
+        return self.laplace(x.view(oc * ic, 1, k1, k2, k3)).pow(2).mean() / 2
 
 
 class FlatLaplaceL23d(nn.Module):
@@ -174,9 +178,9 @@ class FlatLaplaceL23d(nn.Module):
         self.laplace = Laplace()
 
     def forward(self, x):
-        ic, oc, k1, k2, k3 = x.size()
+        oc, ic, k1, k2, k3 = x.size()
         assert k1 == 1, "time dimension must be one"
-        return self.laplace(x.view(ic * oc, 1, k2, k3)).pow(2).mean() / 2
+        return self.laplace(x.view(oc * ic, 1, k2, k3)).pow(2).mean() / 2
 
 
 class LaplaceL1(nn.Module):
@@ -188,9 +192,11 @@ class LaplaceL1(nn.Module):
         super().__init__()
         self.laplace = Laplace(padding=padding)
 
-    def forward(self, x):
-        ic, oc, k1, k2 = x.size()
-        return self.laplace(x.view(ic * oc, 1, k1, k2)).abs().mean()
+    def forward(self, x, avg=True):
+        agg_fn = torch.mean if avg else torch.sum
+
+        oc, ic, k1, k2 = x.size()
+        return agg_fn(self.laplace(x.view(oc * ic, 1, k1, k2)).abs())
 
 
 class GaussianLaplaceL2Adaptive(nn.Module):
@@ -211,14 +217,16 @@ class GaussianLaplaceL2Adaptive(nn.Module):
         self.laplace = Laplace(padding=padding)
         self.sigma = sigma
 
-    def forward(self, x):
-        ic, oc, k1, k2 = x.size()
+    def forward(self, x, avg=False):
+        agg_fn = torch.mean if avg else torch.sum
+
+        oc, ic, k1, k2 = x.size()
         sigma = self.sigma if self.sigma else min(k1, k2) / 4
 
         out = self.laplace(x.view(ic * oc, 1, k1, k2))
         out = out * (1 - torch.from_numpy(gaussian2d(size=(k1, k2), sigma=sigma)).expand(1, 1, k1, k2).to(x.device))
 
-        return out.pow(2).sum() / x.view(ic * oc, 1, k1, k2).pow(2).sum()
+        return agg_fn(out.pow(2)) / agg_fn(x.view(oc * ic, 1, k1, k2).pow(2))
 
 
 class GaussianLaplaceL2(nn.Module):
@@ -240,9 +248,11 @@ class GaussianLaplaceL2(nn.Module):
         sigma = min(*self.kernel) / 4
         self.gaussian2d = torch.from_numpy(gaussian2d(size=(*self.kernel,), sigma=sigma))
 
-    def forward(self, x):
-        ic, oc, k1, k2 = x.size()
-        out = self.laplace(x.view(ic * oc, 1, k1, k2))
+    def forward(self, x, avg=False):
+        agg_fn = torch.mean if avg else torch.sum
+
+        oc, ic, k1, k2 = x.size()
+        out = self.laplace(x.view(oc * ic, 1, k1, k2))
         out = out * (1 - self.gaussian2d.expand(1, 1, k1, k2).to(x.device))
 
-        return out.pow(2).sum() / x.view(ic * oc, 1, k1, k2).pow(2).sum()
+        return agg_fn(out.pow(2)) / agg_fn(x.view(oc * ic, 1, k1, k2).pow(2))

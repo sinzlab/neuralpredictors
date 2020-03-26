@@ -458,8 +458,84 @@ class DirectoryAttributeTransformer(DirectoryAttributeHandler):
 class FileTreeDataset(StaticSet):
     def __init__(self, dirname, *data_keys, transforms=None):
         """
-        Dataset stored as a file tree. The tree needs to have the following structure.
+        Dataset stored as a file tree. The tree needs to have the subdirs data, meta, meta/neurons, meta/statistics,
+        and meta/trials. Please refer to convert_static_h5_dataset_to_folder in mlutils.data.utils
+        how to export an hdf5 file into that structure.
 
+
+        Here is an example. Data directories with too many entries have trials as .npy files
+        named 0.npy, 1.npy, ...
+        The meta/trials subdirectory must have single .npy files with arrays that provide additional trial based
+        meta data.
+
+        static22564-2-13-preproc0
+        ├── data
+        │   ├── behavior [5955 entries exceeds filelimit, not opening dir]
+        │   ├── images [5955 entries exceeds filelimit, not opening dir]
+        │   ├── pupil_center [5955 entries exceeds filelimit, not opening dir]
+        │   └── responses [5955 entries exceeds filelimit, not opening dir]
+        └── meta
+            ├── neurons
+            │   ├── animal_ids.npy
+            │   ├── area.npy
+            │   ├── layer.npy
+            │   ├── scan_idx.npy
+            │   ├── sessions.npy
+            │   └── unit_ids.npy
+            ├── statistics
+            │   ├── behavior
+            │   │   ├── all
+            │   │   │   ├── max.npy
+            │   │   │   ├── mean.npy
+            │   │   │   ├── median.npy
+            │   │   │   ├── min.npy
+            │   │   │   └── std.npy
+            │   │   └── stimulus_frame
+            │   │       ├── max.npy
+            │   │       ├── mean.npy
+            │   │       ├── median.npy
+            │   │       ├── min.npy
+            │   │       └── std.npy
+            │   ├── images
+            │   │   ├── all
+            │   │   │   ├── max.npy
+            │   │   │   ├── mean.npy
+            │   │   │   ├── median.npy
+            │   │   │   ├── min.npy
+            │   │   │   └── std.npy
+            │   │   └── stimulus_frame
+            │   │       ├── max.npy
+            │   │       ├── mean.npy
+            │   │       ├── median.npy
+            │   │       ├── min.npy
+            │   │       └── std.npy
+            │   ├── pupil_center
+            │   │   ├── all
+            │   │   │   ├── max.npy
+            │   │   │   ├── mean.npy
+            │   │   │   ├── median.npy
+            │   │   │   ├── min.npy
+            │   │   │   └── std.npy
+            │   │   └── stimulus_frame
+            │   │       ├── max.npy
+            │   │       ├── mean.npy
+            │   │       ├── median.npy
+            │   │       ├── min.npy
+            │   │       └── std.npy
+            │   └── responses
+            │       ├── all
+            │       │   ├── max.npy
+            │       │   ├── mean.npy
+            │       │   ├── median.npy
+            │       │   ├── min.npy
+            │       │   └── std.npy
+            │       └── stimulus_frame
+            │           ├── max.npy
+            │           ├── mean.npy
+            │           ├── median.npy
+            │           ├── min.npy
+            │           └── std.npy
+            └── trials [12 entries exceeds filelimit, not opening dir]
 
         Args:
             dirname:     root directory name

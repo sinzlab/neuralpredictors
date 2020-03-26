@@ -81,14 +81,16 @@ class Stacked2dCore(Core2d, nn.Module):
             gamma_input:    regularizer factor for the input weights (default: LaplaceL2, see mlutils.regularizers)
             skip:           Adds a skip connection
             final_nonlinearity: Boolean, if true, appends an ELU layer after the last BatchNorm (if BN=True)
-            elu_xshift, elu_yshift: final_nonlinearity(x) = Elu(x - elu_xshift) + elu_yshift    
+            elu_xshift, elu_yshift: final_nonlinearity(x) = Elu(x - elu_xshift) + elu_yshift
             bias:           Adds a bias layer.
             momentum:       BN momentum
             pad_input:      Boolean, if True, applies zero padding to all convolutions
-            hidden_padding: int or list of int. Padding for hidden layers. Note that this will apply to all the layers 
+            hidden_padding: int or list of int. Padding for hidden layers. Note that this will apply to all the layers
                             except the first (input) layer.
             batch_norm:     Boolean, if True appends a BN layer after each convolutional layer
             batch_norm_scale: If True, a scaling factor after BN will be learned.
+            independent_bn_bias:    If False, will allow for scaling the batch norm, so that batchnorm
+                                    and bias can both be true. Defaults to True.
             hidden_dilation:    If set to > 1, will apply dilated convs for all hidden layers
             laplace_padding: Padding size for the laplace convolution. If padding = None, it defaults to half of
                 the kernel size (recommended). Setting Padding to 0 is not recommended and leads to artefacts,
@@ -104,10 +106,10 @@ class Stacked2dCore(Core2d, nn.Module):
                                 And stack of 1 will read out from layer 1 (0 indexed) until the last layer.
 
             use_avg_reg:    bool. Whether to use the averaged value of regularizer(s) or the summed.
-            
-            To enable learning batch_norms bias and scale independently, the arguments bias, batch_norm and batch_norm_scale 
-            work together: By default, all are true. In this case there won't be a bias learned in the convolutional layer, but 
-            batch_norm will learn both its bias and scale. If batch_norm is false, but bias true, a bias will be learned in the 
+
+            To enable learning batch_norms bias and scale independently, the arguments bias, batch_norm and batch_norm_scale
+            work together: By default, all are true. In this case there won't be a bias learned in the convolutional layer, but
+            batch_norm will learn both its bias and scale. If batch_norm is false, but bias true, a bias will be learned in the
             convolutional layer. If batch_norm and bias are true, but batch_norm_scale is false, batch_norm won't have learnable
             parameters and a BiasLayer will be added after the batch_norm layer.
         """

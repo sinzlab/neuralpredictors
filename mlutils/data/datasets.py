@@ -6,24 +6,20 @@ import numpy as np
 from scipy.signal import convolve2d
 from torch.utils.data import Dataset
 
+from .exceptions import InconsistentDataException, DoesNotExistException
 from .transforms import DataTransform, MovieTransform, StaticTransform, Invertible, Subsequence, Delay
 from ..utils import recursively_load_dict_contents_from_group
 
 
-class InconsistentDataException(Exception):
-    """
-    Raised when (parts of) a Dataset is inconsistent
-    """
-
-
-class DoesNotExistException(Exception):
-    """
-    Raised when (parts of) a Dataset does not exist
-    """
-
-
 class AttributeHandler:
     def __init__(self, name, h5_handle):
+        """
+        Can be used to turn a dataset within a hdf5 dataset into an attribute.
+
+        Args:
+            name:       name of the dataset in the hdf5 file
+            h5_handle:  file handle for the hdf5 file
+        """
         assert name in h5_handle, "{} must be in {}".format(name, h5_handle)
         self.name = name
         self.h5_handle = h5_handle
@@ -46,12 +42,18 @@ class AttributeHandler:
 
 
 class AttributeTransformer(AttributeHandler):
-    """
-    Allows for id_transform of transforms to be applied to the
-    specified attribute.
-    """
 
     def __init__(self, name, h5_handle, transforms, data_group):
+        """
+        Allows for id_transform of transforms to be applied to the
+        specified attribute. Otherwise behaves like an AttributeHandler
+
+        Args:
+            name:       see AttributeHandler
+            h5_handle:  see AttributeHandler
+            transforms: the set of transforms that's supposed to be applied
+            data_group: the data_key of the dataset that this attribute represents
+        """
         super().__init__(name, h5_handle)
         self.transforms = transforms
         self.data_group = data_group
@@ -67,6 +69,12 @@ class AttributeTransformer(AttributeHandler):
 class TransformDataset(Dataset):
 
     def __init__(self, transforms=None):
+        """
+        Abstract Class for Datasets. Classes that inherit from this class can implement the transform and invert function.
+
+        Args:
+            transforms: list of transforms applied to each data point
+        """
         self.transforms = transforms or []
 
     def transform(self, x, exclude=None):
@@ -97,6 +105,8 @@ class TransformDataset(Dataset):
 
 class H5SequenceSet(TransformDataset):
     def __init__(self, filename, *data_groups, output_rename=None, transforms=None):
+        super().__init__(transforms=transforms)
+
         if output_rename is None:
             output_rename = {}
 
@@ -259,6 +269,9 @@ default_datapoint = namedtuple("DefaultDataPoint", ["images", "responses"])
 
 class StaticSet(TransformDataset):
     def __init__(self, *data_keys, transforms=None):
+        """
+        Abstract class for static datasets. Defines data_keys and a corresponding datapoint.
+        """
         super().__init__(transforms=transforms)
 
         self.data_keys = data_keys
@@ -272,6 +285,14 @@ class StaticSet(TransformDataset):
 
 class H5ArraySet(StaticSet):
     def __init__(self, filename, *data_keys, transforms=None):
+        """
+        Dataset for static data stored in hdf5 files.
+
+        Args:
+            filename:      filename of the hdf5 file
+            *data_keys:    data keys to be read from the file
+            transforms:    list of transforms applied to each datapoint
+        """
         super().__init__(*data_keys, transforms=transforms)
 
         self._fid = h5py.File(filename, "r")
@@ -285,7 +306,6 @@ class H5ArraySet(StaticSet):
             else:
                 assert m == len(self.data[key]), "Length of datasets do not match"
         self._len = m
-
 
     def load_content(self):
         self.data = recursively_load_dict_contents_from_group(self._fid)
@@ -330,6 +350,16 @@ class H5ArraySet(StaticSet):
 
 class StaticImageSet(H5ArraySet):
     def __init__(self, filename, *data_keys, transforms=None, cache_raw=False, stats_source=None):
+        """
+        Dataset for h5 files.
+
+        Args:
+            filename:       filename of the hdf5 file
+            *data_keys:     datasets to be extracted
+            transforms:     transforms applied to each data point
+            cache_raw:      whether to cache the raw (untransformed) datapoints
+            stats_source:   statistic source to be used.
+        """
         super().__init__(filename, *data_keys, transforms=transforms)
         self.cache_raw = cache_raw
         self.last_raw = None
@@ -367,8 +397,16 @@ class StaticImageSet(H5ArraySet):
         attrs = set(self.__dict__).union(set(dir(type(self))))
         return attrs.union(set(self.data.keys()))
 
+
 class DirectoryAttributeHandler:
     def __init__(self, path):
+        """
+        Class that can be used to represent a subdirectory of a FileTree as a property in a FileTree dataset.
+        Caches already loaded data items.
+
+        Args:
+            path: path to the subdiretory (pathlib.Path object)
+        """
         self.path = path
         self._cache = {}
 
@@ -376,7 +414,11 @@ class DirectoryAttributeHandler:
         if item in self._cache:
             return self._cache['item']
         else:
-            val = np.load(self.path / '{}.npy'.format(item))
+            temp_path = self.path / item
+            if temp_path.exists() and temp_path.is_dir():
+                val = DirectoryAttributeHandler(temp_path)
+            else:
+                val = np.load(self.path / '{}.npy'.format(item))
             self._cache[item] = val
             return val
 
@@ -384,7 +426,7 @@ class DirectoryAttributeHandler:
         return getattr(self, item)
 
     def keys(self):
-        return [e.stem for e in self.path.glob('*.npy')]
+        return [e.stem for e in self.path.glob('*')]
 
     def __dir__(self):
         attrs = set(super().__dir__())
@@ -392,12 +434,16 @@ class DirectoryAttributeHandler:
 
 
 class DirectoryAttributeTransformer(DirectoryAttributeHandler):
-    """
-    Allows for id_transform of transforms to be applied to the
-    specified attribute.
-    """
-
     def __init__(self, path, transforms, data_group):
+        """
+        Class that can be used to represent a subdirectory of a FileTree as a property in a FileTree dataset.
+        Like DirectoryAttributeHandler but allows for id_transform of transforms to be applied to the
+        specified attribute.
+
+        Args:
+            path: path to the subdiretory (pathlib.Path object)
+        """
+
         super().__init__(path)
         self.transforms = transforms
         self.data_group = data_group
@@ -409,9 +455,17 @@ class DirectoryAttributeTransformer(DirectoryAttributeHandler):
         return ret[self.data_group]
 
 
-
 class FileTreeDataset(StaticSet):
     def __init__(self, dirname, *data_keys, transforms=None):
+        """
+        Dataset stored as a file tree. The tree needs to have the following structure.
+
+
+        Args:
+            dirname:     root directory name
+            *data_keys:  data items to be extraced (must be subdirectories of root/data)
+            transforms:  transforms to be applied to the data (see TransformDataset)
+        """
         super().__init__(*data_keys, transforms=transforms)
 
         number_of_files = []
@@ -465,11 +519,16 @@ class FileTreeDataset(StaticSet):
     def trial_info(self):
         return DirectoryAttributeHandler(self.basepath / 'meta/trials')
 
+    @property
+    def statistics(self):
+        return DirectoryAttributeHandler(self.basepath / 'meta/statistics')
 
     @property
     def img_shape(self):
         return (1,) + self[0].images.shape
 
-
     def __repr__(self):
-        return "{} {} (n={} items)".format(self.__class__.__name__, self.basepath, self._len)
+        return "{} {} (n={} items)\n\t{}".format(self.__class__.__name__,
+                                                 self.basepath,
+                                                 self._len,
+                                                 ', '.join(self.data_keys))

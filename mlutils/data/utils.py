@@ -54,6 +54,7 @@ def convert_static_h5_dataset_to_folder(filename, outpath=None,  overwrite=False
 
         # save statistics
         def statistics_func(name, node):
+            name = name.replace('.', '_').lower()
             if not isinstance(node, h5.Dataset):
                 subpath = outpath / 'meta/statistics' / name
                 subpath.mkdir(exist_ok=True, parents=True)

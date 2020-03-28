@@ -9,7 +9,8 @@ from torch.utils.data import Dataset
 from .exceptions import InconsistentDataException, DoesNotExistException
 from .transforms import DataTransform, MovieTransform, StaticTransform, Invertible, Subsequence, Delay
 from ..utils import recursively_load_dict_contents_from_group
-
+from datetime import datetime
+import os
 
 class AttributeHandler:
     def __init__(self, name, h5_handle):
@@ -546,7 +547,7 @@ class FileTreeDataset(StaticSet):
 
         number_of_files = []
 
-        basepath = self.basepath = Path(dirname)
+        basepath = self.basepath = Path(dirname).absolute()
 
         for data_key in data_keys:
             datapath = basepath / 'data' / data_key
@@ -581,6 +582,36 @@ class FileTreeDataset(StaticSet):
             x = tr(x)
         return x
 
+    def add_log_entry(self, msg):
+        timestamp = datetime.now().strftime("%d-%b-%Y (%H:%M:%S.%f)")
+        with open(self.basepath / 'change.log', 'a+') as fid:
+            fid.write('{}: {}\n'.format(timestamp, msg))
+
+    # def add_neuron_meta(self, name, animal_id, session, scan_idx, unit_id, values):
+    #     ref = np.c_[(self.neurons.animal_ids, self.neurons.sessions, self.neurons.scan_idx, self.neurons.unit_ids)]
+    #     return ref
+
+    @property
+    def log(self):
+        if (self.basepath / 'change.log').exists():
+            with open(self.basepath / 'change.log', 'r') as fid:
+                print(''.join(fid.readlines()))
+
+
+    def add_synonym(self, attr, new_name):
+        cwd = self.basepath.cwd()
+
+        for location in ['data', 'meta/statistics']:
+            os.chdir(self.basepath / location)
+
+            existing_attr =  Path(attr)
+            new_attr = Path(new_name)
+
+            new_attr.symlink_to(existing_attr, target_is_directory=True)
+
+            self.add_log_entry('Created synonym {} -> {} in {}'.format(existing_attr, new_attr, location))
+        os.chdir(cwd)
+
     @property
     def n_neurons(self):
         return len(self[0].responses)
@@ -589,7 +620,7 @@ class FileTreeDataset(StaticSet):
     def neurons(self):
         return DirectoryAttributeTransformer(self.basepath / 'meta/neurons',
                                              self.transforms,
-                                             data_group="responses")
+                                             data_group="responses" if "responses" in self.data_keys else "targets")
 
     @property
     def trial_info(self):

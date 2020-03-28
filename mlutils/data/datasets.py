@@ -1,4 +1,4 @@
-import os
+import json
 from collections import namedtuple
 from datetime import datetime
 from pathlib import Path
@@ -8,9 +8,9 @@ import numpy as np
 from scipy.signal import convolve2d
 from torch.utils.data import Dataset
 
-from mlutils.data.utils import convert_static_h5_dataset_to_folder
 from .exceptions import InconsistentDataException, DoesNotExistException
 from .transforms import DataTransform, MovieTransform, StaticTransform, Invertible, Subsequence, Delay
+from .utils import convert_static_h5_dataset_to_folder, zip_dir
 from ..utils import recursively_load_dict_contents_from_group
 
 
@@ -549,19 +549,48 @@ class FileTreeDataset(StaticSet):
 
         number_of_files = []
 
-        basepath = self.basepath = Path(dirname).absolute()
+        self.basepath = Path(dirname).absolute()
+        self._config_file = (self.basepath / 'config.json')
+
+        if not self._config_file.exists():
+            self._save_config(self._default_config)
 
         for data_key in data_keys:
-            datapath = basepath / 'data' / data_key
-            if not datapath.exists():
-                raise DoesNotExistException("{} does not exist.".format(datapath))
+            datapath = self.resolve_data_path(data_key)
             number_of_files.append(len(list(datapath.glob('*'))))
+
         if not np.all(np.diff(number_of_files) == 0):
             raise InconsistentDataException("Number of data points is not equal")
         else:
             self._len = number_of_files[0]
 
         self._cache = {data_key: {} for data_key in data_keys}
+
+
+    _default_config = {
+        'links': {}
+    }
+
+    def resolve_data_path(self, data_key):
+        if self.link_exists(data_key):
+            data_key = self.config['links'][data_key]
+        datapath = self.basepath / 'data' / data_key
+
+        if not datapath.exists():
+            raise DoesNotExistException('Data path {} does not exist'.format(datapath))
+        return datapath
+
+    def link_exists(self, link):
+        return 'links' in self.config and link in self.config['links']
+
+    @property
+    def config(self):
+        with open(self._config_file) as fid:
+            return json.load(fid)
+
+    def _save_config(self, cfg):
+        with open(self._config_file, 'w') as fid:
+            return json.dump(cfg, fid)
 
     def __len__(self):
         return self._len
@@ -573,7 +602,8 @@ class FileTreeDataset(StaticSet):
             if item in self._cache[data_key]:
                 ret.append(self._cache[data_key][item])
             else:
-                val = np.load(self.basepath / 'data' / data_key / '{}.npy'.format(item))
+                datapath = self.resolve_data_path(data_key)
+                val = np.load(datapath / '{}.npy'.format(item))
                 self._cache[data_key][item] = val
                 ret.append(val)
 
@@ -642,19 +672,39 @@ class FileTreeDataset(StaticSet):
             with open(self.basepath / 'change.log', 'r') as fid:
                 print(''.join(fid.readlines()))
 
-    def add_synonym(self, attr, new_name):
-        cwd = self.basepath.cwd()
+    def zip(self, filename=None):
+        """
+        Zips current dataset.
 
-        for location in ['data', 'meta/statistics']:
-            os.chdir(self.basepath / location)
+        Args:
+            filename:  Filename for the zip. Directory name + zip by default.
+        """
 
-            existing_attr = Path(attr)
-            new_attr = Path(new_name)
+        if filename is None:
+            filename = str(self.basepath) + '.zip'
+        zip_dir(filename, self.basepath)
 
-            new_attr.symlink_to(existing_attr, target_is_directory=True)
+    def add_link(self, attr, new_name):
+        """
+        Add a new dataset that links to an existing dataset.
 
-            self.add_log_entry('Created synonym {} -> {} in {}'.format(existing_attr, new_attr, location))
-        os.chdir(cwd)
+        For instance `targets` that links to `responses`
+
+        Args:
+            attr:       existing attribute such as `responses`
+            new_name:   name of the new attribute reference.
+        """
+        if not (self.basepath / 'data/{}'.format(attr)).exists():
+            raise DoesNotExistException('Link target does not exist')
+
+        if (self.basepath / 'data/{}'.format(new_name)).exists():
+            raise FileExistsError('Link target already exists')
+
+        config = self.config
+        if not 'links' in config:
+            config['links'] = {}
+        config['links'][new_name] = attr
+        self._save_config(config)
 
     @property
     def n_neurons(self):

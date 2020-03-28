@@ -3,6 +3,18 @@ import h5py as h5
 import numpy as np
 import tqdm
 
+from pathlib import Path
+from zipfile import ZIP_DEFLATED, ZipFile
+
+def zip_dir(zip_name: str, source_dir):
+    """
+    Zips all files in `source_dir` into a zip file names `zip_name`.
+    """
+    src_path = Path(source_dir).absolute().resolve(strict=True)
+    with ZipFile(zip_name, 'w', ZIP_DEFLATED) as zf:
+        for file in tqdm(src_path.rglob('*')):
+            zf.write(file, file.relative_to(src_path.parent))
+
 def _savenpy(path, val, overwrite):
 
     if not np.isscalar(val) and val[0].dtype.char == "S":  # convert bytes to univcode

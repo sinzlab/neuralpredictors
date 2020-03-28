@@ -402,7 +402,7 @@ class StaticImageSet(H5ArraySet):
 
 
 class DirectoryAttributeHandler:
-    def __init__(self, path):
+    def __init__(self, path, links = None):
         """
         Class that can be used to represent a subdirectory of a FileTree as a property in a FileTree dataset.
         Caches already loaded data items.
@@ -410,20 +410,22 @@ class DirectoryAttributeHandler:
         Args:
             path: path to the subdiretory (pathlib.Path object)
         """
+        self.links = links or {}
         self.path = path
-        self._cache = {}
 
     def __getattr__(self, item):
-        if item in self._cache:
-            return self._cache['item']
+        temp_path = self.resolve_item_path(item)
+        if temp_path.exists() and temp_path.is_dir():
+            val = DirectoryAttributeHandler(temp_path, links=self.links)
         else:
-            temp_path = self.path / item
-            if temp_path.exists() and temp_path.is_dir():
-                val = DirectoryAttributeHandler(temp_path)
-            else:
-                val = np.load(self.path / '{}.npy'.format(item))
-            self._cache[item] = val
-            return val
+            val = np.load(self.path / '{}.npy'.format(item))
+        return val
+
+
+    def resolve_item_path(self, item):
+        if item in self.links:
+            item = self.links[item]
+        return self.path / item
 
     def __getitem__(self, item):
         return getattr(self, item)
@@ -433,11 +435,11 @@ class DirectoryAttributeHandler:
 
     def __dir__(self):
         attrs = set(super().__dir__())
-        return attrs.union(set(self.keys()))
+        return attrs.union(set(self.keys())).union(set(self.links.keys()))
 
 
 class DirectoryAttributeTransformer(DirectoryAttributeHandler):
-    def __init__(self, path, transforms, data_group):
+    def __init__(self, path, transforms, data_group, links=None):
         """
         Class that can be used to represent a subdirectory of a FileTree as a property in a FileTree dataset.
         Like DirectoryAttributeHandler but allows for id_transform of transforms to be applied to the
@@ -447,7 +449,7 @@ class DirectoryAttributeTransformer(DirectoryAttributeHandler):
             path: path to the subdiretory (pathlib.Path object)
         """
 
-        super().__init__(path)
+        super().__init__(path, links=links)
         self.transforms = transforms
         self.data_group = data_group
 
@@ -722,7 +724,7 @@ class FileTreeDataset(StaticSet):
 
     @property
     def statistics(self):
-        return DirectoryAttributeHandler(self.basepath / 'meta/statistics')
+        return DirectoryAttributeHandler(self.basepath / 'meta/statistics', self.config['links'])
 
     @property
     def img_shape(self):

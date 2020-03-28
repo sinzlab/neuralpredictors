@@ -1,4 +1,6 @@
+import os
 from collections import namedtuple
+from datetime import datetime
 from pathlib import Path
 
 import h5py
@@ -6,11 +8,11 @@ import numpy as np
 from scipy.signal import convolve2d
 from torch.utils.data import Dataset
 
+from mlutils.data.utils import convert_static_h5_dataset_to_folder
 from .exceptions import InconsistentDataException, DoesNotExistException
 from .transforms import DataTransform, MovieTransform, StaticTransform, Invertible, Subsequence, Delay
 from ..utils import recursively_load_dict_contents_from_group
-from datetime import datetime
-import os
+
 
 class AttributeHandler:
     def __init__(self, name, h5_handle):
@@ -587,16 +589,58 @@ class FileTreeDataset(StaticSet):
         with open(self.basepath / 'change.log', 'a+') as fid:
             fid.write('{}: {}\n'.format(timestamp, msg))
 
-    # def add_neuron_meta(self, name, animal_id, session, scan_idx, unit_id, values):
-    #     ref = np.c_[(self.neurons.animal_ids, self.neurons.sessions, self.neurons.scan_idx, self.neurons.unit_ids)]
-    #     return ref
+    @staticmethod
+    def match_order(target, permuted):
+        """
+        Matches the order or rows in permuted to by returning an index array such that
+
+        Returns: index array `idx` such that `target == permuted[idx, :]`
+        """
+
+        order = 0 * target[:, 0].astype(int)
+        for i, row in enumerate(target):
+            idx = np.sum(permuted - row, axis=1) == 0
+            assert idx.sum() == 1
+            order[i] = np.where(idx)[0][0]
+        return order
+
+    def add_neuron_meta(self, name, animal_id, session, scan_idx, unit_id, values):
+        """
+        Add new meta information about neurons.
+
+        Args:
+            name:       name of the new meta information
+            animal_id:  array with animal_ids per first dimension of values
+            session:    array with session per first dimension of values
+            scan_idx:   array with scan_idx per first dimension of values
+            unit_id:    array with unit_id per first dimension of values
+            values:     new meta information. First dimension must refer to neurons.
+        """
+        if not len(animal_id) == len(session) == len(scan_idx) == len(unit_id) == len(values):
+            raise InconsistentDataException('number of trials and identifiers not consistent')
+
+        target = np.c_[(self.neurons.animal_ids, self.neurons.sessions, self.neurons.scan_idx, self.neurons.unit_ids)]
+        permuted = np.c_[(animal_id, session, scan_idx, unit_id)]
+
+        idx = self.match_order(target, permuted)
+        assert np.sum(target - permuted[idx, ...]) == 0, 'Something went wrong in sorting'
+
+        values = values[idx, ...]
+        np.save(self.basepath / 'meta/neurons/{}.npy'.format(name), values)
+        self.add_log_entry('Added new neuron meta attribute {} to meta/neurons'.format(name))
+
+    @staticmethod
+    def initialize_from(filename, outpath=None, overwrite=False):
+        """
+        Convenience function. See `convert_static_h5_dataset_to_folder` in `.utils`
+        """
+        convert_static_h5_dataset_to_folder(filename, outpath=outpath, overwrite=overwrite)
 
     @property
-    def log(self):
+    def change_log(self):
         if (self.basepath / 'change.log').exists():
             with open(self.basepath / 'change.log', 'r') as fid:
                 print(''.join(fid.readlines()))
-
 
     def add_synonym(self, attr, new_name):
         cwd = self.basepath.cwd()
@@ -604,7 +648,7 @@ class FileTreeDataset(StaticSet):
         for location in ['data', 'meta/statistics']:
             os.chdir(self.basepath / location)
 
-            existing_attr =  Path(attr)
+            existing_attr = Path(attr)
             new_attr = Path(new_name)
 
             new_attr.symlink_to(existing_attr, target_is_directory=True)

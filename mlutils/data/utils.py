@@ -1,7 +1,7 @@
 from pathlib import Path
 import h5py as h5
 import numpy as np
-import tqdm
+from tqdm import tqdm
 
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
@@ -43,7 +43,7 @@ def convert_static_h5_dataset_to_folder(filename, outpath=None,  overwrite=False
         for data_key in ['images', 'responses', 'behavior', 'pupil_center']:
             subpath = outpath / 'data/{}'.format(data_key)
             subpath.mkdir(exist_ok=True, parents=True)
-            for i, value in tqdm.tqdm(enumerate(fid[data_key]), total=fid[data_key].shape[0], desc='Saving {}'.format(data_key)):
+            for i, value in tqdm(enumerate(fid[data_key]), total=fid[data_key].shape[0], desc='Saving {}'.format(data_key)):
                 outfile = subpath / '{}.npy'.format(i)
                 if not outfile.exists() or overwrite:
                     np.save(outfile, value)

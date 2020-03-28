@@ -2,6 +2,7 @@ import json
 from collections import namedtuple
 from datetime import datetime
 from pathlib import Path
+from zipfile import ZipFile
 
 import h5py
 import numpy as np
@@ -551,6 +552,10 @@ class FileTreeDataset(StaticSet):
 
         number_of_files = []
 
+        if dirname.endswith('.zip'):
+            self.unzip(dirname, Path(dirname).absolute().parent)
+            dirname = dirname[:-4]
+
         self.basepath = Path(dirname).absolute()
         self._config_file = (self.basepath / 'config.json')
 
@@ -674,6 +679,7 @@ class FileTreeDataset(StaticSet):
             with open(self.basepath / 'change.log', 'r') as fid:
                 print(''.join(fid.readlines()))
 
+    @staticmethod
     def zip(self, filename=None):
         """
         Zips current dataset.
@@ -685,6 +691,11 @@ class FileTreeDataset(StaticSet):
         if filename is None:
             filename = str(self.basepath) + '.zip'
         zip_dir(filename, self.basepath)
+
+    def unzip(self, filename, path):
+        print('Unzipping {} into {}'.format(filename, path))
+        with ZipFile(filename, 'r') as zip_obj:
+            zip_obj.extractall(path)
 
     def add_link(self, attr, new_name):
         """

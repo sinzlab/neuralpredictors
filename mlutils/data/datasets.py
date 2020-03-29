@@ -403,7 +403,7 @@ class StaticImageSet(H5ArraySet):
 
 
 class DirectoryAttributeHandler:
-    def __init__(self, path, links = None):
+    def __init__(self, path, links=None):
         """
         Class that can be used to represent a subdirectory of a FileTree as a property in a FileTree dataset.
         Caches already loaded data items.
@@ -421,7 +421,6 @@ class DirectoryAttributeHandler:
         else:
             val = np.load(self.path / '{}.npy'.format(item))
         return val
-
 
     def resolve_item_path(self, item):
         if item in self.links:
@@ -573,7 +572,6 @@ class FileTreeDataset(StaticSet):
 
         self._cache = {data_key: {} for data_key in data_keys}
 
-
     _default_config = {
         'links': {}
     }
@@ -627,21 +625,32 @@ class FileTreeDataset(StaticSet):
             fid.write('{}: {}\n'.format(timestamp, msg))
 
     @staticmethod
-    def match_order(target, permuted):
+    def match_order(target, permuted, not_exist_ok=False):
         """
-        Matches the order or rows in permuted to by returning an index array such that
+        Matches the order or rows in permuted to by returning an index array such that.
+
+        Args:
+            not_exist_ok: if the element does not exist, don't return an index
 
         Returns: index array `idx` such that `target == permuted[idx, :]`
         """
 
-        order = 0 * target[:, 0].astype(int)
+        order, target_idx = [], []
+        unmatched_counter = 0
         for i, row in enumerate(target):
             idx = np.sum(permuted - row, axis=1) == 0
-            assert idx.sum() == 1
-            order[i] = np.where(idx)[0][0]
-        return order
+            if not not_exist_ok:
+                assert idx.sum() == 1
+            elif idx.sum() == 1:
+                order.append(np.where(idx)[0][0])
+                target_idx.append(i)
+            else:
+                unmatched_counter += 1
+        if not_exist_ok:
+            print('Encountered {} unmatched elements'.format(unmatched_counter))
+        return np.array(target_idx, dtype=int), np.array(order, dtype=int)
 
-    def add_neuron_meta(self, name, animal_id, session, scan_idx, unit_id, values):
+    def add_neuron_meta(self, name, animal_id, session, scan_idx, unit_id, values, fill_missing=None):
         """
         Add new meta information about neurons.
 
@@ -652,6 +661,7 @@ class FileTreeDataset(StaticSet):
             scan_idx:   array with scan_idx per first dimension of values
             unit_id:    array with unit_id per first dimension of values
             values:     new meta information. First dimension must refer to neurons.
+            fill_missing:   fill the values of the new attribute with NaN if not provided
         """
         if not len(animal_id) == len(session) == len(scan_idx) == len(unit_id) == len(values):
             raise InconsistentDataException('number of trials and identifiers not consistent')
@@ -659,11 +669,14 @@ class FileTreeDataset(StaticSet):
         target = np.c_[(self.neurons.animal_ids, self.neurons.sessions, self.neurons.scan_idx, self.neurons.unit_ids)]
         permuted = np.c_[(animal_id, session, scan_idx, unit_id)]
 
-        idx = self.match_order(target, permuted)
-        assert np.sum(target - permuted[idx, ...]) == 0, 'Something went wrong in sorting'
+        vals = np.ones((len(target),) + values.shape[1:], dtype=values.dtype) \
+                    * (np.nan if fill_missing is None else fill_missing)
+        tidx, idx = self.match_order(target, permuted, not_exist_ok=fill_missing is not None)
 
-        values = values[idx, ...]
-        np.save(self.basepath / 'meta/neurons/{}.npy'.format(name), values)
+        assert np.sum(target[tidx] - permuted[idx, ...]) == 0, 'Something went wrong in sorting'
+
+        vals[tidx, ...] = values[idx, ...]
+        np.save(self.basepath / 'meta/neurons/{}.npy'.format(name), vals)
         self.add_log_entry('Added new neuron meta attribute {} to meta/neurons'.format(name))
 
     @staticmethod

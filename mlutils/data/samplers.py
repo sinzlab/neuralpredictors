@@ -1,11 +1,10 @@
 from collections import Counter
-
-import torch
 import numpy as np
-from torch.utils.data.sampler import Sampler
+from torch.utils.data import Sampler
 
 
 class RepeatsBatchSampler(Sampler):
+
     def __init__(self, keys, subset_index=None):
         if subset_index is None:
             subset_index = np.arange(len(keys))
@@ -24,7 +23,6 @@ class RepeatsBatchSampler(Sampler):
 
 class SubsetSequentialSampler(Sampler):
     """Samples elements sequentially from a given list of indices, without replacement.
-
     Arguments:
         indices (list): a list of indices
     """
@@ -41,7 +39,6 @@ class SubsetSequentialSampler(Sampler):
 
 class SampledSubsetRandomSampler(Sampler):
     r"""Samples elements randomly from sampled subset of indices.
-
     Arguments:
         indices (sequence): a sequence of indices
         num_samples (int): number of samples to draw
@@ -62,7 +59,6 @@ class SampledSubsetRandomSampler(Sampler):
 
 class SampledSubsetSequentialSampler(Sampler):
     r"""Samples elements sequentially from sampled subset of indices.
-
     Arguments:
         indices (sequence): a sequence of indices
         num_samples (int): number of samples to draw
@@ -85,7 +81,6 @@ class SampledSubsetSequentialSampler(Sampler):
 class SubSubsetRandomSequentialSampler(Sampler):
     """Samples a subset from a dataset randomly.
     Then iterates through those indices sequentially.
-
     Arguments:
         indices (list): a list of indices
         subsubset_size (int): size of subset of subset
@@ -105,7 +100,6 @@ class SubSubsetRandomSequentialSampler(Sampler):
 
 class BalancedSubsetSampler(Sampler):
     """Samples elements randomly from a given list of indices, without replacement, balanced by occurence of types.
-
     Arguments:
         indices (list): a list of indices
     """

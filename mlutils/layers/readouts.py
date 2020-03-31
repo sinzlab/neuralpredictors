@@ -1,11 +1,13 @@
+import warnings
 from collections import OrderedDict
+
 import numpy as np
 import torch
-import warnings
 from torch import nn as nn
+from torch.nn import ModuleDict
 from torch.nn import Parameter
 from torch.nn import functional as F
-from torch.nn import ModuleDict
+
 from ..constraints import positive
 
 
@@ -18,10 +20,33 @@ class Readout:
         s += " [{} regularizers: ".format(self.__class__.__name__)
         ret = []
         for attr in filter(
-            lambda x: not x.startswith("_") and ("gamma" in x or "pool" in x or "positive" in x), dir(self)
+                lambda x: not x.startswith("_") and ("gamma" in x or "pool" in x or "positive" in x), dir(self)
         ):
             ret.append("{} = {}".format(attr, getattr(self, attr)))
         return s + "|".join(ret) + "]\n"
+
+
+class MultiReadout(Readout):
+    _base_readout = None
+
+    def __init__(self, in_shape, loaders, gamma_readout, **kwargs):
+        if self._base_readout is None:
+            raise ValueError('Attribute _base_reaout must be set')
+
+        super().__init__()
+
+        self.in_shape = in_shape
+        self.neurons = OrderedDict([(k, loader.dataset.n_neurons) for k, loader in loaders.items()])
+
+        self.gamma_readout = gamma_readout  # regularisation strength
+
+        for k, n_neurons in self.neurons.items():
+            self.add_module(k, self._base_readout(in_shape=in_shape, outdims=n_neurons, **kwargs))
+
+    def initialize(self, mean_activity_dict):
+        for k, mu in mean_activity_dict.items():
+            self[k].initialize()
+            self[k].bias.data = mu.squeeze() - 1
 
 
 ##############
@@ -253,18 +278,18 @@ class PointPooled2d(nn.Module):
 
 class SpatialTransformerPooled3d(nn.Module):
     def __init__(
-        self,
-        in_shape,
-        outdims,
-        pool_steps=1,
-        positive=False,
-        bias=True,
-        init_range=0.05,
-        kernel_size=2,
-        stride=2,
-        grid=None,
-        stop_grad=False,
-        align_corners=True,
+            self,
+            in_shape,
+            outdims,
+            pool_steps=1,
+            positive=False,
+            bias=True,
+            init_range=0.05,
+            kernel_size=2,
+            stride=2,
+            grid=None,
+            stop_grad=False,
+            align_corners=True,
     ):
         super().__init__()
         self._pool_steps = pool_steps
@@ -512,7 +537,8 @@ class Pyramid(nn.Module):
 
 
 class PointPyramid2d(nn.Module):
-    def __init__(self, in_shape, outdims, scale_n, positive, bias, init_range, downsample, type, align_corners=True, **kwargs):
+    def __init__(self, in_shape, outdims, scale_n, positive, bias, init_range, downsample, type, align_corners=True,
+                 **kwargs):
         super().__init__()
         self.in_shape = in_shape
         c, w, h = in_shape
@@ -543,7 +569,7 @@ class PointPyramid2d(nn.Module):
         n = f // group_size
         ret = 0
         for chunk in range(0, f, group_size):
-            ret = ret + (self.features[:, chunk : chunk + group_size, ...].pow(2).mean(1) + 1e-12).sqrt().mean() / n
+            ret = ret + (self.features[:, chunk: chunk + group_size, ...].pow(2).mean(1) + 1e-12).sqrt().mean() / n
         return ret
 
     def feature_l1(self, average=True):
@@ -589,37 +615,6 @@ class PointPyramid2d(nn.Module):
 ##############
 
 
-class MultipleGaussian2d(Readout, ModuleDict):
-    """
-    Instantiates multiple instances of Gaussian2d Readouts
-    usually used when dealing with more than one dataset sharing the same core.
-
-    Args:
-        in_shape (list): shape of the input feature map [channels, width, height]
-        loaders (list):  a list of dataloaders
-        gamma_readout (float): regularizer for the readout
-    """
-
-    def __init__(self, in_shape, loaders, gamma_readout, **kwargs):
-        super().__init__()
-
-        self.in_shape = in_shape
-        self.neurons = OrderedDict([(k, loader.dataset.n_neurons) for k, loader in loaders.items()])
-
-        self.gamma_readout = gamma_readout  # regularisation strength
-
-        for k, n_neurons in self.neurons.items():
-            self.add_module(k, Gaussian2d(in_shape=in_shape, outdims=n_neurons, **kwargs))
-
-    def initialize(self, mean_activity_dict):
-        for k, mu in mean_activity_dict.items():
-            self[k].initialize()
-            self[k].bias.data = mu.squeeze() - 1
-
-    def regularizer(self, readout_key):
-        return self[readout_key].feature_l1() * self.gamma_readout
-
-
 class Gaussian2d(nn.Module):
     """
     Instantiates an object that can used to learn a point in the core feature space for each neuron,
@@ -650,7 +645,8 @@ class Gaussian2d(nn.Module):
                 If true, initialized the sigma not in a range, but with the exact value given for all neurons.
     """
 
-    def __init__(self, in_shape, outdims, bias, init_mu_range=0.5, init_sigma_range=0.5, batch_sample=True, align_corners=True, fixed_sigma=False, **kwargs):
+    def __init__(self, in_shape, outdims, bias, init_mu_range=0.5, init_sigma_range=0.5, batch_sample=True,
+                 align_corners=True, fixed_sigma=False, **kwargs):
 
         super().__init__()
         if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma_range <= 0.0:
@@ -675,7 +671,6 @@ class Gaussian2d(nn.Module):
         self.align_corners = align_corners
         self.fixed_sigma = fixed_sigma
         self.initialize()
-
 
     def initialize(self):
         """
@@ -798,6 +793,87 @@ class Gaussian2d(nn.Module):
         return r
 
 
+class MultipleGaussian2d(MultiReadout, ModuleDict):
+    """
+    Instantiates multiple instances of Gaussian2d Readouts
+    usually used when dealing with more than one dataset sharing the same core.
+
+    Args:
+        in_shape (list): shape of the input feature map [channels, width, height]
+        loaders (list):  a list of dataloaders
+        gamma_readout (float): regularizer for the readout
+    """
+
+    _base_readout = Gaussian2d
+
+    def regularizer(self, readout_key):
+        return self[readout_key].feature_l1() * self.gamma_readout
+
+
+class Cortex2Gaussian2d(Gaussian2d):
+    def __init__(self, in_shape, outdims, bias, cortex_coordinates, init_mu_range=0.5, init_sigma_range=0.5,
+                 batch_sample=True, align_corners=True, fixed_sigma=True, **kwargs):
+
+        nn.Module.__init__(self)
+        if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma_range <= 0.0:
+            raise ValueError(
+                "either init_mu_range doesn't belong to [0.0, 1.0] or init_sigma_range is non-positive")
+        self.in_shape = in_shape
+        c, w, h = in_shape
+        self.outdims = outdims
+        self.batch_sample = batch_sample
+        self.grid_shape = (1, outdims, 1, 2)
+        self.sigma = Parameter(torch.Tensor(*self.grid_shape))  # standard deviation for gaussian for each neuron
+        self.features = Parameter(torch.Tensor(1, c, 1, outdims))  # feature weights for each channel of the core
+
+        if bias:
+            bias = Parameter(torch.Tensor(outdims))
+            self.register_parameter("bias", bias)
+        else:
+            self.register_parameter("bias", None)
+
+        self.init_mu_range = init_mu_range
+        self.init_sigma_range = init_sigma_range
+        self.align_corners = align_corners
+        self.fixed_sigma = fixed_sigma
+
+        self.mu_transform = nn.Linear(cortex_coordinates.shape[1], 2)
+
+        # this normalization is very important to make the model train
+        cortex_coordinates = cortex_coordinates - cortex_coordinates.mean(axis=0, keepdims=True)
+        cortex_coordinates = cortex_coordinates / np.abs(cortex_coordinates).max()
+
+        self.register_buffer('cortex_coordinates', torch.from_numpy(cortex_coordinates.astype(np.float32)))
+        self.initialize()
+
+    @property
+    def mu(self):
+        return self.mu_transform(self.cortex_coordinates).view(*self.grid_shape)
+
+    def initialize(self):
+        """
+        Initializes the mean, and sigma of the Gaussian readout along with the features weights
+        """
+
+        coco = self.cortex_coordinates
+        m = coco.mean(dim=0, keepdim=True)
+        s = self.init_mu_range / (coco - m).abs().max()
+        self.mu_transform.bias.data = -m.squeeze()[:2] * s
+        self.mu_transform.weight.data[:, -1] = 0
+        self.mu_transform.weight.data[:, :2] = torch.eye(2) * s
+
+        if self.fixed_sigma:
+            self.sigma.data.uniform_(self.init_sigma_range, self.init_sigma_range)
+        else:
+            self.sigma.data.uniform_(0, self.init_sigma_range)
+            warnings.warn("sigma is sampled from uniform distribuiton, instead of a fixed value. Consider setting "
+                          "fixed_sigma to True")
+        self.features.data.fill_(1 / self.in_shape[0])
+
+        if self.bias is not None:
+            self.bias.data.fill_(0)
+
+
 ##############
 # Gaussian3d Readout
 ##############
@@ -865,7 +941,8 @@ class Gaussian3d(nn.Module):
                 If true, initialized the sigma not in a range, but with the exact value given for all neurons.
     """
 
-    def __init__(self, in_shape, outdims, bias, init_mu_range=0.5, init_sigma_range=0.5, batch_sample=True, align_corners=True, fixed_sigma=False, **kwargs):
+    def __init__(self, in_shape, outdims, bias, init_mu_range=0.5, init_sigma_range=0.5, batch_sample=True,
+                 align_corners=True, fixed_sigma=False, **kwargs):
         super().__init__()
         if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma_range <= 0.0:
             raise ValueError("init_mu_range or init_sigma_range is not within required limit!")
@@ -1061,18 +1138,18 @@ class UltraSparse(nn.Module):
     """
 
     def __init__(
-        self,
-        in_shape,
-        outdims,
-        bias,
-        init_mu_range,
-        init_sigma_range,
-        batch_sample=True,
-        num_filters=1,
-        shared_mean=False,
-        align_corners=True,
-        fixed_sigma=False,
-        **kwargs
+            self,
+            in_shape,
+            outdims,
+            bias,
+            init_mu_range,
+            init_sigma_range,
+            batch_sample=True,
+            num_filters=1,
+            shared_mean=False,
+            align_corners=True,
+            fixed_sigma=False,
+            **kwargs
     ):
 
         super().__init__()

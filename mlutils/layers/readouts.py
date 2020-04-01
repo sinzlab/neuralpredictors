@@ -681,7 +681,7 @@ class Gaussian2d(nn.Module):
             self.sigma.data.uniform_(self.init_sigma_range, self.init_sigma_range)
         else:
             self.sigma.data.uniform_(0, self.init_sigma_range)
-            warnings.warn("sigma is sampled from uniform distribuiton, instead of a fixed value. Consider setting "
+            warnings.warn("sigma is sampled from uniform distribution, instead of a fixed value. Consider setting "
                           "fixed_sigma to True")
         self.features.data.fill_(1 / self.in_shape[0])
 

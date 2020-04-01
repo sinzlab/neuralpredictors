@@ -913,10 +913,10 @@ class CortexNonIsotropicGaussian2d(GaussianMixin, nn.Module):
             nn.Linear(cortex_coordinates.shape[1], hidden_features if hidden_layers > 0 else 2)
         ]
 
-        for _ in range(hidden_layers):
+        for i in range(hidden_layers):
             layers.extend([
                 nn.ELU(),
-                nn.Linear(hidden_features, hidden_features)
+                nn.Linear(hidden_features, hidden_features if i < hidden_layers - 1 else 2)
             ])
 
         if final_tanh:

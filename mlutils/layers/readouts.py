@@ -46,7 +46,8 @@ class MultiReadout(Readout):
     def initialize(self, mean_activity_dict):
         for k, mu in mean_activity_dict.items():
             self[k].initialize()
-            self[k].bias.data = mu.squeeze() - 1
+            if not isinstance(self[k], ClonedReadout):
+                self[k].bias.data = mu.squeeze() - 1
 
 
 ##############
@@ -617,6 +618,10 @@ class PointPyramid2d(nn.Module):
 class GaussianMixin:
 
     @property
+    def features(self):
+        return self._features
+
+    @property
     def grid(self):
         return self.sample_grid(batch_size=1, sample=False)
 
@@ -692,6 +697,40 @@ class GaussianMixin:
             r += "  -> " + ch.__repr__() + "\n"
         return r
 
+    def sample_grid(self, batch_size, sample=None):
+        """
+        Returns the grid locations from the core by sampling from a Gaussian distribution
+        Args:
+            batch_size (int): size of the batch
+            sample (bool/None): sample determines whether we draw a sample from Gaussian distribution, N(mu,sigma), defined per neuron
+                            or use the mean, mu, of the Gaussian distribution without sampling.
+                           if sample is None (default), samples from the N(mu,sigma) during training phase and
+                             fixes to the mean, mu, during evaluation phase.
+                           if sample is True/False, overrides the model_state (i.e training or eval) and does as instructed
+        """
+        with torch.no_grad():
+            self.mu.clamp_(min=-1, max=1)  # at eval time, only self.mu is used so it must belong to [-1,1]
+            if self._is_isotropic:
+                self.sigma.clamp_(min=0)  # sigma/variance is always a positive quantity
+
+        grid_shape = (batch_size,) + self.grid_shape[1:]
+
+        sample = self.training if sample is None else sample
+
+        if sample:
+            norm = self.mu.new(*grid_shape).normal_()
+        else:
+            norm = self.mu.new(*grid_shape).zero_()  # for consistency and CUDA capability
+
+        if self._is_isotropic:
+            return torch.clamp(
+                norm * self.sigma + self.mu, min=-1, max=1
+            )  # grid locations in feature space sampled randomly around the mean self.mu
+        else:
+            return torch.clamp(
+                torch.einsum('ancd,bnid->bnic', self.L, norm) + self.mu, min=-1, max=1
+            )  # grid locations in feature space sampled randomly around the mean self.mu
+
 
 class Gaussian2d(GaussianMixin, nn.Module):
     """
@@ -723,6 +762,8 @@ class Gaussian2d(GaussianMixin, nn.Module):
                 If true, initialized the sigma not in a range, but with the exact value given for all neurons.
     """
 
+    _is_isotropic = True
+
     def __init__(self, in_shape, outdims, bias, init_mu_range=0.5, init_sigma_range=0.5, batch_sample=True,
                  align_corners=True, fixed_sigma=False, **kwargs):
 
@@ -736,7 +777,7 @@ class Gaussian2d(GaussianMixin, nn.Module):
         self.grid_shape = (1, outdims, 1, 2)
         self.mu = Parameter(torch.Tensor(*self.grid_shape))  # mean location of gaussian for each neuron
         self.sigma = Parameter(torch.Tensor(*self.grid_shape))  # standard deviation for gaussian for each neuron
-        self.features = Parameter(torch.Tensor(1, c, 1, outdims))  # feature weights for each channel of the core
+        self._features = Parameter(torch.Tensor(1, c, 1, outdims))  # feature weights for each channel of the core
 
         if bias:
             bias = Parameter(torch.Tensor(outdims))
@@ -761,41 +802,14 @@ class Gaussian2d(GaussianMixin, nn.Module):
             self.sigma.data.uniform_(0, self.init_sigma_range)
             warnings.warn("sigma is sampled from uniform distribution, instead of a fixed value. Consider setting "
                           "fixed_sigma to True")
-        self.features.data.fill_(1 / self.in_shape[0])
+        self._features.data.fill_(1 / self.in_shape[0])
 
         if self.bias is not None:
             self.bias.data.fill_(0)
 
-    def sample_grid(self, batch_size, sample=None):
-        """
-        Returns the grid locations from the core by sampling from a Gaussian distribution
-        Args:
-            batch_size (int): size of the batch
-            sample (bool/None): sample determines whether we draw a sample from Gaussian distribution, N(mu,sigma), defined per neuron
-                            or use the mean, mu, of the Gaussian distribution without sampling.
-                           if sample is None (default), samples from the N(mu,sigma) during training phase and
-                             fixes to the mean, mu, during evaluation phase.
-                           if sample is True/False, overrides the model_state (i.e training or eval) and does as instructed
-        """
-        with torch.no_grad():
-            self.mu.clamp_(min=-1, max=1)  # at eval time, only self.mu is used so it must belong to [-1,1]
-            self.sigma.clamp_(min=0)  # sigma/variance is always a positive quantity
-
-        grid_shape = (batch_size,) + self.grid_shape[1:]
-
-        sample = self.training if sample is None else sample
-
-        if sample:
-            norm = self.mu.new(*grid_shape).normal_()
-        else:
-            norm = self.mu.new(*grid_shape).zero_()  # for consistency and CUDA capability
-
-        return torch.clamp(
-            norm * self.sigma + self.mu, min=-1, max=1
-        )  # grid locations in feature space sampled randomly around the mean self.mu
-
 
 class NonIsotropicGaussian2d(GaussianMixin, nn.Module):
+    _is_isotropic = False
 
     def __init__(self, in_shape, outdims, bias, init_mu_range=0.5, init_sigma_range=0.5, batch_sample=True,
                  align_corners=True, **kwargs):
@@ -811,7 +825,7 @@ class NonIsotropicGaussian2d(GaussianMixin, nn.Module):
         self.L_shape = (1, outdims, 2, 2)
         self.mu = Parameter(torch.Tensor(*self.grid_shape))  # mean location of gaussian for each neuron
         self.L = Parameter(torch.Tensor(*self.L_shape))  # standard deviation for gaussian for each neuron
-        self.features = Parameter(torch.Tensor(1, c, 1, outdims))  # feature weights for each channel of the core
+        self._features = Parameter(torch.Tensor(1, c, 1, outdims))  # feature weights for each channel of the core
 
         if bias:
             bias = Parameter(torch.Tensor(outdims))
@@ -830,37 +844,10 @@ class NonIsotropicGaussian2d(GaussianMixin, nn.Module):
         """
         self.mu.data.uniform_(-self.init_mu_range, self.init_mu_range)
         self.L.data.uniform_(-self.init_L_range, self.init_L_range)
-        self.features.data.fill_(1 / self.in_shape[0])
+        self._features.data.fill_(1 / self.in_shape[0])
 
         if self.bias is not None:
             self.bias.data.fill_(0)
-
-    def sample_grid(self, batch_size, sample=None):
-        """
-        Returns the grid locations from the core by sampling from a Gaussian distribution
-        Args:
-            batch_size (int): size of the batch
-            sample (bool/None): sample determines whether we draw a sample from Gaussian distribution, N(mu,sigma), defined per neuron
-                            or use the mean, mu, of the Gaussian distribution without sampling.
-                           if sample is None (default), samples from the N(mu,sigma) during training phase and
-                             fixes to the mean, mu, during evaluation phase.
-                           if sample is True/False, overrides the model_state (i.e training or eval) and does as instructed
-        """
-        with torch.no_grad():
-            self.mu.clamp_(min=-1, max=1)  # at eval time, only self.mu is used so it must belong to [-1,1]
-
-        grid_shape = (batch_size,) + self.grid_shape[1:]
-
-        sample = self.training if sample is None else sample
-
-        if sample:
-            norm = self.mu.new(*grid_shape).normal_()
-        else:
-            norm = self.mu.new(*grid_shape).zero_()  # for consistency and CUDA capability
-
-        return torch.clamp(
-            torch.einsum('ancd,bnid->bnic', self.L, norm) + self.mu, min=-1, max=1
-        )  # grid locations in feature space sampled randomly around the mean self.mu
 
 
 class MultipleGaussian2d(MultiReadout, ModuleDict):
@@ -880,35 +867,9 @@ class MultipleGaussian2d(MultiReadout, ModuleDict):
         return self[readout_key].feature_l1() * self.gamma_readout
 
 
-class CortexNonIsotropicGaussian2d(GaussianMixin, nn.Module):
+class CortexMixin:
 
-    def __init__(self, in_shape, outdims, bias, cortex_coordinates, init_mu_range=0.5, init_sigma_range=0.5,
-                 batch_sample=True, align_corners=True, final_tanh=False, hidden_layers=0, hidden_features=20,
-                 **kwargs):
-
-        super().__init__()
-        if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma_range <= 0.0:
-            raise ValueError("either init_mu_range doesn't belong to [0.0, 1.0] or init_sigma_range is non-positive")
-        self.in_shape = in_shape
-        c, w, h = in_shape
-        self.outdims = outdims
-        self.batch_sample = batch_sample
-        self.grid_shape = (1, outdims, 1, 2)
-        self.L_shape = (1, outdims, 2, 2)
-        self.L = Parameter(torch.Tensor(*self.L_shape))  # standard deviation for gaussian for each neuron
-        self.features = Parameter(torch.Tensor(1, c, 1, outdims))  # feature weights for each channel of the core
-
-        if bias:
-            bias = Parameter(torch.Tensor(outdims))
-            self.register_parameter("bias", bias)
-        else:
-            self.register_parameter("bias", None)
-
-        self.init_mu_range = init_mu_range
-        self.init_L_range = init_sigma_range
-        self.align_corners = align_corners
-
-
+    def initialize_transform(self, cortex_coordinates, hidden_features, hidden_layers, final_tanh):
         layers = [
             nn.Linear(cortex_coordinates.shape[1], hidden_features if hidden_layers > 0 else 2)
         ]
@@ -930,11 +891,44 @@ class CortexNonIsotropicGaussian2d(GaussianMixin, nn.Module):
         cortex_coordinates = cortex_coordinates / np.abs(cortex_coordinates).max()
         self.register_buffer('cortex_coordinates', torch.from_numpy(cortex_coordinates.astype(np.float32)))
 
-        self.initialize()
-
     @property
     def mu(self):
         return self.mu_transform(self.cortex_coordinates).view(*self.grid_shape)
+
+class CortexNonIsotropicGaussian2d(GaussianMixin, CortexMixin, nn.Module):
+    _is_isotropic = False
+
+    def __init__(self, in_shape, outdims, bias, cortex_coordinates, init_mu_range=0.5, init_sigma_range=0.5,
+                 batch_sample=True, align_corners=True, final_tanh=False, hidden_layers=0, hidden_features=20,
+                 **kwargs):
+
+        super().__init__()
+        if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma_range <= 0.0:
+            raise ValueError("either init_mu_range doesn't belong to [0.0, 1.0] or init_sigma_range is non-positive")
+        self.in_shape = in_shape
+        c, w, h = in_shape
+        self.outdims = outdims
+        self.batch_sample = batch_sample
+        self.grid_shape = (1, outdims, 1, 2)
+        self.L_shape = (1, outdims, 2, 2)
+        self.L = Parameter(torch.Tensor(*self.L_shape))  # standard deviation for gaussian for each neuron
+        self._features = Parameter(torch.Tensor(1, c, 1, outdims))  # feature weights for each channel of the core
+
+        if bias:
+            bias = Parameter(torch.Tensor(outdims))
+            self.register_parameter("bias", bias)
+        else:
+            self.register_parameter("bias", None)
+
+        self.init_mu_range = init_mu_range
+        self.init_L_range = init_sigma_range
+        self.align_corners = align_corners
+
+        self.initialize_transform(cortex_coordinates, hidden_features, hidden_layers, final_tanh)
+
+        self.initialize()
+
+
 
     def initialize(self):
         """
@@ -942,38 +936,94 @@ class CortexNonIsotropicGaussian2d(GaussianMixin, nn.Module):
         """
 
         self.L.data.uniform_(-self.init_L_range, self.init_L_range)
-        self.features.data.fill_(1 / self.in_shape[0])
+        self._features.data.fill_(1 / self.in_shape[0])
 
         if self.bias is not None:
             self.bias.data.fill_(0)
 
-    def sample_grid(self, batch_size, sample=None):
-        """
-        Returns the grid locations from the core by sampling from a Gaussian distribution
-        Args:
-            batch_size (int): size of the batch
-            sample (bool/None): sample determines whether we draw a sample from Gaussian distribution, N(mu,sigma), defined per neuron
-                            or use the mean, mu, of the Gaussian distribution without sampling.
-                           if sample is None (default), samples from the N(mu,sigma) during training phase and
-                             fixes to the mean, mu, during evaluation phase.
-                           if sample is True/False, overrides the model_state (i.e training or eval) and does as instructed
-        """
-        with torch.no_grad():
-            self.mu.clamp_(min=-1, max=1)  # at eval time, only self.mu is used so it must belong to [-1,1]
+# TODO: Share positions
+# TODO: One Gaussian Readout with isotropic parameter
+# TODO: MultipleReadout Inheritance properly
+class SharedCortexNonIsotropicGaussian2d(GaussianMixin, CortexMixin, nn.Module):
+    _is_isotropic = False
 
-        grid_shape = (batch_size,) + self.grid_shape[1:]
+    def __init__(self, in_shape, outdims, bias, cortex_coordinates, multi_unit_ids, init_mu_range=0.5,
+                 init_sigma_range=0.5, batch_sample=True, align_corners=True, final_tanh=False, hidden_layers=0,
+                 hidden_features=20, shared_features = None,
+                 **kwargs):
 
-        sample = self.training if sample is None else sample
+        super().__init__()
+        assert outdims == len(multi_unit_ids)
 
-        if sample:
-            norm = self.mu.new(*grid_shape).normal_()
+        if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma_range <= 0.0:
+            raise ValueError("either init_mu_range doesn't belong to [0.0, 1.0] or init_sigma_range is non-positive")
+        self.in_shape = in_shape
+        c, w, h = in_shape
+        self.outdims = outdims
+        self.batch_sample = batch_sample
+        self.grid_shape = (1, outdims, 1, 2)
+        self.L_shape = (1, outdims, 2, 2)
+        self.L = Parameter(torch.Tensor(*self.L_shape))  # standard deviation for gaussian for each neuron
+
+
+        mu = len(np.unique(multi_unit_ids))
+        self.multi_unit_ids = multi_unit_ids
+        if shared_features is not None:
+            assert shared_features.shape == (1, c, 1, mu)
+            self._features = shared_features
         else:
-            norm = self.mu.new(*grid_shape).zero_()  # for consistency and CUDA capability
+            self._features = Parameter(torch.Tensor(1, c, 1, mu))  # feature weights for each channel of the core
+        self.scales = Parameter(torch.Tensor(1, 1, 1, outdims))  # feature weights for each channel of the core
 
-        return torch.clamp(
-            torch.einsum('ancd,bnid->bnic', self.L, norm) + self.mu, min=-1, max=1
-        )  # grid locations in feature space sampled randomly around the mean self.mu
+        _, sharing_idx = np.unique(multi_unit_ids, return_inverse=True)
+        self.register_buffer('sharing_index', torch.from_numpy(sharing_idx))
 
+        if bias:
+            bias = Parameter(torch.Tensor(outdims))
+            self.register_parameter("bias", bias)
+        else:
+            self.register_parameter("bias", None)
+
+        self.init_mu_range = init_mu_range
+        self.init_L_range = init_sigma_range
+        self.align_corners = align_corners
+
+        self.initialize_transform(cortex_coordinates, hidden_features, hidden_layers, final_tanh)
+
+        self.initialize()
+
+    def feature_l1(self, average=True):
+        """
+        Returns the l1 regularization term either the mean or the sum of all weights
+        Args:
+            average(bool): if True, use mean of weights for regularization
+
+        """
+        if average:
+            return self.shared_features.abs().mean()
+        else:
+            return self.shared_features.abs().sum()
+
+    @property
+    def shared_features(self):
+        return self._features
+
+    @property
+    def features(self):
+        return self.scales * self._features[..., self.sharing_index]
+
+    def initialize(self):
+        """
+        Initializes the mean, and sigma of the Gaussian readout along with the features weights
+        """
+
+        self.L.data.uniform_(-self.init_L_range, self.init_L_range)
+        self._features.data.fill_(1 / self.in_shape[0])
+        # self._features.data.uniform_(0, 1)
+        self.scales.data.fill_(1.)
+
+        if self.bias is not None:
+            self.bias.data.fill_(0)
 
 
 ##############

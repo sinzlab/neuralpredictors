@@ -550,25 +550,19 @@ class PointPyramid2d(nn.Module):
 # TODO: make sure that sample is used
 class Gaussian2d(nn.Module):
     """
-    Instantiates an object that can used to learn a point in the core feature space for each neuron,
-    sampled from a Gaussian distribution with some mean and variance at train but set to mean at test time, that best predicts its response.
-
-    The readout receives the shape of the core as 'in_shape', the number of units/neurons being predicted as 'outdims', 'bias' specifying whether
-    or not bias term is to be used and 'init_range' range for initialising the mean and variance of the gaussian distribution from which we sample to
-    uniform distribution, U(-init_range,init_range) and  uniform distribution, U(0.0, 3*init_range) respectively.
-    The grid parameter contains the normalized locations (x, y coordinates in the core feature space) and is clipped to [-1.1] as it a
-    requirement of the torch.grid_sample function. The feature parameter learns the best linear mapping between the feature
-    map from a given location, sample from Gaussian at train time but set to mean at eval time, and the unit's response with or without an additional elu non-linearity.
+    A readout using a spatial transformer layer whose positions are sampled from one Gaussian per neuron. Mean
+    and covariance of that Gaussian are learned.
 
     Args:
-        in_shape (list): shape of the input feature map [channels, width, height]
+        in_shape (list, tuple): shape of the input feature map [channels, width, height]
         outdims (int): number of output units
         bias (bool): adds a bias term
         init_mu_range (float): initialises the the mean with Uniform([-init_range, init_range])
                             [expected: positive value <=1]
-        init_sigma_range (float): initialises sigma with Uniform([0.0, init_sigma_range]).
-                It is recommended however to use a fixed initialization, for faster convergence.
-                For this, set fixed_sigma to True.
+        init_sigma_range (float): initialises sigma with Uniform([0.0, init_sigma_range]) when isotropic=True.
+                When isotropic=False, initialize the linear transform for the Gaussian sample from a uniform
+                distribution wiht +-init_sigma_range. For isotropic=True it is recommended however to use a
+                fixed initialization, for faster convergence. For this, set fixed_sigma to True.
         batch_sample (bool): if True, samples a position for each image in the batch separately
                             [default: True as it decreases convergence time and performs just as well]
         align_corners (bool): Keyword agrument to gridsample for bilinear interpolation.
@@ -576,6 +570,31 @@ class Gaussian2d(nn.Module):
                 behavior to pre PyTorch 1.3 functionality for comparability.
         fixed_sigma (bool). Recommended behavior: True. But set to false for backwards compatibility.
                 If true, initialized the sigma not in a range, but with the exact value given for all neurons.
+        isotropic (bool): whether the Gaussians are isotropic or not. False is recommended, but default is True
+                to be backwards compatible.
+        grid_mean_predictor (dict): Parameters for a predictor of the mean grid locations. Has to have a form like
+                        {
+                        'input_dimensions': 2,
+                        'hidden_layers':0,
+                        'hidden_features':20,
+                        'final_tanh': False,
+                        }
+        shared_features (dict): Used when the feature vectors are shared (within readout between neurons) or between
+                this readout and other readouts. Has to be a dictionary of the form
+               {
+                    'match_ids': (numpy.array),
+                    'shared_features': torch.nn.Parameter or None
+                }
+                The match_ids are used to match things that should be shared within or across scans.
+                If `shared_features` is None, this readout will create its own features. If it is set to
+                a feature Parameter of another readout, it will replace the features of this readout. It will be
+                access in increasing order of the sorted unique match_ids. For instance, if match_ids=[2,0,0,1],
+                there should be 3 features in order [0,1,2]. When this readout creates features, it will do so in
+                that order.
+        source_grid (numpy.array or torch.nn.Parameter):
+                Source grid for the grid_mean_predictor.
+                Needs to be of size neurons x grid_mean_predictor[input_dimensions]
+
     """
 
     def __init__(self, in_shape, outdims, bias, init_mu_range=0.5, init_sigma_range=0.5, batch_sample=True,
@@ -682,7 +701,6 @@ class Gaussian2d(nn.Module):
         grid_shape = (batch_size,) + self.grid_shape[1:]
 
         sample = self.training if sample is None else sample
-
         if sample:
             norm = self.mu.new(*grid_shape).normal_()
         else:
@@ -741,7 +759,8 @@ class Gaussian2d(nn.Module):
             self.sigma.data.uniform_(-self.init_sigma_range, self.init_sigma_range)
 
         self._features.data.fill_(1 / self.in_shape[0])
-
+        if self._shared_features:
+            self.scales.data.fill_(1.)
         if self.bias is not None:
             self.bias.data.fill_(0)
 

@@ -11,6 +11,8 @@ from torch.nn import functional as F
 from ..constraints import positive
 
 
+# ------------------ Base Classes -------------------------
+
 class Readout:
     def initialize(self, *args, **kwargs):
         raise NotImplementedError("initialize is not implemented for ", self.__class__.__name__)
@@ -26,36 +28,51 @@ class Readout:
         return s + "|".join(ret) + "]\n"
 
 
-class MultiReadout(Readout):
+class MultiReadout(Readout, ModuleDict):
     _base_readout = None
 
     def __init__(self, in_shape, loaders, gamma_readout, **kwargs):
         if self._base_readout is None:
-            raise ValueError('Attribute _base_reaout must be set')
+            raise ValueError('Attribute _base_readout must be set')
 
         super().__init__()
 
         self.in_shape = in_shape
         self.neurons = OrderedDict([(k, loader.dataset.n_neurons) for k, loader in loaders.items()])
+        if 'positive' in kwargs:
+            self._positive = kwargs['positive']
 
         self.gamma_readout = gamma_readout  # regularisation strength
 
         for k, n_neurons in self.neurons.items():
+            if isinstance(self.in_shape, dict):
+                in_shape = self.in_shape[k]
             self.add_module(k, self._base_readout(in_shape=in_shape, outdims=n_neurons, **kwargs))
 
     def initialize(self, mean_activity_dict):
         for k, mu in mean_activity_dict.items():
             self[k].initialize()
-            if not isinstance(self[k], ClonedReadout):
+            if not hasattr(self[k], 'bias'):
                 self[k].bias.data = mu.squeeze() - 1
 
+    def regularizer(self, readout_key):
+        return self[readout_key].feature_l1() * self.gamma_readout
 
-##############
-# Cloned Readout
-##############
+    @property
+    def positive(self):
+        if hasattr(self, '_positive'):
+            return self._positive
+        else:
+            return False
+
+    @positive.setter
+    def positive(self, value):
+        self._positive = value
+        for k in self:
+            self[k].positive = value
 
 
-class ClonedReadout(nn.Module):
+class ClonedReadout(Readout, nn.Module):
     """
     This readout clones another readout while applying a linear transformation on the output. Used for MultiDatasets
     with matched neurons where the x-y positions in the grid stay the same but the predicted responses are rescaled due
@@ -85,19 +102,14 @@ class ClonedReadout(nn.Module):
         self.beta.data.fill_(0.0)
 
 
-##############
-# Point Pooled Readout
-##############
-
-
-class MultiplePointPooled2d(Readout, ModuleDict):
+class MultiplePointPooled2d(MultiReadout, ModuleDict):
     """
     Instantiates multiple instances of PointPool2d Readouts
     usually used when dealing with more than one dataset sharing the same core.
     """
 
     def __init__(self, in_shape, loaders, gamma_readout, clone_readout=False, **kwargs):
-        super().__init__()
+        ModuleDict.__init__(self)
 
         self.in_shape = in_shape
         self.neurons = OrderedDict([(k, loader.dataset.n_neurons) for k, loader in loaders.items()])
@@ -110,15 +122,6 @@ class MultiplePointPooled2d(Readout, ModuleDict):
                 original_readout = k
             elif i > 0 and clone_readout is True:
                 self.add_module(k, ClonedReadout(self[original_readout], **kwargs))
-
-    def initialize(self, mean_activity_dict):
-        for k, mu in mean_activity_dict.items():
-            self[k].initialize()
-            if not isinstance(self[k], ClonedReadout):
-                self[k].bias.data = mu.squeeze() - 1
-
-    def regularizer(self, readout_key):
-        return self[readout_key].feature_l1() * self.gamma_readout
 
 
 class PointPooled2d(nn.Module):
@@ -272,11 +275,6 @@ class PointPooled2d(nn.Module):
         return r
 
 
-##############
-# Spatial Transformer Readout
-##############
-
-
 class SpatialTransformerPooled3d(nn.Module):
     def __init__(
             self,
@@ -428,42 +426,8 @@ class SpatialTransformerPooled3d(nn.Module):
         return r
 
 
-##############
-# Pyramid Readout
-##############
-
-
-class MultiplePointPyramid2d(Readout, ModuleDict):
-    def __init__(self, in_shape, loaders, gamma_readout, positive, **kwargs):
-        super().__init__()
-
-        self.in_shape = in_shape
-        self.neurons = OrderedDict([(k, loader.dataset.n_neurons) for k, loader in loaders.items()])
-        self._positive = positive
-        self.gamma_readout = gamma_readout
-        for k, n_neurons in self.neurons.items():
-            if isinstance(self.in_shape, dict):
-                in_shape = self.in_shape[k]
-            self.add_module(k, PointPyramid2d(in_shape=in_shape, outdims=n_neurons, positive=positive, **kwargs))
-
-    @property
-    def positive(self):
-        return self._positive
-
-    @positive.setter
-    def positive(self, value):
-        self._positive = value
-        for k in self:
-            self[k].positive = value
-
-    def initialize(self, mu_dict):
-
-        for k, mu in mu_dict.items():
-            self[k].initialize()
-            self[k].bias.data = mu.squeeze() - 1
-
-    def regularizer(self, readout_key):
-        return self[readout_key].feature_l1() * self.gamma_readout
+class MultiplePointPyramid2d(MultiReadout):
+    _base_readout = PointPyramid2d
 
 
 class Pyramid(nn.Module):
@@ -610,10 +574,6 @@ class PointPyramid2d(nn.Module):
             r += "  -> " + ch.__repr__() + "\n"
         return r
 
-
-##############
-# Gaussian Readout
-##############
 
 class GaussianMixin:
 
@@ -850,7 +810,7 @@ class NonIsotropicGaussian2d(GaussianMixin, nn.Module):
             self.bias.data.fill_(0)
 
 
-class MultipleGaussian2d(MultiReadout, ModuleDict):
+class MultipleGaussian2d(MultiReadout):
     """
     Instantiates multiple instances of Gaussian2d Readouts
     usually used when dealing with more than one dataset sharing the same core.
@@ -862,9 +822,6 @@ class MultipleGaussian2d(MultiReadout, ModuleDict):
     """
 
     _base_readout = Gaussian2d
-
-    def regularizer(self, readout_key):
-        return self[readout_key].feature_l1() * self.gamma_readout
 
 
 class CortexMixin:
@@ -894,6 +851,7 @@ class CortexMixin:
     @property
     def mu(self):
         return self.mu_transform(self.cortex_coordinates).view(*self.grid_shape)
+
 
 class CortexNonIsotropicGaussian2d(GaussianMixin, CortexMixin, nn.Module):
     _is_isotropic = False
@@ -928,8 +886,6 @@ class CortexNonIsotropicGaussian2d(GaussianMixin, CortexMixin, nn.Module):
 
         self.initialize()
 
-
-
     def initialize(self):
         """
         Initializes the mean, and sigma of the Gaussian readout along with the features weights
@@ -941,6 +897,7 @@ class CortexNonIsotropicGaussian2d(GaussianMixin, CortexMixin, nn.Module):
         if self.bias is not None:
             self.bias.data.fill_(0)
 
+
 # TODO: Share positions
 # TODO: One Gaussian Readout with isotropic parameter
 # TODO: MultipleReadout Inheritance properly
@@ -949,7 +906,7 @@ class SharedCortexNonIsotropicGaussian2d(GaussianMixin, CortexMixin, nn.Module):
 
     def __init__(self, in_shape, outdims, bias, cortex_coordinates, multi_unit_ids, init_mu_range=0.5,
                  init_sigma_range=0.5, batch_sample=True, align_corners=True, final_tanh=False, hidden_layers=0,
-                 hidden_features=20, shared_features = None,
+                 hidden_features=20, shared_features=None,
                  **kwargs):
 
         super().__init__()
@@ -964,7 +921,6 @@ class SharedCortexNonIsotropicGaussian2d(GaussianMixin, CortexMixin, nn.Module):
         self.grid_shape = (1, outdims, 1, 2)
         self.L_shape = (1, outdims, 2, 2)
         self.L = Parameter(torch.Tensor(*self.L_shape))  # standard deviation for gaussian for each neuron
-
 
         mu = len(np.unique(multi_unit_ids))
         self.multi_unit_ids = multi_unit_ids
@@ -1026,12 +982,7 @@ class SharedCortexNonIsotropicGaussian2d(GaussianMixin, CortexMixin, nn.Module):
             self.bias.data.fill_(0)
 
 
-##############
-# Gaussian3d Readout
-##############
-
-
-class MultipleGaussian3d(Readout, ModuleDict):
+class MultipleGaussian3d(MultiReadout):
     """
     Instantiates multiple instances of Gaussian3d Readouts
     usually used when dealing with different datasets or areas sharing the same core.
@@ -1042,22 +993,7 @@ class MultipleGaussian3d(Readout, ModuleDict):
                                as it contains one dimensional weight
 
     """
-
-    def __init__(self, in_shape, loaders, gamma_readout, **kwargs):
-        super().__init__()
-
-        self.in_shape = in_shape
-        self.neurons = OrderedDict([(k, loader.dataset.n_neurons) for k, loader in loaders.items()])
-
-        self.gamma_readout = gamma_readout
-
-        for k, n_neurons in self.neurons.items():
-            self.add_module(k, Gaussian3d(in_shape=in_shape, outdims=n_neurons, **kwargs))
-
-    def initialize(self, mean_activity_dict):
-        for k, mu in mean_activity_dict.items():
-            self[k].initialize()
-            self[k].bias.data = mu.squeeze() - 1
+    _base_readout = Gaussian3d
 
     def regularizer(self, readout_key):
         return self.gamma_readout
@@ -1217,11 +1153,6 @@ class Gaussian3d(nn.Module):
         if self.bias is not None:
             y = y + bias
         return y
-
-
-#############
-# UltraSparse Readout
-#############
 
 
 class MultipleUltraSparse(Readout, ModuleDict):

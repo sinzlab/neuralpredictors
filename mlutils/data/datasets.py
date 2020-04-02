@@ -641,7 +641,7 @@ class FileTreeDataset(StaticSet):
             idx = np.sum(permuted - row, axis=1) == 0
             if not not_exist_ok:
                 assert idx.sum() == 1
-            elif idx.sum() == 1:
+            if idx.sum() == 1:
                 order.append(np.where(idx)[0][0])
                 target_idx.append(i)
             else:
@@ -668,7 +668,6 @@ class FileTreeDataset(StaticSet):
 
         target = np.c_[(self.neurons.animal_ids, self.neurons.sessions, self.neurons.scan_idx, self.neurons.unit_ids)]
         permuted = np.c_[(animal_id, session, scan_idx, unit_id)]
-
         vals = np.ones((len(target),) + values.shape[1:], dtype=values.dtype) \
                     * (np.nan if fill_missing is None else fill_missing)
         tidx, idx = self.match_order(target, permuted, not_exist_ok=fill_missing is not None)

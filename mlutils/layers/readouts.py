@@ -32,50 +32,6 @@ class Readout:
         return s + "|".join(ret) + "]\n"
 
 
-class MultiReadout(Readout, ModuleDict):
-    _base_readout = None
-
-    def __init__(self, in_shape, loaders, gamma_readout, **kwargs):
-        if self._base_readout is None:
-            raise ValueError('Attribute _base_readout must be set')
-
-        super().__init__()
-
-        self.in_shape = in_shape
-        self.neurons = OrderedDict([(k, loader.dataset.n_neurons) for k, loader in loaders.items()])
-        if 'positive' in kwargs:
-            self._positive = kwargs['positive']
-
-        self.gamma_readout = gamma_readout  # regularisation strength
-
-        for k, n_neurons in self.neurons.items():
-            if isinstance(self.in_shape, dict):
-                in_shape = self.in_shape[k]
-            self.add_module(k, self._base_readout(in_shape=in_shape, outdims=n_neurons, **kwargs))
-
-    def initialize(self, mean_activity_dict):
-        for k, mu in mean_activity_dict.items():
-            self[k].initialize()
-            if not hasattr(self[k], 'bias'):
-                self[k].bias.data = mu.squeeze() - 1
-
-    def regularizer(self, readout_key):
-        return self[readout_key].feature_l1() * self.gamma_readout
-
-    @property
-    def positive(self):
-        if hasattr(self, '_positive'):
-            return self._positive
-        else:
-            return False
-
-    @positive.setter
-    def positive(self, value):
-        self._positive = value
-        for k in self:
-            self[k].positive = value
-
-
 class ClonedReadout(Readout, nn.Module):
     """
     This readout clones another readout while applying a linear transformation on the output. Used for MultiDatasets
@@ -667,7 +623,6 @@ class Gaussian2d(nn.Module):
     @property
     def shared_grid(self):
         return self._mu
-
 
     @property
     def features(self):
@@ -1333,6 +1288,52 @@ class UltraSparse(nn.Module):
 
 # ------------ Multi Readouts ------------------------
 
+class MultiReadout(Readout, ModuleDict):
+    _base_readout = None
+
+    def __init__(self, in_shape, loaders, gamma_readout, clone_readout=False, **kwargs):
+        if self._base_readout is None:
+            raise ValueError('Attribute _base_readout must be set')
+
+        super().__init__()
+
+        self.in_shape = in_shape
+        self.neurons = OrderedDict([(k, loader.dataset.n_neurons) for k, loader in loaders.items()])
+        if 'positive' in kwargs:
+            self._positive = kwargs['positive']
+
+        self.gamma_readout = gamma_readout  # regularisation strength
+
+        for i, (k, n_neurons) in enumerate(self.neurons.items()):
+            if i == 0 or clone_readout is False:
+                self.add_module(k, self._base_readout(in_shape=in_shape, outdims=n_neurons, **kwargs))
+                original_readout = k
+            elif i > 0 and clone_readout is True:
+                self.add_module(k, ClonedReadout(self[original_readout], **kwargs))
+
+    def initialize(self, mean_activity_dict):
+        for k, mu in mean_activity_dict.items():
+            self[k].initialize()
+            if hasattr(self[k], 'bias'):
+                self[k].bias.data = mu.squeeze() - 1
+
+    def regularizer(self, readout_key):
+        return self[readout_key].feature_l1() * self.gamma_readout
+
+    @property
+    def positive(self):
+        if hasattr(self, '_positive'):
+            return self._positive
+        else:
+            return False
+
+    @positive.setter
+    def positive(self, value):
+        self._positive = value
+        for k in self:
+            self[k].positive = value
+
+
 class MultiplePointPyramid2d(MultiReadout):
     _base_readout = PointPyramid2d
 
@@ -1360,21 +1361,7 @@ class MultiplePointPooled2d(MultiReadout, ModuleDict):
     Instantiates multiple instances of PointPool2d Readouts
     usually used when dealing with more than one dataset sharing the same core.
     """
-
-    def __init__(self, in_shape, loaders, gamma_readout, clone_readout=False, **kwargs):
-        ModuleDict.__init__(self)
-
-        self.in_shape = in_shape
-        self.neurons = OrderedDict([(k, loader.dataset.n_neurons) for k, loader in loaders.items()])
-
-        self.gamma_readout = gamma_readout  # regularisation strength
-
-        for i, (k, n_neurons) in enumerate(self.neurons.items()):
-            if i == 0 or clone_readout is False:
-                self.add_module(k, PointPooled2d(in_shape=in_shape, outdims=n_neurons, **kwargs))
-                original_readout = k
-            elif i > 0 and clone_readout is True:
-                self.add_module(k, ClonedReadout(self[original_readout], **kwargs))
+    _base_readout = PointPooled2d
 
 
 class MultipleGaussian2d(MultiReadout):

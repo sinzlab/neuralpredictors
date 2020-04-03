@@ -10,6 +10,11 @@ from torch.nn import functional as F
 
 from ..constraints import positive
 
+
+class ConfigurationError(Exception):
+    pass
+
+
 # ------------------ Base Classes -------------------------
 
 class Readout:
@@ -547,7 +552,7 @@ class PointPyramid2d(nn.Module):
             r += "  -> " + ch.__repr__() + "\n"
         return r
 
-# TODO: make sure that sample is used
+
 class Gaussian2d(nn.Module):
     """
     A readout using a spatial transformer layer whose positions are sampled from one Gaussian per neuron. Mean
@@ -591,7 +596,14 @@ class Gaussian2d(nn.Module):
                 access in increasing order of the sorted unique match_ids. For instance, if match_ids=[2,0,0,1],
                 there should be 3 features in order [0,1,2]. When this readout creates features, it will do so in
                 that order.
-        source_grid (numpy.array or torch.nn.Parameter):
+        shared_grid (dict): Like `shared_features`. Use dictionary like
+               {
+                    'match_ids': (numpy.array),
+                    'shared_grid': torch.nn.Parameter or None
+                }
+                See documentation of `shared_features` for specification.
+
+        source_grid (numpy.array):
                 Source grid for the grid_mean_predictor.
                 Needs to be of size neurons x grid_mean_predictor[input_dimensions]
 
@@ -599,7 +611,7 @@ class Gaussian2d(nn.Module):
 
     def __init__(self, in_shape, outdims, bias, init_mu_range=0.5, init_sigma_range=0.5, batch_sample=True,
                  align_corners=True, fixed_sigma=False, isotropic=True, grid_mean_predictor=None,
-                 shared_features=None, source_grid=None, **kwargs):
+                 shared_features=None, shared_grid=None, source_grid=None, **kwargs):
 
         super().__init__()
 
@@ -620,12 +632,16 @@ class Gaussian2d(nn.Module):
         self.grid_shape = (1, outdims, 1, 2)
 
         # the grid can be predicted from another grid
-        if grid_mean_predictor is None:
+        self._predicted_grid = False
+        self._shared_grid = False
+        if grid_mean_predictor is None and shared_grid is None:
             self._mu = Parameter(torch.Tensor(*self.grid_shape))  # mean location of gaussian for each neuron
-            self.predicted_grid_mean = False
-        else:
+        elif grid_mean_predictor is not None:
             self.init_grid_predictor(source_grid=source_grid, **grid_mean_predictor)
-            self.predicted_grid_mean = True
+        elif shared_grid is not None:
+            self.initialize_shared_grid(**(shared_grid or {}))
+        else:
+            raise ConfigurationError('Shared grid_mean_predictor and shared_grid_mean cannot both be set')
 
         self.sigma_shape = (1, outdims, 1 if self.is_isotropic else 2, 2)
         self.init_sigma_range = init_sigma_range
@@ -649,9 +665,14 @@ class Gaussian2d(nn.Module):
         return self._features
 
     @property
+    def shared_grid(self):
+        return self._mu
+
+
+    @property
     def features(self):
         if self._shared_features:
-            return self.scales * self._features[..., self.sharing_index]
+            return self.scales * self._features[..., self.feature_sharing_index]
         else:
             return self._features
 
@@ -674,11 +695,15 @@ class Gaussian2d(nn.Module):
         else:
             return 0
 
-
     @property
     def mu(self):
-        if self.predicted_grid_mean:
+        if self._predicted_grid:
             return self.mu_transform(self.source_grid.squeeze()).view(*self.grid_shape)
+        elif self._shared_grid:
+            if self._original_grid:
+                return self._mu[:, self.grid_sharing_index, ...]
+            else:
+                return self.mu_transform(self._mu.squeeze())[self.grid_sharing_index].view(*self.grid_shape)
         else:
             return self._mu
 
@@ -732,20 +757,17 @@ class Gaussian2d(nn.Module):
             )
         self.mu_transform = nn.Sequential(*layers)
 
-        if not isinstance(source_grid, nn.Parameter):
-            # this normalization is very important to make the model train
-            source_grid = source_grid - source_grid.mean(axis=0, keepdims=True)
-            source_grid = source_grid / np.abs(source_grid).max()
-            self.register_buffer('source_grid', torch.from_numpy(source_grid.astype(np.float32)))
-        else: # source_grid is from another module
-            self.source_grid = source_grid
+        source_grid = source_grid - source_grid.mean(axis=0, keepdims=True)
+        source_grid = source_grid / np.abs(source_grid).max()
+        self.register_buffer('source_grid', torch.from_numpy(source_grid.astype(np.float32)))
+        self._predicted_grid = True
 
     def initialize(self):
         """
         Initializes the mean, and sigma of the Gaussian readout along with the features weights
         """
 
-        if not self.predicted_grid_mean:
+        if not self._predicted_grid and not self._original_grid:
             self._mu.data.uniform_(-self.init_mu_range, self.init_mu_range)
 
         if self.is_isotropic:
@@ -777,14 +799,39 @@ class Gaussian2d(nn.Module):
                 self._features = shared_features
                 self._original_features = False
             else:
-                self._features = Parameter(torch.Tensor(1, c, 1, n_match_ids))  # feature weights for each channel of the core
+                self._features = Parameter(
+                    torch.Tensor(1, c, 1, n_match_ids))  # feature weights for each channel of the core
             self.scales = Parameter(torch.Tensor(1, 1, 1, self.outdims))  # feature weights for each channel of the core
             _, sharing_idx = np.unique(match_ids, return_inverse=True)
-            self.register_buffer('sharing_index', torch.from_numpy(sharing_idx))
+            self.register_buffer('feature_sharing_index', torch.from_numpy(sharing_idx))
             self._shared_features = True
         else:
-            self._features = Parameter(torch.Tensor(1, c, 1, self.outdims))  # feature weights for each channel of the core
+            self._features = Parameter(
+                torch.Tensor(1, c, 1, self.outdims))  # feature weights for each channel of the core
             self._shared_features = False
+
+    def initialize_shared_grid(self, match_ids=None, shared_grid=None):
+        c, w, h = self.in_shape
+        self._original_grid = True
+
+        if match_ids is None:
+            raise ConfigurationError('match_ids must be set for sharing grid')
+        assert self.outdims == len(match_ids)
+
+        n_match_ids = len(np.unique(match_ids))
+        self._match_ids = match_ids
+        if shared_grid is not None:
+            assert shared_grid.shape == (1, n_match_ids, 1, 2)
+            self._mu = shared_grid
+            self._original_grid = False
+            self.mu_transform = nn.Linear(2, 2)
+            self.mu_transform.bias.data.fill_(0.)
+            self.mu_transform.weight.data = torch.eye(2)
+        else:
+            self._mu = Parameter(torch.Tensor(1, n_match_ids, 1, 2))  # feature weights for each channel of the core
+        _, sharing_idx = np.unique(match_ids, return_inverse=True)
+        self.register_buffer('grid_sharing_index', torch.from_numpy(sharing_idx))
+        self._shared_grid = True
 
     def forward(self, x, sample=None, shift=None, out_idx=None):
         """
@@ -846,11 +893,15 @@ class Gaussian2d(nn.Module):
         if self._shared_features:
             r += ", with {} features".format('original' if self._original_features else 'shared')
 
-        if self.predicted_grid_mean:
-            r += ", with predicted grid mean"
+        if self._predicted_grid:
+            r += ", with predicted grid"
+        if self._shared_grid:
+            r += ", with {} grid".format('original' if self._original_grid else 'shared')
+
         for ch in self.children():
             r += "  -> " + ch.__repr__() + "\n"
         return r
+
 
 class Gaussian3d(nn.Module):
     """

@@ -698,6 +698,7 @@ class Gaussian2d(nn.Module):
             )  # grid locations in feature space sampled randomly around the mean self.mu
 
     def init_grid_predictor(self, source_grid, hidden_features=20, hidden_layers=0, final_tanh=False):
+        self._original_grid = False
         layers = [
             nn.Linear(source_grid.shape[1], hidden_features if hidden_layers > 0 else 2)
         ]

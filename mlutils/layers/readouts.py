@@ -590,6 +590,8 @@ class Gaussian2d(nn.Module):
         # the grid can be predicted from another grid
         self._predicted_grid = False
         self._shared_grid = False
+        self._original_grid = True
+
         if grid_mean_predictor is None and shared_grid is None:
             self._mu = Parameter(torch.Tensor(*self.grid_shape))  # mean location of gaussian for each neuron
         elif grid_mean_predictor is not None:
@@ -767,7 +769,6 @@ class Gaussian2d(nn.Module):
 
     def initialize_shared_grid(self, match_ids=None, shared_grid=None):
         c, w, h = self.in_shape
-        self._original_grid = True
 
         if match_ids is None:
             raise ConfigurationError('match_ids must be set for sharing grid')

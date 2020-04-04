@@ -724,7 +724,7 @@ class Gaussian2d(nn.Module):
         Initializes the mean, and sigma of the Gaussian readout along with the features weights
         """
 
-        if not self._predicted_grid and not self._original_grid:
+        if not self._predicted_grid or self._original_grid:
             self._mu.data.uniform_(-self.init_mu_range, self.init_mu_range)
 
         if self.is_isotropic:

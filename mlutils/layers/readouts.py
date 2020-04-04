@@ -590,7 +590,7 @@ class Gaussian2d(nn.Module):
         # the grid can be predicted from another grid
         self._predicted_grid = False
         self._shared_grid = False
-        self._original_grid = True
+        self._original_grid = not self._predicted_grid
 
         if grid_mean_predictor is None and shared_grid is None:
             self._mu = Parameter(torch.Tensor(*self.grid_shape))  # mean location of gaussian for each neuron

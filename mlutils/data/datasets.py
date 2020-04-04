@@ -691,7 +691,6 @@ class FileTreeDataset(StaticSet):
             with open(self.basepath / 'change.log', 'r') as fid:
                 print(''.join(fid.readlines()))
 
-    @staticmethod
     def zip(self, filename=None):
         """
         Zips current dataset.

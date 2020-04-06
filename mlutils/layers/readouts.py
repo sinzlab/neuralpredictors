@@ -509,7 +509,7 @@ class PointPyramid2d(nn.Module):
         return r
 
 
-class Gaussian2d(nn.Module):
+class NonIsoGaussian2d(nn.Module):
     """
     A readout using a spatial transformer layer whose positions are sampled from one Gaussian per neuron. Mean
     and covariance of that Gaussian are learned.
@@ -1377,4 +1377,4 @@ class MultipleGaussian2d(MultiReadout):
         gamma_readout (float): regularizer for the readout
     """
 
-    _base_readout = Gaussian2d
+    _base_readout = NonIsoGaussian2d

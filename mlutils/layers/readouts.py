@@ -594,12 +594,12 @@ class NonIsoGaussian2d(nn.Module):
 
         if grid_mean_predictor is None and shared_grid is None:
             self._mu = Parameter(torch.Tensor(*self.grid_shape))  # mean location of gaussian for each neuron
+        elif grid_mean_predictor is not None and shared_grid is not None:
+            raise ConfigurationError('Shared grid_mean_predictor and shared_grid_mean cannot both be set')
         elif grid_mean_predictor is not None:
             self.init_grid_predictor(source_grid=source_grid, **grid_mean_predictor)
         elif shared_grid is not None:
             self.initialize_shared_grid(**(shared_grid or {}))
-        else:
-            raise ConfigurationError('Shared grid_mean_predictor and shared_grid_mean cannot both be set')
 
         self.sigma_shape = (1, outdims, 1 if self.is_isotropic else 2, 2)
         self.init_sigma_range = init_sigma_range
@@ -751,9 +751,9 @@ class NonIsoGaussian2d(nn.Module):
             assert self.outdims == len(match_ids)
 
             n_match_ids = len(np.unique(match_ids))
-            self._match_ids = match_ids
             if shared_features is not None:
-                assert shared_features.shape == (1, c, 1, n_match_ids)
+                assert shared_features.shape == (1, c, 1, n_match_ids), \
+                    f'shared features need to have shape (1, {c}, 1, {n_match_ids})'
                 self._features = shared_features
                 self._original_features = False
             else:
@@ -773,12 +773,12 @@ class NonIsoGaussian2d(nn.Module):
 
         if match_ids is None:
             raise ConfigurationError('match_ids must be set for sharing grid')
-        assert self.outdims == len(match_ids)
+        assert self.outdims == len(match_ids), 'There must be one match ID per output dimension'
 
         n_match_ids = len(np.unique(match_ids))
-        self._match_ids = match_ids
         if shared_grid is not None:
-            assert shared_grid.shape == (1, n_match_ids, 1, 2)
+            assert shared_grid.shape == (1, n_match_ids, 1, 2), \
+                f'shared grid needs to have shape (1, {n_match_ids}, 1, 2)'
             self._mu = shared_grid
             self._original_grid = False
             self.mu_transform = nn.Linear(2, 2)

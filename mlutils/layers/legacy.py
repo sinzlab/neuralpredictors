@@ -1,10 +1,11 @@
 import warnings
 
-from torch import nn
 import numpy as np
-from torch.nn import Parameter
 import torch
+from torch import nn
+from torch.nn import Parameter
 from torch.nn import functional as F
+
 
 class Gaussian2d(nn.Module):
     """
@@ -36,8 +37,10 @@ class Gaussian2d(nn.Module):
                 If true, initialized the sigma not in a range, but with the exact value given for all neurons.
     """
 
-    def __init__(self, in_shape, outdims, bias, init_mu_range=0.5, init_sigma_range=0.5, batch_sample=True, align_corners=True, fixed_sigma=False, **kwargs):
-
+    def __init__(self, in_shape, outdims, bias, init_mu_range=0.5, init_sigma_range=0.5, batch_sample=True,
+                 align_corners=True, fixed_sigma=False, **kwargs):
+        raise DeprecationWarning(
+            'Gaussian2d is deprecated and will be removed in the future. Use `layers.readout.NonIsoGaussian2d` instead')
         super().__init__()
         if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma_range <= 0.0:
             raise ValueError("either init_mu_range doesn't belong to [0.0, 1.0] or init_sigma_range is non-positive")
@@ -61,7 +64,6 @@ class Gaussian2d(nn.Module):
         self.align_corners = align_corners
         self.fixed_sigma = fixed_sigma
         self.initialize()
-
 
     def initialize(self):
         """

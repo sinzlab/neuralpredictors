@@ -1327,7 +1327,7 @@ class MultipleGaussian3d(MultiReadout):
         return self.gamma_readout
 
 
-class MultiplePointPooled2d(MultiReadout, ModuleDict):
+class MultiplePointPooled2d(MultiReadout):
     """
     Instantiates multiple instances of PointPool2d Readouts
     usually used when dealing with more than one dataset sharing the same core.
@@ -1358,3 +1358,4 @@ class MultipleUltraSparse(MultiReadout):
         gamma_readout (float): regularisation term for the readout which is usally set to 0.0 for UltraSparseReadout readout
                                as it contains one dimensional weight
     """
+    _base_readout = UltraSparse

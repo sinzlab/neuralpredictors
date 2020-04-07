@@ -1335,7 +1335,7 @@ class MultiplePointPooled2d(MultiReadout):
     _base_readout = PointPooled2d
 
 
-class MultipleGaussian2d(MultiReadout):
+class MultipleNonIsoGaussian2d(MultiReadout):
     """
     Instantiates multiple instances of Gaussian2d Readouts
     usually used when dealing with more than one dataset sharing the same core.

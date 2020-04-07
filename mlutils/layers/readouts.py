@@ -1014,36 +1014,6 @@ class Gaussian3d(nn.Module):
         return y
 
 
-class MultipleUltraSparse(Readout, ModuleDict):
-    """
-    This class instantiates multiple instances of UltraSparseReadout
-    useful when dealing with multiple datasets
-    Args:
-        in_shape (list): shape of the input feature map [channels, width, height]
-        loaders (list):  a list of dataset objects
-        gamma_readout (float): regularisation term for the readout which is usally set to 0.0 for UltraSparseReadout readout
-                               as it contains one dimensional weight
-    """
-
-    def __init__(self, in_shape, loaders, gamma_readout, **kwargs):
-        super().__init__()
-
-        self.in_shape = in_shape
-        self.neurons = OrderedDict([(k, loader.dataset.n_neurons) for k, loader in loaders.items()])
-
-        self.gamma_readout = gamma_readout
-
-        for k, n_neurons in self.neurons.items():
-            self.add_module(k, UltraSparse(in_shape=in_shape, outdims=n_neurons, **kwargs))
-
-    def initialize(self, mean_activity_dict):
-        for k, mu in mean_activity_dict.items():
-            self[k].initialize()
-            self[k].bias.data = mu.squeeze() - 1
-
-    def regularizer(self, readout_key):
-        return self[readout_key].feature_l1() * self.gamma_readout
-
 
 class UltraSparse(nn.Module):
     """
@@ -1377,3 +1347,14 @@ class MultipleGaussian2d(MultiReadout):
     """
 
     _base_readout = NonIsoGaussian2d
+
+class MultipleUltraSparse(MultiReadout):
+    """
+    This class instantiates multiple instances of UltraSparseReadout
+    useful when dealing with multiple datasets
+    Args:
+        in_shape (list): shape of the input feature map [channels, width, height]
+        loaders (list):  a list of dataset objects
+        gamma_readout (float): regularisation term for the readout which is usally set to 0.0 for UltraSparseReadout readout
+                               as it contains one dimensional weight
+    """

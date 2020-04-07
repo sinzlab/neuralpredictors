@@ -217,7 +217,7 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
 
         self.exclude = exclude or []
 
-        in_name = 'images' if 'images' in data.statistics.keys() else 'inputs'
+        in_name = "images" if "images" in data.statistics.keys() else "inputs"
 
         self._inputs_mean = data.statistics[in_name][stats_source]["mean"][()]
         self._inputs_std = data.statistics[in_name][stats_source]["std"][()]
@@ -285,20 +285,28 @@ class AddBehaviorAsChannels(MovieTransform, StaticTransform, Invertible):
         - input image concatinated with behavior as new channel(s)
         - responses
         - behavior
-    """    
+    """
+
     def __init__(self):
         self.transforms, self.itransforms = {}, {}
-        self.transforms['images'] = lambda img, behavior: np.concatenate((img,
-                                                                          np.ones((1, *img.shape[-(len(img.shape)-1):])) *
-                                                                          np.expand_dims(behavior, axis=((len(img.shape)-2), (len(img.shape)-1)))),
-                                                                          axis=len(img.shape)-3)
+        self.transforms["images"] = lambda img, behavior: np.concatenate(
+            (
+                img,
+                np.ones((1, *img.shape[-(len(img.shape) - 1) :]))
+                * np.expand_dims(behavior, axis=((len(img.shape) - 2), (len(img.shape) - 1))),
+            ),
+            axis=len(img.shape) - 3,
+        )
         self.transforms["responses"] = lambda x: x
         self.transforms["behavior"] = lambda x: x
+
     def __call__(self, x):
-        key_vals = {k: v for k, v in zip(x._fields, x)}        
-        dd = {'images': self.transforms['images'](key_vals['images'], key_vals['behavior']), 
-              'responses': self.transforms['responses'](key_vals['responses']), 
-              'behavior': self.transforms['behavior'](key_vals['behavior'])}
+        key_vals = {k: v for k, v in zip(x._fields, x)}
+        dd = {
+            "images": self.transforms["images"](key_vals["images"], key_vals["behavior"]),
+            "responses": self.transforms["responses"](key_vals["responses"]),
+            "behavior": self.transforms["behavior"](key_vals["behavior"]),
+        }
         return x.__class__(**dd)
 
 
@@ -315,4 +323,3 @@ class SelectInputChannel(StaticTransform):
         img = key_vals["images"]
         key_vals["images"] = img[:, (self.grab_channel,)] if len(img.shape) == 4 else img[(self.grab_channel,)]
         return x.__class__(**key_vals)
-

@@ -531,8 +531,7 @@ class NonIsoGaussian2d(nn.Module):
                 behavior to pre PyTorch 1.3 functionality for comparability.
         fixed_sigma (bool). Recommended behavior: True. But set to false for backwards compatibility.
                 If true, initialized the sigma not in a range, but with the exact value given for all neurons.
-        isotropic (bool): whether the Gaussians are isotropic or not. False is recommended, but default is True
-                to be backwards compatible.
+        isotropic (bool): whether the Gaussians are isotropic or not. False is recommended, but default is False.
         grid_mean_predictor (dict): Parameters for a predictor of the mean grid locations. Has to have a form like
                         {
                         'input_dimensions': 2,
@@ -566,7 +565,7 @@ class NonIsoGaussian2d(nn.Module):
     """
 
     def __init__(self, in_shape, outdims, bias, init_mu_range=0.5, init_sigma_range=0.5, batch_sample=True,
-                 align_corners=True, fixed_sigma=False, isotropic=True, grid_mean_predictor=None,
+                 align_corners=True, fixed_sigma=False, isotropic=False, grid_mean_predictor=None,
                  shared_features=None, shared_grid=None, source_grid=None, **kwargs):
 
         super().__init__()

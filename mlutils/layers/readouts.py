@@ -531,8 +531,7 @@ class NonIsoGaussian2d(nn.Module):
                 behavior to pre PyTorch 1.3 functionality for comparability.
         fixed_sigma (bool). Recommended behavior: True. But set to false for backwards compatibility.
                 If true, initialized the sigma not in a range, but with the exact value given for all neurons.
-        isotropic (bool): whether the Gaussians are isotropic or not. False is recommended, but default is True
-                to be backwards compatible.
+        isotropic (bool): whether the Gaussians are isotropic or not. False is recommended, but default is False.
         grid_mean_predictor (dict): Parameters for a predictor of the mean grid locations. Has to have a form like
                         {
                         'input_dimensions': 2,
@@ -566,7 +565,7 @@ class NonIsoGaussian2d(nn.Module):
     """
 
     def __init__(self, in_shape, outdims, bias, init_mu_range=0.5, init_sigma_range=0.5, batch_sample=True,
-                 align_corners=True, fixed_sigma=False, isotropic=True, grid_mean_predictor=None,
+                 align_corners=True, fixed_sigma=False, isotropic=False, grid_mean_predictor=None,
                  shared_features=None, shared_grid=None, source_grid=None, **kwargs):
 
         super().__init__()
@@ -594,12 +593,12 @@ class NonIsoGaussian2d(nn.Module):
 
         if grid_mean_predictor is None and shared_grid is None:
             self._mu = Parameter(torch.Tensor(*self.grid_shape))  # mean location of gaussian for each neuron
+        elif grid_mean_predictor is not None and shared_grid is not None:
+            raise ConfigurationError('Shared grid_mean_predictor and shared_grid_mean cannot both be set')
         elif grid_mean_predictor is not None:
             self.init_grid_predictor(source_grid=source_grid, **grid_mean_predictor)
         elif shared_grid is not None:
             self.initialize_shared_grid(**(shared_grid or {}))
-        else:
-            raise ConfigurationError('Shared grid_mean_predictor and shared_grid_mean cannot both be set')
 
         self.sigma_shape = (1, outdims, 1 if self.is_isotropic else 2, 2)
         self.init_sigma_range = init_sigma_range
@@ -751,9 +750,9 @@ class NonIsoGaussian2d(nn.Module):
             assert self.outdims == len(match_ids)
 
             n_match_ids = len(np.unique(match_ids))
-            self._match_ids = match_ids
             if shared_features is not None:
-                assert shared_features.shape == (1, c, 1, n_match_ids)
+                assert shared_features.shape == (1, c, 1, n_match_ids), \
+                    f'shared features need to have shape (1, {c}, 1, {n_match_ids})'
                 self._features = shared_features
                 self._original_features = False
             else:
@@ -773,12 +772,12 @@ class NonIsoGaussian2d(nn.Module):
 
         if match_ids is None:
             raise ConfigurationError('match_ids must be set for sharing grid')
-        assert self.outdims == len(match_ids)
+        assert self.outdims == len(match_ids), 'There must be one match ID per output dimension'
 
         n_match_ids = len(np.unique(match_ids))
-        self._match_ids = match_ids
         if shared_grid is not None:
-            assert shared_grid.shape == (1, n_match_ids, 1, 2)
+            assert shared_grid.shape == (1, n_match_ids, 1, 2), \
+                f'shared grid needs to have shape (1, {n_match_ids}, 1, 2)'
             self._mu = shared_grid
             self._original_grid = False
             self.mu_transform = nn.Linear(2, 2)
@@ -1014,36 +1013,6 @@ class Gaussian3d(nn.Module):
             y = y + bias
         return y
 
-
-class MultipleUltraSparse(Readout, ModuleDict):
-    """
-    This class instantiates multiple instances of UltraSparseReadout
-    useful when dealing with multiple datasets
-    Args:
-        in_shape (list): shape of the input feature map [channels, width, height]
-        loaders (list):  a list of dataset objects
-        gamma_readout (float): regularisation term for the readout which is usally set to 0.0 for UltraSparseReadout readout
-                               as it contains one dimensional weight
-    """
-
-    def __init__(self, in_shape, loaders, gamma_readout, **kwargs):
-        super().__init__()
-
-        self.in_shape = in_shape
-        self.neurons = OrderedDict([(k, loader.dataset.n_neurons) for k, loader in loaders.items()])
-
-        self.gamma_readout = gamma_readout
-
-        for k, n_neurons in self.neurons.items():
-            self.add_module(k, UltraSparse(in_shape=in_shape, outdims=n_neurons, **kwargs))
-
-    def initialize(self, mean_activity_dict):
-        for k, mu in mean_activity_dict.items():
-            self[k].initialize()
-            self[k].bias.data = mu.squeeze() - 1
-
-    def regularizer(self, readout_key):
-        return self[readout_key].feature_l1() * self.gamma_readout
 
 
 class UltraSparse(nn.Module):
@@ -1358,7 +1327,7 @@ class MultipleGaussian3d(MultiReadout):
         return self.gamma_readout
 
 
-class MultiplePointPooled2d(MultiReadout, ModuleDict):
+class MultiplePointPooled2d(MultiReadout):
     """
     Instantiates multiple instances of PointPool2d Readouts
     usually used when dealing with more than one dataset sharing the same core.
@@ -1378,3 +1347,15 @@ class MultipleGaussian2d(MultiReadout):
     """
 
     _base_readout = NonIsoGaussian2d
+
+class MultipleUltraSparse(MultiReadout):
+    """
+    This class instantiates multiple instances of UltraSparseReadout
+    useful when dealing with multiple datasets
+    Args:
+        in_shape (list): shape of the input feature map [channels, width, height]
+        loaders (list):  a list of dataset objects
+        gamma_readout (float): regularisation term for the readout which is usally set to 0.0 for UltraSparseReadout readout
+                               as it contains one dimensional weight
+    """
+    _base_readout = UltraSparse

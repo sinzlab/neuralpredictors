@@ -61,7 +61,7 @@ class Gaussian2d(nn.Module):
             self.register_parameter("bias", None)
 
         self.init_mu_range = init_mu_range
-        self.init_sigma = init_sigma_range
+        self.init_sigma_range = init_sigma_range
         self.align_corners = align_corners
         self.fixed_sigma = fixed_sigma
         self.initialize()

@@ -604,7 +604,7 @@ class FullGaussian2d(nn.Module):
         elif gauss_type == 'isotropic':
             self.sigma_shape = (1, outdims, 1, 1)
         else:
-            raise ValueError(r'gauss_type "{gauss_type}" not known')
+            raise ValueError(f'gauss_type "{gauss_type}" not known')
 
         self.init_sigma = init_sigma
         self.sigma = Parameter(torch.Tensor(*self.sigma_shape))  # standard deviation for gaussian for each neuron

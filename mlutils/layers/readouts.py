@@ -681,7 +681,7 @@ class FullGaussian2d(nn.Module):
         with torch.no_grad():
             self.mu.clamp_(min=-1, max=1)  # at eval time, only self.mu is used so it must belong to [-1,1]
             if self.gauss_type != 'full':
-                self.sigma.clamp_(min=0)  # sigma/variance is always a positive quantity
+                self.sigma.clamp_(min=0)  # sigma/variance i    s always a positive quantity
 
         grid_shape = (batch_size,) + self.grid_shape[1:]
 
@@ -1333,7 +1333,7 @@ class MultiplePointPooled2d(MultiReadout):
     _base_readout = PointPooled2d
 
 
-class MultipleNonIsoGaussian2d(MultiReadout):
+class MultipleFullGaussian2d(MultiReadout):
     """
     Instantiates multiple instances of Gaussian2d Readouts
     usually used when dealing with more than one dataset sharing the same core.

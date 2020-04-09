@@ -509,7 +509,7 @@ class PointPyramid2d(nn.Module):
         return r
 
 
-class NonIsoGaussian2d(nn.Module):
+class FullGaussian2d(nn.Module):
     """
     A readout using a spatial transformer layer whose positions are sampled from one Gaussian per neuron. Mean
     and covariance of that Gaussian are learned.
@@ -519,22 +519,18 @@ class NonIsoGaussian2d(nn.Module):
         outdims (int): number of output units
         bias (bool): adds a bias term
         init_mu_range (float): initialises the the mean with Uniform([-init_range, init_range])
-                            [expected: positive value <=1]
-        init_sigma_range (float): initialises sigma with Uniform([0.0, init_sigma_range]) when isotropic=True.
-                When isotropic=False, initialize the linear transform for the Gaussian sample from a uniform
-                distribution wiht +-init_sigma_range. For isotropic=True it is recommended however to use a
-                fixed initialization, for faster convergence. For this, set fixed_sigma to True.
+                            [expected: positive value <=1]. Default: 0.1
+        init_sigma (float): The standard deviation of the Gaussian with `init_sigma` when `gauss_type` is
+            'isotropic' or 'uncorrelated'. When `gauss_type='full'` initialize the square root of the
+            covariance matrix with with Uniform([-init_sigma, init_sigma]). Default: 1
         batch_sample (bool): if True, samples a position for each image in the batch separately
                             [default: True as it decreases convergence time and performs just as well]
         align_corners (bool): Keyword agrument to gridsample for bilinear interpolation.
                 It changed behavior in PyTorch 1.3. The default of align_corners = True is setting the
                 behavior to pre PyTorch 1.3 functionality for comparability.
-        fixed_sigma (bool). Recommended behavior: True. But set to false for backwards compatibility.
-                If true, initialized the sigma not in a range, but with the exact value given for all neurons.
-        isotropic (bool): whether the Gaussians are isotropic or not. False is recommended, but default is False.
+        gauss_type (str): Which Gaussian to use. Options are 'isotropic', 'uncorrelated', or 'full' (default).
         grid_mean_predictor (dict): Parameters for a predictor of the mean grid locations. Has to have a form like
                         {
-                        'input_dimensions': 2,
                         'hidden_layers':0,
                         'hidden_features':20,
                         'final_tanh': False,
@@ -564,16 +560,16 @@ class NonIsoGaussian2d(nn.Module):
 
     """
 
-    def __init__(self, in_shape, outdims, bias, init_mu_range=0.5, init_sigma_range=0.5, batch_sample=True,
-                 align_corners=True, fixed_sigma=False, isotropic=False, grid_mean_predictor=None,
+    def __init__(self, in_shape, outdims, bias, init_mu_range=0.1, init_sigma=1, batch_sample=True,
+                 align_corners=True, gauss_type='full', grid_mean_predictor=None,
                  shared_features=None, shared_grid=None, source_grid=None, **kwargs):
 
         super().__init__()
 
         # determines whether the Gaussian is isotropic or not
-        self.is_isotropic = isotropic
+        self.gauss_type = gauss_type
 
-        if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma_range <= 0.0:
+        if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma <= 0.0:
             raise ValueError("either init_mu_range doesn't belong to [0.0, 1.0] or init_sigma_range is non-positive")
 
         # store statistics about the images and neurons
@@ -600,8 +596,16 @@ class NonIsoGaussian2d(nn.Module):
         elif shared_grid is not None:
             self.initialize_shared_grid(**(shared_grid or {}))
 
-        self.sigma_shape = (1, outdims, 1 if self.is_isotropic else 2, 2)
-        self.init_sigma_range = init_sigma_range
+        if gauss_type == 'full':
+            self.sigma_shape = (1, outdims, 2, 2)
+        elif gauss_type == 'uncorrelated':
+            self.sigma_shape = (1, outdims, 1, 2)
+        elif gauss_type == 'isotropic':
+            self.sigma_shape = (1, outdims, 1, 1)
+        else:
+            raise ValueError(f'gauss_type "{gauss_type}" not known')
+
+        self.init_sigma = init_sigma
         self.sigma = Parameter(torch.Tensor(*self.sigma_shape))  # standard deviation for gaussian for each neuron
 
         self.initialize_features(**(shared_features or {}))
@@ -614,7 +618,6 @@ class NonIsoGaussian2d(nn.Module):
 
         self.init_mu_range = init_mu_range
         self.align_corners = align_corners
-        self.fixed_sigma = fixed_sigma
         self.initialize()
 
     @property
@@ -676,8 +679,8 @@ class NonIsoGaussian2d(nn.Module):
         """
         with torch.no_grad():
             self.mu.clamp_(min=-1, max=1)  # at eval time, only self.mu is used so it must belong to [-1,1]
-            if self.is_isotropic:
-                self.sigma.clamp_(min=0)  # sigma/variance is always a positive quantity
+            if self.gauss_type != 'full':
+                self.sigma.clamp_(min=0)  # sigma/variance i    s always a positive quantity
 
         grid_shape = (batch_size,) + self.grid_shape[1:]
 
@@ -687,7 +690,7 @@ class NonIsoGaussian2d(nn.Module):
         else:
             norm = self.mu.new(*grid_shape).zero_()  # for consistency and CUDA capability
 
-        if self.is_isotropic:
+        if self.gauss_type != 'full':
             return torch.clamp(
                 norm * self.sigma + self.mu, min=-1, max=1
             )  # grid locations in feature space sampled randomly around the mean self.mu
@@ -727,16 +730,10 @@ class NonIsoGaussian2d(nn.Module):
         if not self._predicted_grid or self._original_grid:
             self._mu.data.uniform_(-self.init_mu_range, self.init_mu_range)
 
-        if self.is_isotropic:
-            if self.fixed_sigma:
-                self.sigma.data.uniform_(self.init_sigma_range, self.init_sigma_range)
-            else:
-                self.sigma.data.uniform_(0, self.init_sigma_range)
-                warnings.warn("sigma is sampled from uniform distribution, instead of a fixed value. Consider setting "
-                              "fixed_sigma to True")
+        if self.gauss_type != 'full':
+            self.sigma.data.fill_(self.init_sigma)
         else:
-            self.sigma.data.uniform_(-self.init_sigma_range, self.init_sigma_range)
-
+            self.sigma.data.uniform_(-self.init_sigma, self.init_sigma)
         self._features.data.fill_(1 / self.in_shape[0])
         if self._shared_features:
             self.scales.data.fill_(1.)
@@ -842,7 +839,7 @@ class NonIsoGaussian2d(nn.Module):
 
     def __repr__(self):
         c, w, h = self.in_shape
-        r = 'Isotropic ' if self.is_isotropic else 'Non-Isotropic '
+        r = self.gauss_type + ' '
         r += self.__class__.__name__ + " (" + "{} x {} x {}".format(c, w, h) + " -> " + str(self.outdims) + ")"
         if self.bias is not None:
             r += " with bias"
@@ -1335,9 +1332,9 @@ class MultiplePointPooled2d(MultiReadout):
     _base_readout = PointPooled2d
 
 
-class MultipleGaussian2d(MultiReadout):
+class MultipleFullGaussian2d(MultiReadout):
     """
-    Instantiates multiple instances of Gaussian2d Readouts
+    Instantiates multiple instances of FullGaussian2d Readouts
     usually used when dealing with more than one dataset sharing the same core.
 
     Args:
@@ -1346,7 +1343,7 @@ class MultipleGaussian2d(MultiReadout):
         gamma_readout (float): regularizer for the readout
     """
 
-    _base_readout = NonIsoGaussian2d
+    _base_readout = FullGaussian2d
 
 class MultipleUltraSparse(MultiReadout):
     """

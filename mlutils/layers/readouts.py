@@ -57,8 +57,8 @@ class SpatialXFeatureLinear(nn.Module):
     def normalized_spatial(self):
         positive(self.spatial)
         if self.normalize:
-            norm = self.spatial.pow(2).sum(dim=2, keepdim=True)
-            norm = norm.sum(dim=3, keepdim=True).sqrt().expand_as(self.spatial) + 1e-6
+            norm = self.spatial.pow(2).sum(dim=1, keepdim=True)
+            norm = norm.sum(dim=2, keepdim=True).sqrt().expand_as(self.spatial) + 1e-6
             weight = self.spatial / norm
         else:
             weight = self.spatial
@@ -81,7 +81,7 @@ class SpatialXFeatureLinear(nn.Module):
             ret = ret / (n * c * w * h)
         return ret
 
-    def initialize(self, init_noise=1e-3):
+    def initialize(self):
         self.spatial.data.normal_(0, self.init_noise)
         self.features.data.normal_(0, self.init_noise)
         if self.bias is not None:

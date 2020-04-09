@@ -64,15 +64,13 @@ class SpatialXFeatureLinear(nn.Module):
             weight = self.spatial
         return weight
 
-    # @property
-    # def weight(self):
-    #     if self.positive:
-    #         positive(self.features)
-    #     n = self.outdims
-    #     c, w, h = self.in_shape
-    #     weight = self.normalized_spatial.expand(n, c, w, h) * self.features.expand(n, c, w, h)
-    #     weight = weight.view(self.outdims, -1)
-    #     return weight
+    @property
+    def weight(self):
+        if self.positive:
+            positive(self.features)
+        n = self.outdims
+        c, w, h = self.in_shape
+        return self.normalized_spatial.view(n, 1, w, h) * self.features.view(n, c, 1, 1)
 
     def l1(self, average=False):
         n = self.outdims

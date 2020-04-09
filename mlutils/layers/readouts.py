@@ -519,10 +519,10 @@ class FullGaussian2d(nn.Module):
         outdims (int): number of output units
         bias (bool): adds a bias term
         init_mu_range (float): initialises the the mean with Uniform([-init_range, init_range])
-                            [expected: positive value <=1]
+                            [expected: positive value <=1]. Default: 0.1
         init_sigma (float): The standard deviation of the Gaussian with `init_sigma` when `gauss_type` is
             'isotropic' or 'uncorrelated'. When `gauss_type='full'` initialize the square root of the
-            covariance matrix with with Uniform([-init_sigma, init_sigma]).
+            covariance matrix with with Uniform([-init_sigma, init_sigma]). Default: 1
         batch_sample (bool): if True, samples a position for each image in the batch separately
                             [default: True as it decreases convergence time and performs just as well]
         align_corners (bool): Keyword agrument to gridsample for bilinear interpolation.
@@ -561,7 +561,7 @@ class FullGaussian2d(nn.Module):
 
     """
 
-    def __init__(self, in_shape, outdims, bias, init_mu_range=0.5, init_sigma=1, batch_sample=True,
+    def __init__(self, in_shape, outdims, bias, init_mu_range=0.1, init_sigma=1, batch_sample=True,
                  align_corners=True, gauss_type='full', grid_mean_predictor=None,
                  shared_features=None, shared_grid=None, source_grid=None, **kwargs):
 

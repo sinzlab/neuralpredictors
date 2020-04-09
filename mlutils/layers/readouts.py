@@ -531,7 +531,6 @@ class FullGaussian2d(nn.Module):
         gauss_type (str): Which Gaussian to use. Options are 'isotropic', 'uncorrelated', or 'full' (default).
         grid_mean_predictor (dict): Parameters for a predictor of the mean grid locations. Has to have a form like
                         {
-                        'input_dimensions': 2,
                         'hidden_layers':0,
                         'hidden_features':20,
                         'final_tanh': False,
@@ -1335,7 +1334,7 @@ class MultiplePointPooled2d(MultiReadout):
 
 class MultipleFullGaussian2d(MultiReadout):
     """
-    Instantiates multiple instances of Gaussian2d Readouts
+    Instantiates multiple instances of FullGaussian2d Readouts
     usually used when dealing with more than one dataset sharing the same core.
 
     Args:

@@ -229,7 +229,6 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
         idx = s > threshold
         self._response_precision = np.ones_like(s) / threshold
         self._response_precision[idx] = 1 / s[idx]
-
         transforms, itransforms = {}, {}
 
         # -- inputs

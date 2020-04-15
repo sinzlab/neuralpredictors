@@ -27,9 +27,9 @@ def positive(weight):
         weight: tensor to be positive
 
     """
-    with torch.no_grad():
-        weight.clamp_(0)
-    # weight.data *= weight.data.ge(0).float()
+    # with torch.no_grad():
+    #     weight.clamp_(0)
+    weight.data *= weight.data.ge(0).float()
 
 
 def at_least(weight, bound, cache=None):

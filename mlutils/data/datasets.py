@@ -2,7 +2,6 @@ import json
 from collections import namedtuple
 from datetime import datetime
 from pathlib import Path
-from warnings import warn
 from zipfile import ZipFile
 
 import h5py

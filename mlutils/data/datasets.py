@@ -552,7 +552,10 @@ class FileTreeDataset(StaticSet):
         number_of_files = []
 
         if dirname.endswith('.zip'):
-            self.unzip(dirname, Path(dirname).absolute().parent)
+            if not Path(dirname[:-4]).exists():
+                self.unzip(dirname, Path(dirname).absolute().parent)
+            else:
+                print('{} exists already. Not unpacking {}'.format(dirname[:-4], dirname))
             dirname = dirname[:-4]
 
         self.basepath = Path(dirname).absolute()

@@ -939,17 +939,17 @@ class DeterministicGaussian2d(nn.Module):
         in_shape (list): shape of the input feature map [channels, width, height]
         outdims (int): number of output units
         bias (bool): adds a bias term
-        constrain_positive (bool): if True, all weights will be constrained to have positive values, default: False
+        positive (bool): if True, all weights will be constrained to have positive values, default: False
         constrain_mode (str): ['default', 'abs', 'elu'] sets the way the weights are constrained, default: 'default'
     """
 
-    def __init__(self, in_shape, outdims, bias, constrain_positive=False, constrain_mode='default', **kwargs):
+    def __init__(self, in_shape, outdims, bias, positive=False, constrain_mode='default', **kwargs):
 
         super().__init__()
         self.in_shape = in_shape
         c, w, h = in_shape
         self.outdims = outdims
-        self.constrain_positive = constrain_positive
+        self.positive = positive
         
         if constrain_mode not in ['default', 'abs', 'elu']:
             raise ValueError("Value of parameter constrain_mode = "+str(constrain_mode)+" is invalid. Value must be in ['default', 'abs', 'elu'] ")
@@ -1062,7 +1062,7 @@ class DeterministicGaussian2d(nn.Module):
         else:
             mask = self.mask(shift=shift)
             
-        if self.constrain_positive:
+        if self.positive:
             if self.constrain_mode == 'default':
                 positive(mask)
                 positive(feat)

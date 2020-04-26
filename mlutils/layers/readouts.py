@@ -940,10 +940,10 @@ class DeterministicGaussian2d(nn.Module):
         outdims (int): number of output units
         bias (bool): adds a bias term
         constrain_positive (bool): if True, all weights will be constrained to have positive values, default: False
-        constrain_mode (str): ['abs', 'elu'] sets the way the weights are constrained, default: 'elu'
+        constrain_mode (str): ['default', 'abs', 'elu'] sets the way the weights are constrained, default: 'default'
     """
 
-    def __init__(self, in_shape, outdims, bias, constrain_positive=False, constrain_mode='elu', **kwargs):
+    def __init__(self, in_shape, outdims, bias, constrain_positive=False, constrain_mode='default', **kwargs):
 
         super().__init__()
         self.in_shape = in_shape
@@ -951,8 +951,8 @@ class DeterministicGaussian2d(nn.Module):
         self.outdims = outdims
         self.constrain_positive = constrain_positive
         
-        if constrain_mode not in ['abs', 'elu']:
-            raise ValueError("Value of parameter constrain_mode = "+str(constrain_mode)+" is invalid. Value must be in ['abs', 'elu'] ")
+        if constrain_mode not in ['default', 'abs', 'elu']:
+            raise ValueError("Value of parameter constrain_mode = "+str(constrain_mode)+" is invalid. Value must be in ['default', 'abs', 'elu'] ")
         self.constrain_mode = constrain_mode
 
         self.mu = Parameter(
@@ -1063,12 +1063,16 @@ class DeterministicGaussian2d(nn.Module):
             mask = self.mask(shift=shift)
             
         if self.constrain_positive:
-            if self.constrain_mode == 'elu':
-                mask = F.elu(mask) + 1
-                feat = F.elu(feat) + 1
+            if self.constrain_mode == 'default':
+                positive(mask)
+                positive(feat)
             elif self.constrain_mode == 'abs':
                 mask = torch.abs(mask)
                 feat = torch.abs(feat)
+            elif self.constrain_mode == 'elu':
+                mask = F.elu(mask) + 1
+                feat = F.elu(feat) + 1
+            
                 
         y = torch.einsum('bcij,nij,cn->bn', x, mask, feat)
 

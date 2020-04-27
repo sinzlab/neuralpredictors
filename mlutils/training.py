@@ -74,14 +74,14 @@ def eval_state(model):
 
 @contextmanager
 def device_state(model, device):
-    original_device = 'cuda' if next(model.parameters()).is_cuda else 'cpu'
+    original_device = "cuda" if next(model.parameters()).is_cuda else "cpu"
     try:
         model.to(device)
         yield model
     finally:
         model.to(original_device)
-        
-    
+
+
 def early_stopping(
     model,
     objective_closure,

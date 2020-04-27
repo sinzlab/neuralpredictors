@@ -4,7 +4,6 @@ from torch.distributions import Distribution, Normal
 
 
 class ExponentialMixture(Distribution):
-
     def __init__(self, fraction_on, considered_zero=1e-2):
         super().__init__()
         self.fraction_on = fraction_on
@@ -20,7 +19,6 @@ class ExponentialMixture(Distribution):
 
 
 class GaussianMixture(Distribution):
-
     def __init__(self, fraction_on):
         super().__init__()
         self.fraction_on = fraction_on

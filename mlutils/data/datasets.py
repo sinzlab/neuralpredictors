@@ -46,7 +46,6 @@ class AttributeHandler:
 
 
 class AttributeTransformer(AttributeHandler):
-
     def __init__(self, name, h5_handle, transforms, data_group):
         """
         Allows for id_transform of transforms to be applied to the
@@ -71,7 +70,6 @@ class AttributeTransformer(AttributeHandler):
 
 
 class TransformDataset(Dataset):
-
     def __init__(self, transforms=None):
         """
         Abstract Class for Datasets. Classes that inherit from this class can implement the transform and invert function.
@@ -100,10 +98,10 @@ class TransformDataset(Dataset):
 
     def __repr__(self):
         return (
-                "{} m={}:\n\t({})".format(self.__class__.__name__, len(self), ", ".join(self.data_groups))
-                + "\n\t[Transforms: "
-                + "->".join([repr(tr) for tr in self.transforms])
-                + "]"
+            "{} m={}:\n\t({})".format(self.__class__.__name__, len(self), ", ".join(self.data_groups))
+            + "\n\t[Transforms: "
+            + "->".join([repr(tr) for tr in self.transforms])
+            + "]"
         )
 
 
@@ -247,11 +245,11 @@ class MovieSet(H5SequenceSet):
         mu, s = stat("inputs", "mean"), stat("inputs", "std")
         h_filt = np.float64([[1 / 16, 1 / 8, 1 / 16], [1 / 8, 1 / 4, 1 / 8], [1 / 16, 1 / 8, 1 / 16]])
         noise_input = (
-                np.stack([convolve2d(np.random.randn(w, h), h_filt, mode="same") for _ in range(m * t * c)]).reshape(
-                    (m, c, t, w, h)
-                )
-                * s
-                + mu
+            np.stack([convolve2d(np.random.randn(w, h), h_filt, mode="same") for _ in range(m * t * c)]).reshape(
+                (m, c, t, w, h)
+            )
+            * s
+            + mu
         )
 
         mean_beh = np.ones((m, t, 1)) * stat("behavior", "mean")[None, None, :]
@@ -419,7 +417,7 @@ class DirectoryAttributeHandler:
         if temp_path.exists() and temp_path.is_dir():
             val = DirectoryAttributeHandler(temp_path, links=self.links)
         else:
-            val = np.load(self.path / '{}.npy'.format(item))
+            val = np.load(self.path / "{}.npy".format(item))
         return val
 
     def resolve_item_path(self, item):
@@ -431,7 +429,7 @@ class DirectoryAttributeHandler:
         return getattr(self, item)
 
     def keys(self):
-        return [e.stem for e in self.path.glob('*')]
+        return [e.stem for e in self.path.glob("*")]
 
     def __dir__(self):
         attrs = set(super().__dir__())
@@ -559,14 +557,14 @@ class FileTreeDataset(StaticSet):
             dirname = dirname[:-4]
 
         self.basepath = Path(dirname).absolute()
-        self._config_file = (self.basepath / 'config.json')
+        self._config_file = self.basepath / "config.json"
 
         if not self._config_file.exists():
             self._save_config(self._default_config)
 
         for data_key in data_keys:
             datapath = self.resolve_data_path(data_key)
-            number_of_files.append(len(list(datapath.glob('*'))))
+            number_of_files.append(len(list(datapath.glob("*"))))
 
         if not np.all(np.diff(number_of_files) == 0):
             raise InconsistentDataException("Number of data points is not equal")
@@ -575,21 +573,19 @@ class FileTreeDataset(StaticSet):
 
         self._cache = {data_key: {} for data_key in data_keys}
 
-    _default_config = {
-        'links': {}
-    }
+    _default_config = {"links": {}}
 
     def resolve_data_path(self, data_key):
         if self.link_exists(data_key):
-            data_key = self.config['links'][data_key]
-        datapath = self.basepath / 'data' / data_key
+            data_key = self.config["links"][data_key]
+        datapath = self.basepath / "data" / data_key
 
         if not datapath.exists():
-            raise DoesNotExistException('Data path {} does not exist'.format(datapath))
+            raise DoesNotExistException("Data path {} does not exist".format(datapath))
         return datapath
 
     def link_exists(self, link):
-        return 'links' in self.config and link in self.config['links']
+        return "links" in self.config and link in self.config["links"]
 
     @property
     def config(self):
@@ -597,7 +593,7 @@ class FileTreeDataset(StaticSet):
             return json.load(fid)
 
     def _save_config(self, cfg):
-        with open(self._config_file, 'w') as fid:
+        with open(self._config_file, "w") as fid:
             return json.dump(cfg, fid)
 
     def __len__(self):
@@ -611,7 +607,7 @@ class FileTreeDataset(StaticSet):
                 ret.append(self._cache[data_key][item])
             else:
                 datapath = self.resolve_data_path(data_key)
-                val = np.load(datapath / '{}.npy'.format(item))
+                val = np.load(datapath / "{}.npy".format(item))
                 self._cache[data_key][item] = val
                 ret.append(val)
 
@@ -624,8 +620,8 @@ class FileTreeDataset(StaticSet):
 
     def add_log_entry(self, msg):
         timestamp = datetime.now().strftime("%d-%b-%Y (%H:%M:%S.%f)")
-        with open(self.basepath / 'change.log', 'a+') as fid:
-            fid.write('{}: {}\n'.format(timestamp, msg))
+        with open(self.basepath / "change.log", "a+") as fid:
+            fid.write("{}: {}\n".format(timestamp, msg))
 
     @staticmethod
     def match_order(target, permuted, not_exist_ok=False):
@@ -650,7 +646,7 @@ class FileTreeDataset(StaticSet):
             else:
                 unmatched_counter += 1
         if not_exist_ok:
-            print('Encountered {} unmatched elements'.format(unmatched_counter))
+            print("Encountered {} unmatched elements".format(unmatched_counter))
         return np.array(target_idx, dtype=int), np.array(order, dtype=int)
 
     def add_neuron_meta(self, name, animal_id, session, scan_idx, unit_id, values, fill_missing=None):
@@ -667,19 +663,20 @@ class FileTreeDataset(StaticSet):
             fill_missing:   fill the values of the new attribute with NaN if not provided
         """
         if not len(animal_id) == len(session) == len(scan_idx) == len(unit_id) == len(values):
-            raise InconsistentDataException('number of trials and identifiers not consistent')
+            raise InconsistentDataException("number of trials and identifiers not consistent")
 
         target = np.c_[(self.neurons.animal_ids, self.neurons.sessions, self.neurons.scan_idx, self.neurons.unit_ids)]
         permuted = np.c_[(animal_id, session, scan_idx, unit_id)]
-        vals = np.ones((len(target),) + values.shape[1:], dtype=values.dtype) \
-                    * (np.nan if fill_missing is None else fill_missing)
+        vals = np.ones((len(target),) + values.shape[1:], dtype=values.dtype) * (
+            np.nan if fill_missing is None else fill_missing
+        )
         tidx, idx = self.match_order(target, permuted, not_exist_ok=fill_missing is not None)
 
-        assert np.sum(target[tidx] - permuted[idx, ...]) == 0, 'Something went wrong in sorting'
+        assert np.sum(target[tidx] - permuted[idx, ...]) == 0, "Something went wrong in sorting"
 
         vals[tidx, ...] = values[idx, ...]
-        np.save(self.basepath / 'meta/neurons/{}.npy'.format(name), vals)
-        self.add_log_entry('Added new neuron meta attribute {} to meta/neurons'.format(name))
+        np.save(self.basepath / "meta/neurons/{}.npy".format(name), vals)
+        self.add_log_entry("Added new neuron meta attribute {} to meta/neurons".format(name))
 
     @staticmethod
     def initialize_from(filename, outpath=None, overwrite=False):
@@ -690,9 +687,9 @@ class FileTreeDataset(StaticSet):
 
     @property
     def change_log(self):
-        if (self.basepath / 'change.log').exists():
-            with open(self.basepath / 'change.log', 'r') as fid:
-                print(''.join(fid.readlines()))
+        if (self.basepath / "change.log").exists():
+            with open(self.basepath / "change.log", "r") as fid:
+                print("".join(fid.readlines()))
 
     def zip(self, filename=None):
         """
@@ -703,12 +700,12 @@ class FileTreeDataset(StaticSet):
         """
 
         if filename is None:
-            filename = str(self.basepath) + '.zip'
+            filename = str(self.basepath) + ".zip"
         zip_dir(filename, self.basepath)
 
     def unzip(self, filename, path):
-        print('Unzipping {} into {}'.format(filename, path))
-        with ZipFile(filename, 'r') as zip_obj:
+        print("Unzipping {} into {}".format(filename, path))
+        with ZipFile(filename, "r") as zip_obj:
             zip_obj.extractall(path)
 
     def add_link(self, attr, new_name):
@@ -721,16 +718,16 @@ class FileTreeDataset(StaticSet):
             attr:       existing attribute such as `responses`
             new_name:   name of the new attribute reference.
         """
-        if not (self.basepath / 'data/{}'.format(attr)).exists():
-            raise DoesNotExistException('Link target does not exist')
+        if not (self.basepath / "data/{}".format(attr)).exists():
+            raise DoesNotExistException("Link target does not exist")
 
-        if (self.basepath / 'data/{}'.format(new_name)).exists():
-            raise FileExistsError('Link target already exists')
+        if (self.basepath / "data/{}".format(new_name)).exists():
+            raise FileExistsError("Link target already exists")
 
         config = self.config
-        if not 'links' in config:
-            config['links'] = {}
-        config['links'][new_name] = attr
+        if not "links" in config:
+            config["links"] = {}
+        config["links"][new_name] = attr
         self._save_config(config)
 
     @property
@@ -739,24 +736,25 @@ class FileTreeDataset(StaticSet):
 
     @property
     def neurons(self):
-        return DirectoryAttributeTransformer(self.basepath / 'meta/neurons',
-                                             self.transforms,
-                                             data_group="responses" if "responses" in self.data_keys else "targets")
+        return DirectoryAttributeTransformer(
+            self.basepath / "meta/neurons",
+            self.transforms,
+            data_group="responses" if "responses" in self.data_keys else "targets",
+        )
 
     @property
     def trial_info(self):
-        return DirectoryAttributeHandler(self.basepath / 'meta/trials')
+        return DirectoryAttributeHandler(self.basepath / "meta/trials")
 
     @property
     def statistics(self):
-        return DirectoryAttributeHandler(self.basepath / 'meta/statistics', self.config['links'])
+        return DirectoryAttributeHandler(self.basepath / "meta/statistics", self.config["links"])
 
     @property
     def img_shape(self):
         return (1,) + self[0].images.shape
 
     def __repr__(self):
-        return "{} {} (n={} items)\n\t{}".format(self.__class__.__name__,
-                                                 self.basepath,
-                                                 self._len,
-                                                 ', '.join(self.data_keys))
+        return "{} {} (n={} items)\n\t{}".format(
+            self.__class__.__name__, self.basepath, self._len, ", ".join(self.data_keys)
+        )

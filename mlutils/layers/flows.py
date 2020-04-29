@@ -46,16 +46,10 @@ class ResNet(nn.Module):
         super().__init__()
         self.final_linear = final_linear
         if not final_linear:
-            layers = [nn.Sequential(
-                nn.Linear(n_in if i == 0 else n_out, n_out),
-                nn.ELU())
-                for i in range(layers)]
+            layers = [nn.Sequential(nn.Linear(n_in if i == 0 else n_out, n_out), nn.ELU()) for i in range(layers)]
         else:
-            assert n_hidden is not None, 'n_hidden must not bet none when final_linear=True'
-            layers = [nn.Sequential(
-                nn.Linear(n_in if i == 0 else n_hidden, n_hidden),
-                nn.ELU())
-                for i in range(layers)]
+            assert n_hidden is not None, "n_hidden must not bet none when final_linear=True"
+            layers = [nn.Sequential(nn.Linear(n_in if i == 0 else n_hidden, n_hidden), nn.ELU()) for i in range(layers)]
             layers.append(nn.Sequential(nn.Linear(n_hidden if len(layers) > 0 else n_hidden, n_out)))
 
         self.layers = nn.ModuleList(layers)
@@ -75,7 +69,7 @@ class ResNet(nn.Module):
 
 
 class InvertibleLinear(nn.Module):
-    def __init__(self, pdims, bias=None, type='full', components=2):
+    def __init__(self, pdims, bias=None, type="full", components=2):
         """
         Invertible Linear Layer
 
@@ -104,13 +98,13 @@ class InvertibleLinear(nn.Module):
         self._type = type
         self._components = components
 
-        if type == 'full':
+        if type == "full":
             self.weight = nn.Parameter(torch.Tensor(w_init))
-        elif type == 'lowrank':
+        elif type == "lowrank":
             self.u = nn.Parameter(torch.zeros(pdims, components))  # .normal_() * 1e-2))
             self.v = nn.Parameter(torch.zeros(components, pdims))  # .normal_() * 1e-2))
             self.d = nn.Parameter(torch.ones(pdims))
-        elif type == 'LU':
+        elif type == "LU":
             np_p, np_l, np_u = linalg.lu(w_init)
             np_s = np.diag(np_u)
             np_sign_s = np.sign(np_s)
@@ -119,10 +113,10 @@ class InvertibleLinear(nn.Module):
             l_mask = np.tril(np.ones(w_shape, dtype=np.float32), -1)
             eye = np.eye(*w_shape, dtype=np.float32)
 
-            self.register_buffer('p', torch.Tensor(np_p.astype(np.float32)))
-            self.register_buffer('sign_s', torch.Tensor(np_sign_s.astype(np.float32)))
-            self.register_buffer('l_mask', torch.Tensor(l_mask))
-            self.register_buffer('I', torch.Tensor(eye))
+            self.register_buffer("p", torch.Tensor(np_p.astype(np.float32)))
+            self.register_buffer("sign_s", torch.Tensor(np_sign_s.astype(np.float32)))
+            self.register_buffer("l_mask", torch.Tensor(l_mask))
+            self.register_buffer("I", torch.Tensor(eye))
 
             self.l = nn.Parameter(torch.Tensor(np_l.astype(np.float32)))
             self.log_s = nn.Parameter(torch.Tensor(np_log_s.astype(np.float32)))
@@ -131,7 +125,7 @@ class InvertibleLinear(nn.Module):
     def get_weight(self, reverse, compute_logdet=False):
         dlogdet = None
 
-        if self._type == 'full':
+        if self._type == "full":
             if compute_logdet:
                 dlogdet = torch.slogdet(self.weight)[1]
 
@@ -140,7 +134,7 @@ class InvertibleLinear(nn.Module):
             else:
                 weight = torch.inverse(self.weight.double()).float()
 
-        elif self._type == 'LU':
+        elif self._type == "LU":
             l = self.l * self.l_mask + self.I
             u = self.u * self.l_mask.transpose(0, 1).contiguous() + torch.diag(self.sign_s * torch.exp(self.log_s))
             if compute_logdet:
@@ -152,7 +146,7 @@ class InvertibleLinear(nn.Module):
                 u = torch.inverse(u.double()).float()
                 weight = u @ l @ self.p.inverse()
 
-        elif self._type == 'lowrank':
+        elif self._type == "lowrank":
             weight = self.u @ self.v + torch.diag(self.d)
 
             if reverse:
@@ -186,18 +180,17 @@ class InvertibleLinear(nn.Module):
         return z, x, logdet
 
     def __repr__(self):
-        if self._type == 'full':
-            tstring = 'W'
-        elif self._type == 'LU':
-            tstring = 'PL(U+ diag(s))'
-        elif self._type == 'lowrank':
-            tstring = 'UV + D [components={}]'.format(self._components)
-        bias = 'b' if self.nonlinear_bias is None else '{}(x)'.format(self.bias.__class__.__name__)
-        return 'Linear(W={}, bias={})'.format(tstring, bias)
+        if self._type == "full":
+            tstring = "W"
+        elif self._type == "LU":
+            tstring = "PL(U+ diag(s))"
+        elif self._type == "lowrank":
+            tstring = "UV + D [components={}]".format(self._components)
+        bias = "b" if self.nonlinear_bias is None else "{}(x)".format(self.bias.__class__.__name__)
+        return "Linear(W={}, bias={})".format(tstring, bias)
 
 
 class Anscombe(nn.Module):
-
     def __init__(self, transform_x=False):
         """
         Variance stabilizing transform for Poisson variables.
@@ -230,11 +223,10 @@ class Anscombe(nn.Module):
         return z, x, logdet if logdet is None else logdet + dlogdet
 
     def __repr__(self):
-        return 'Anscombe(transform_x={})'.format(self.transform_x)
+        return "Anscombe(transform_x={})".format(self.transform_x)
 
 
 class Difference(nn.Module):
-
     def forward(self, y, x, logdet=None, reverse=False):
 
         if not reverse:
@@ -245,12 +237,11 @@ class Difference(nn.Module):
         return z, x, logdet
 
     def __repr__(self):
-        return 'Difference(y-x)'
+        return "Difference(y-x)"
 
 
 class MixtureOfSigmoids(nn.Module):
-
-    def __init__(self, pdims, components, a_init=0.01, b_init=1., scale=1, offset=0):
+    def __init__(self, pdims, components, a_init=0.01, b_init=1.0, scale=1, offset=0):
         super().__init__()
         self.a = nn.Parameter(torch.Tensor(1, pdims, components).uniform_(a_init, 2 * a_init))
         self.b = nn.Parameter(torch.Tensor(1, pdims, components).normal_(0, b_init))
@@ -277,13 +268,13 @@ class MixtureOfSigmoids(nn.Module):
         return z, x, logdet
 
     def __repr__(self):
-        return 'Mixture of Sigmoids(components={}, dimensions={})'.format(self.components, self.pdims)
+        return "Mixture of Sigmoids(components={}, dimensions={})".format(self.components, self.pdims)
 
 
 class AffineLog(nn.Module):
     def __init__(self, pdims, lower_bound=1e-4, transform_x=False):
         super().__init__()
-        assert lower_bound > 0, 'lower bound must be greater than 0'
+        assert lower_bound > 0, "lower bound must be greater than 0"
         self.a = nn.Parameter(torch.ones(1, pdims))
         self.b = nn.Parameter(torch.ones(1, pdims))
         self.lower_bound = lower_bound
@@ -310,11 +301,10 @@ class AffineLog(nn.Module):
         return z, x, logdet
 
     def __repr__(self):
-        return 'AffineLog(lower_bound={}, dimensions={})'.format(self.lower_bound, self.pdims)
+        return "AffineLog(lower_bound={}, dimensions={})".format(self.lower_bound, self.pdims)
 
 
 class Logit(nn.Module):
-
     def forward(self, y, x=None, logdet=None, reverse=False):
         z = torch.log(y / (1 - y))
         if logdet is not None:
@@ -325,7 +315,6 @@ class Logit(nn.Module):
 
 
 class Permute(nn.Module):
-
     def __init__(self, neurons, shuffle=True):
         super().__init__()
         self.neurons = neurons
@@ -337,8 +326,8 @@ class Permute(nn.Module):
 
         indices_inverse = np.argsort(indices)
 
-        self.register_buffer('indices', torch.LongTensor(indices))
-        self.register_buffer('indices_inverse', torch.LongTensor(indices_inverse))
+        self.register_buffer("indices", torch.LongTensor(indices))
+        self.register_buffer("indices_inverse", torch.LongTensor(indices_inverse))
 
     def forward(self, y, x=None, logdet=None, reverse=False):
         assert len(y.shape) == 2
@@ -360,13 +349,12 @@ def split(tensor, type="split"):
 
     C = tensor.size(1)
     if type == "middle":
-        return tensor[:, :C // 2], tensor[:, C // 2:]
+        return tensor[:, : C // 2], tensor[:, C // 2 :]
     elif type == "alternate":
         return tensor[:, 0::2], tensor[:, 1::2]
 
 
 class Preprocessor(nn.Module):
-
     def __init__(self, preprocessor):
         """
         Preprocessor module for x (the variables conditioned on).
@@ -383,7 +371,7 @@ class Preprocessor(nn.Module):
         return y, x, logdet
 
     def __repr__(self):
-        return 'Preprocessor({})'.format(self.preprocessor.__name__)
+        return "Preprocessor({})".format(self.preprocessor.__name__)
 
 
 class AffineLayer1D(nn.Module):
@@ -404,11 +392,11 @@ class AffineLayer1D(nn.Module):
 
             return z, x, logdet
         else:
-            raise NotImplementedError('Inverse not implemented yet.')
+            raise NotImplementedError("Inverse not implemented yet.")
 
     def __repr__(self):
-        bias = '{}(x)'.format(self.f.__class__.__name__)
-        return 'Linear(coefficients from {})'.format(bias)
+        bias = "{}(x)".format(self.f.__class__.__name__)
+        return "Linear(coefficients from {})".format(bias)
 
 
 class Sigmoid1D(nn.Module):
@@ -433,11 +421,11 @@ class Sigmoid1D(nn.Module):
 
             return self.scale * z + self.offset, x, logdet
         else:
-            raise NotImplementedError('Inverse not implemented yet.')
+            raise NotImplementedError("Inverse not implemented yet.")
 
     def __repr__(self):
-        bias = '{}(x)'.format(self.f.__class__.__name__)
-        return '{} * Sigmoid(coefficients from {}) + {}'.format(self.scale, bias, self.offset)
+        bias = "{}(x)".format(self.f.__class__.__name__)
+        return "{} * Sigmoid(coefficients from {}) + {}".format(self.scale, bias, self.offset)
 
 
 class ELU1D(nn.Module):
@@ -448,7 +436,7 @@ class ELU1D(nn.Module):
     def forward(self, y, x, logdet=None, reverse=False):
         if not reverse:
             tmp = self.f(x)
-            assert tmp.shape[1] == 2, 'f needs to output exactly two dimensions'
+            assert tmp.shape[1] == 2, "f needs to output exactly two dimensions"
             s, t = tmp[:, 0], tmp[:, 1]
             z = F.elu(s[:, None] * y + t[:, None])
 
@@ -460,18 +448,19 @@ class ELU1D(nn.Module):
 
             return z, x, logdet
         else:
-            raise NotImplementedError('Inverse not implemented yet.')
+            raise NotImplementedError("Inverse not implemented yet.")
 
     def __repr__(self):
-        bias = '{}(x)'.format(self.f.__class__.__name__)
-        return 'ELU(coefficients from {})'.format(bias)
+        bias = "{}(x)".format(self.f.__class__.__name__)
+        return "ELU(coefficients from {})".format(bias)
 
 
 def bucketize(tensor, bucket_boundaries):
     result = torch.zeros_like(tensor, dtype=torch.long) - 1
     for b in range(bucket_boundaries.shape[-1]):
-        result += (tensor >= bucket_boundaries[..., b:b+1]).long()
+        result += (tensor >= bucket_boundaries[..., b : b + 1]).long()
     return result.squeeze()
+
 
 class Interpolate1D(nn.Module):
     def __init__(self, f, resolution, y_min=0, y_max=1, scale=1, offset=0):
@@ -481,9 +470,7 @@ class Interpolate1D(nn.Module):
         self.offset = offset
         self.resolution = resolution
         self.y_min, self.y_max = (y_min, y_max)
-        self.register_buffer('base_points', torch.linspace(self.y_min, self.y_max, resolution))
-
-
+        self.register_buffer("base_points", torch.linspace(self.y_min, self.y_max, resolution))
 
     def forward(self, y, x, logdet=None, reverse=False):
 
@@ -531,10 +518,10 @@ class Interpolate1D(nn.Module):
 
             return z, x, logdet
 
-
     def __repr__(self):
-        bias = '{}(x)'.format(self.f.__class__.__name__)
-        return '{} * Interpolate(base features from {}) + {}'.format(self.scale, bias, self.offset)
+        bias = "{}(x)".format(self.f.__class__.__name__)
+        return "{} * Interpolate(base features from {}) + {}".format(self.scale, bias, self.offset)
+
 
 # class AffineLayer(nn.Module):
 #

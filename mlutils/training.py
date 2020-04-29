@@ -3,6 +3,7 @@ from contextlib import contextmanager
 from itertools import cycle
 import numpy as np
 import time
+import warnings
 
 
 def copy_state(model):
@@ -75,6 +76,9 @@ def eval_state(model):
 @contextmanager
 def device_state(model, device):
     original_device = 'cuda' if next(model.parameters()).is_cuda else 'cpu'
+    if not(torch.cuda.is_available()) and (device == 'cuda'):
+        device = 'cpu'
+        warnings.warn('CUDA not found, using CPU')  
     try:
         model.to(device)
         yield model

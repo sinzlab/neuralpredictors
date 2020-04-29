@@ -75,14 +75,10 @@ def eval_state(model):
 
 @contextmanager
 def device_state(model, device):
-<<<<<<< HEAD
     original_device = 'cuda' if next(model.parameters()).is_cuda else 'cpu'
     if not(torch.cuda.is_available()) and (device == 'cuda'):
         device = 'cpu'
-        warnings.warn('CUDA not found, using CPU')  
-=======
-    original_device = "cuda" if next(model.parameters()).is_cuda else "cpu"
->>>>>>> a56e39f078a82350deb4635e5bad7274f7803733
+        warnings.warn('CUDA not found, using CPU')
     try:
         model.to(device)
         yield model

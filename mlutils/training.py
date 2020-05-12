@@ -1,9 +1,17 @@
 from collections import OrderedDict, defaultdict
 from contextlib import contextmanager
-from itertools import cycle
 import numpy as np
 import time
 
+
+def cycle(iterable):
+    # see https://github.com/pytorch/pytorch/issues/23900
+    iterator = iter(iterable)
+    while True:
+        try:
+            yield next(iterator)
+        except StopIteration:
+            iterator = iter(iterable)
 
 def copy_state(model):
     """

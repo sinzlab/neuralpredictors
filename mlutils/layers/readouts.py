@@ -715,7 +715,7 @@ class FullGaussian2d(nn.Module):
             average(bool): if True, use mean of weights for regularization
 
         """
-        if not self._original_features:
+        if self._original_features is True:
             if average:
                 return self._features.abs().mean()
             else:

@@ -4,7 +4,6 @@ from torch.utils.data import Sampler
 
 
 class RepeatsBatchSampler(Sampler):
-
     def __init__(self, keys, subset_index=None):
         if subset_index is None:
             subset_index = np.arange(len(keys))

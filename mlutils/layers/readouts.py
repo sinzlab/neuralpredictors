@@ -715,7 +715,7 @@ class FullGaussian2d(nn.Module):
             average(bool): if True, use mean of weights for regularization
 
         """
-        if not self._original_features:
+        if self._original_features:
             if average:
                 return self._features.abs().mean()
             else:
@@ -810,6 +810,11 @@ class FullGaussian2d(nn.Module):
             self.bias.data.fill_(0)
 
     def initialize_features(self, match_ids=None, shared_features=None):
+        """
+        The internal attribute `_original_features` in this function denotes whether this instance of the FullGuassian2d
+        learns the original features (True) or if it uses a copy of the features from another instance of FullGaussian2d
+        via the `shared_features` (False). If it uses a copy, the feature_l1 regularizer for this copy will return 0
+        """
         c, w, h = self.in_shape
         self._original_features = True
         if match_ids is not None:

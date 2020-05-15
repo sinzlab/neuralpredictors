@@ -28,16 +28,15 @@ class CounterClosure:
         return ret
 
 
-objective_vals = [5, 4, .1, 1, 1, 1, 1, 1, 1, 1]
+objective_vals = [5, 4, 0.1, 1, 1, 1, 1, 1, 1, 1]
 
 test_data = [
     (patience, interval, maximize, (np.argmax if maximize else np.argmin)(objective_vals))
-        for patience, interval, maximize in product(range(1, 4), range(1, 8), [True, False])
+    for patience, interval, maximize in product(range(1, 4), range(1, 8), [True, False])
 ]
 
 
 class TestEarlyStopping:
-
     @pytest.mark.parametrize("patience,interval,maximize,expected_epoch", test_data)
     def test_stop_minimize(self, patience, interval, maximize, expected_epoch):
         print(patience, interval, maximize, expected_epoch)
@@ -47,6 +46,7 @@ class TestEarlyStopping:
 
         for epoch, val in early_stopping(model, closure, maximize=maximize, patience=patience, interval=interval):
             pass
-        assert int(
-            model.counter) == expected_epoch + 2  # +2 because the closure is called two more times after convergence
+        assert (
+            int(model.counter) == expected_epoch + 2
+        )  # +2 because the closure is called two more times after convergence
         assert epoch == (expected_epoch + patience) * interval

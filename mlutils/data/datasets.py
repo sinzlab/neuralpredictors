@@ -679,11 +679,11 @@ class FileTreeDataset(StaticSet):
         self.add_log_entry("Added new neuron meta attribute {} to meta/neurons".format(name))
 
     @staticmethod
-    def initialize_from(filename, outpath=None, overwrite=False):
+    def initialize_from(filename, outpath=None, overwrite=False, include_behavior=True):
         """
         Convenience function. See `convert_static_h5_dataset_to_folder` in `.utils`
         """
-        convert_static_h5_dataset_to_folder(filename, outpath=outpath, overwrite=overwrite)
+        convert_static_h5_dataset_to_folder(filename, outpath=outpath, overwrite=overwrite, include_behavior=include_behavior)
 
     @property
     def change_log(self):

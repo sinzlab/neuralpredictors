@@ -36,6 +36,8 @@ def convert_static_h5_dataset_to_folder(filename, outpath=None,  overwrite=False
         filename:       filename of the hdf5 file
         outpath:        location of the FileTreeDataset (default .)
         overwrite:      overwrite existing files
+        include_behavior:   if False, only saves images and responses. This is helpful for files where the behavior
+                            has not been exported.
 
     """
     h5file = Path(filename)

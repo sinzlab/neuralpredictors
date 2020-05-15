@@ -45,30 +45,30 @@ class Core2d(Core):
 
 class Stacked2dCore(Core2d, nn.Module):
     def __init__(
-            self,
-            input_channels,
-            hidden_channels,
-            input_kern,
-            hidden_kern,
-            layers=3,
-            gamma_hidden=0,
-            gamma_input=0.0,
-            skip=0,
-            final_nonlinearity=True,
-            elu_xshift=0.0,
-            elu_yshift=0.0,
-            bias=True,
-            momentum=0.1,
-            pad_input=True,
-            hidden_padding=None,
-            batch_norm=True,
-            batch_norm_scale=True,
-            independent_bn_bias=True,
-            hidden_dilation=1,
-            laplace_padding=0,
-            input_regularizer="LaplaceL2",
-            stack=None,
-            use_avg_reg=True,
+        self,
+        input_channels,
+        hidden_channels,
+        input_kern,
+        hidden_kern,
+        layers=3,
+        gamma_hidden=0,
+        gamma_input=0.0,
+        skip=0,
+        final_nonlinearity=True,
+        elu_xshift=0.0,
+        elu_yshift=0.0,
+        bias=True,
+        momentum=0.1,
+        pad_input=True,
+        hidden_padding=None,
+        batch_norm=True,
+        batch_norm_scale=True,
+        independent_bn_bias=True,
+        hidden_dilation=1,
+        laplace_padding=0,
+        input_regularizer="LaplaceL2",
+        stack=None,
+        use_avg_reg=True,
     ):
         """
         Args:
@@ -143,8 +143,11 @@ class Stacked2dCore(Core2d, nn.Module):
         # --- first layer
         layer = OrderedDict()
         layer["conv"] = nn.Conv2d(
-            input_channels, hidden_channels, input_kern, padding=input_kern // 2 if pad_input else 0,
-            bias=bias and not batch_norm
+            input_channels,
+            hidden_channels,
+            input_kern,
+            padding=input_kern // 2 if pad_input else 0,
+            bias=bias and not batch_norm,
         )
         if batch_norm:
             if independent_bn_bias:
@@ -198,7 +201,7 @@ class Stacked2dCore(Core2d, nn.Module):
         ret = []
         for l, feat in enumerate(self.features):
             do_skip = l >= 1 and self.skip > 1
-            input_ = feat(input_ if not do_skip else torch.cat(ret[-min(self.skip, l):], dim=1))
+            input_ = feat(input_ if not do_skip else torch.cat(ret[-min(self.skip, l) :], dim=1))
             ret.append(input_)
 
         return torch.cat([ret[ind] for ind in self.stack], dim=1)

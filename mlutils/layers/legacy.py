@@ -37,11 +37,22 @@ class Gaussian2d(nn.Module):
                 If true, initialized the sigma not in a range, but with the exact value given for all neurons.
     """
 
-    def __init__(self, in_shape, outdims, bias, init_mu_range=0.5, init_sigma_range=0.5, batch_sample=True,
-                 align_corners=True, fixed_sigma=False, **kwargs):
+    def __init__(
+        self,
+        in_shape,
+        outdims,
+        bias,
+        init_mu_range=0.5,
+        init_sigma_range=0.5,
+        batch_sample=True,
+        align_corners=True,
+        fixed_sigma=False,
+        **kwargs
+    ):
         warnings.warn(
-            'Gaussian2d is deprecated and will be removed in the future. Use `layers.readout.NonIsoGaussian2d` instead',
-            DeprecationWarning)
+            "Gaussian2d is deprecated and will be removed in the future. Use `layers.readout.NonIsoGaussian2d` instead",
+            DeprecationWarning,
+        )
         super().__init__()
         if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma_range <= 0.0:
             raise ValueError("either init_mu_range doesn't belong to [0.0, 1.0] or init_sigma_range is non-positive")
@@ -75,8 +86,10 @@ class Gaussian2d(nn.Module):
             self.sigma.data.uniform_(self.init_sigma_range, self.init_sigma_range)
         else:
             self.sigma.data.uniform_(0, self.init_sigma_range)
-            warnings.warn("sigma is sampled from uniform distribuiton, instead of a fixed value. Consider setting "
-                          "fixed_sigma to True")
+            warnings.warn(
+                "sigma is sampled from uniform distribuiton, instead of a fixed value. Consider setting "
+                "fixed_sigma to True"
+            )
         self.features.data.fill_(1 / self.in_shape[0])
 
         if self.bias is not None:

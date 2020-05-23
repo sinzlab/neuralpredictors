@@ -320,5 +320,5 @@ class SelectInputChannel(StaticTransform):
     def __call__(self, x):
         key_vals = {k: v for k, v in zip(x._fields, x)}
         img = key_vals["images"]
-        key_vals["images"] = img[:, (self.grab_channel,)] if len(img.shape) == 4 else img[(self.grab_channel,)]
+        key_vals["images"] = img[:, (self.grab_channel,), ] if len(img.shape) == 4 else img[(self.grab_channel,), ]
         return x.__class__(**key_vals)

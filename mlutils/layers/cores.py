@@ -44,6 +44,11 @@ class Core2d(Core):
             if m.bias is not None:
                 m.bias.data.fill_(0)
 
+    @staticmethod
+    def init_conv_hermite(m):
+        if isinstance(m, HermiteConv2D):
+            nn.init.normal_(m.coeffs.data, std=0.1)
+
 
 # ---------------------- Conv2d Cores -----------------------------
 
@@ -252,7 +257,6 @@ class RotationEquivariant2dCore(Core2d, nn.Module):
         batch_norm_scale=True,
         rot_eq_batch_norm=True,
         independent_bn_bias=True,
-        hidden_dilation=1,
         laplace_padding=0,
         input_regularizer="LaplaceL2",
         stack=None,
@@ -281,7 +285,6 @@ class RotationEquivariant2dCore(Core2d, nn.Module):
             batch_norm_scale: If True, a scaling factor after BN will be learned.
             independent_bn_bias:    If False, will allow for scaling the batch norm, so that batchnorm
                                     and bias can both be true. Defaults to True.
-            hidden_dilation:    If set to > 1, will apply dilated convs for all hidden layers
             laplace_padding: Padding size for the laplace convolution. If padding = None, it defaults to half of
                 the kernel size (recommended). Setting Padding to 0 is not recommended and leads to artefacts,
                 zero is the default however to recreate backwards compatibility.
@@ -379,7 +382,9 @@ class RotationEquivariant2dCore(Core2d, nn.Module):
         for l in range(1, self.layers):
             layer = OrderedDict()
 
-            hidden_padding = ((hidden_kern[l - 1] - 1) * hidden_dilation + 1) // 2
+            if hidden_padding is None:
+                hidden_padding = hidden_kern[l - 1] // 2
+
             layer["conv"] = HermiteConv2D(
                 input_features=hidden_channels * num_rotations,
                 output_features=hidden_channels,
@@ -405,7 +410,7 @@ class RotationEquivariant2dCore(Core2d, nn.Module):
                 layer["nonlin"] = AdaptiveELU(elu_xshift, elu_yshift)
             self.features.add_module("layer{}".format(l), nn.Sequential(layer))
 
-        self.apply(self.init_conv)
+        self.apply(self.init_conv_hermite)
 
     def forward(self, input_):
         ret = []

@@ -9,7 +9,7 @@ import torch
 from torch import nn
 
 
-def hermcgen(mu, nu):
+def hermite_coefficients(mu, nu):
     """Generate coefficients of 2D Hermite functions"""
     nur = np.arange(nu + 1)
     num = gamma(mu + nu + 1) * gamma(nu + 1) * ((-2) ** (nu - nur))
@@ -63,7 +63,7 @@ def hermite_2d(N, npts, xvalmax=None):
     nbases = mu.size
     H = np.zeros([nbases, npts, npts])
     for i, (mui, nui, desci) in enumerate(zip(mu, nu, desc)):
-        radvals = polyval(radsq, hermcgen(mui, nui))
+        radvals = polyval(radsq, hermite_coefficients(mui, nui))
         basis = gaussian * (radsq ** (mui / 2)) * radvals * np.exp(1j * mui * theta)
         basis /= np.sqrt(2 ** (mui + 2 * nui) * pi * \
                          math.factorial(mui + nui) * math.factorial(nui))

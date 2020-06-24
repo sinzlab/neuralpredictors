@@ -258,9 +258,9 @@ class RotationEquivariant2dCore(Core2d, nn.Module):
         rot_eq_batch_norm=True,
         independent_bn_bias=True,
         laplace_padding=0,
-        input_regularizer="LaplaceL2",
+        input_regularizer="LaplaceL2norm",
         stack=None,
-        use_avg_reg=True,
+        use_avg_reg=False,
     ):
         """
         Args:

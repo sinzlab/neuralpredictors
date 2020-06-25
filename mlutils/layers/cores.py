@@ -142,7 +142,7 @@ class Stacked2dCore(Core2d, nn.Module):
         self.use_avg_reg = use_avg_reg
 
         if use_avg_reg:
-            warnings.warn("The averaged value of regularizater will be used.", UserWarning)
+            warnings.warn("The averaged value of regularizer will be used.", UserWarning)
 
         self.features = nn.Sequential()
         if stack is None:
@@ -340,7 +340,7 @@ class RotationEquivariant2dCore(Core2d, nn.Module):
             ScaleLayer = Scale2DLayer
 
         if use_avg_reg:
-            warnings.warn("The averaged value of regularizater will be used.", UserWarning)
+            warnings.warn("The averaged value of regularizer will be used.", UserWarning)
 
         self.features = nn.Sequential()
         if stack is None:

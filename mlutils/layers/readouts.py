@@ -708,6 +708,17 @@ class FullGaussian2d(nn.Module):
     def grid(self):
         return self.sample_grid(batch_size=1, sample=False)
 
+    def mu_dispersion(self):
+        """
+        Returns the standard deviation of the learned positions.
+        Is used as a regularizer to push neurons to learn similar positions.
+
+        Returns:
+            mu_dispersion(float): average dispersion of the mean 2d-position
+        """
+
+        return self._mu.std()
+
     def feature_l1(self, average=True):
         """
         Returns the l1 regularization term either the mean or the sum of all weights

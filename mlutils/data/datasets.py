@@ -10,7 +10,14 @@ from scipy.signal import convolve2d
 from torch.utils.data import Dataset
 
 from .exceptions import InconsistentDataException, DoesNotExistException
-from .transforms import DataTransform, MovieTransform, StaticTransform, Invertible, Subsequence, Delay
+from .transforms import (
+    DataTransform,
+    MovieTransform,
+    StaticTransform,
+    Invertible,
+    Subsequence,
+    Delay,
+)
 from .utils import convert_static_h5_dataset_to_folder, zip_dir
 from ..utils import recursively_load_dict_contents_from_group
 
@@ -29,10 +36,13 @@ class AttributeHandler:
         self.h5_handle = h5_handle
 
     def __getattr__(self, item):
-        ret = self.h5_handle[self.name][item][()]
-        if ret.dtype.char == "S":  # convert bytes to unicode
-            ret = ret.astype(str)
-        return ret
+        if item in self.h5_handle[self.name]:
+            ret = self.h5_handle[self.name][item][()]
+            if ret.dtype.char == "S":  # convert bytes to unicode
+                ret = ret.astype(str)
+            return ret
+        else:
+            return super().__getattr__(item)
 
     def __getitem__(self, item):
         return getattr(self, item)
@@ -64,7 +74,8 @@ class AttributeTransformer(AttributeHandler):
     def __getattr__(self, item):
         ret = {self.data_group: super().__getattr__(item)}
         for tr in self.transforms:
-            ret = tr.id_transform(ret)
+            if hasattr(tr, "id_transform"):
+                ret = tr.id_transform(ret)
 
         return ret[self.data_group]
 
@@ -72,21 +83,35 @@ class AttributeTransformer(AttributeHandler):
 class TransformDataset(Dataset):
     def __init__(self, transforms=None):
         """
-        Abstract Class for Datasets. Classes that inherit from this class can implement the transform and invert function.
+        Abstract Class for Datasets with transformations, providing `transform` and `invert` functions
+        to apply data transformation on the elements.
 
         Args:
-            transforms: list of transforms applied to each data point
+            transforms: list of transforms to be applied to each data point
         """
         self.transforms = transforms or []
 
     def transform(self, x, exclude=None):
+        """
+        Apply transform on a data element from the dataset
+
+        Args:
+            x (tuple): a data element from the dataset
+            exclude (Transform, optional): Type of data transformer to be excluded from transform list. Defaults to None.
+
+        Returns:
+            tuple: transformed data element
+        """
+
         for tr in self.transforms:
             if exclude is None or not isinstance(tr, exclude):
                 x = tr(x)
         return x
 
     def invert(self, x, exclude=None):
-        for tr in reversed(filter(lambda tr: not isinstance(tr, exclude), self.transforms)):
+        for tr in reversed(
+            filter(lambda tr: not isinstance(tr, exclude), self.transforms)
+        ):
             if not isinstance(tr, Invertible):
                 raise TypeError("Cannot invert", tr.__class__.__name__)
             else:
@@ -98,7 +123,9 @@ class TransformDataset(Dataset):
 
     def __repr__(self):
         return (
-            "{} m={}:\n\t({})".format(self.__class__.__name__, len(self), ", ".join(self.data_groups))
+            "{} m={}:\n\t({})".format(
+                self.__class__.__name__, len(self), ", ".join(self.data_groups)
+            )
             + "\n\t[Transforms: "
             + "->".join([repr(tr) for tr in self.transforms])
             + "]"
@@ -137,7 +164,9 @@ class H5SequenceSet(TransformDataset):
         self.transforms = transforms or []
 
         self.data_point = namedtuple("DataPoint", data_groups)
-        self.output_point = namedtuple("OutputPoint", [output_rename.get(k, k) for k in data_groups])
+        self.output_point = namedtuple(
+            "OutputPoint", [output_rename.get(k, k) for k in data_groups]
+        )
 
     def load_content(self):
         self.data = recursively_load_dict_contents_from_group(self._fid)
@@ -152,7 +181,10 @@ class H5SequenceSet(TransformDataset):
 
     def __getitem__(self, item):
         x = self.data_point(
-            *(np.array(self.data[g][item if self.data_loaded else str(item)]) for g in self.data_groups)
+            *(
+                np.array(self.data[g][item if self.data_loaded else str(item)])
+                for g in self.data_groups
+            )
         )
         for tr in self.transforms:
             assert isinstance(tr, self._transform_set)
@@ -174,21 +206,41 @@ class H5SequenceSet(TransformDataset):
                 return item
             return item
         else:
-            raise AttributeError("Item {} not found in {}".format(item, self.__class__.__name__))
+            raise AttributeError(
+                "Item {} not found in {}".format(item, self.__class__.__name__)
+            )
 
     def __repr__(self):
         names = [
-            "{} -> {}".format(k, self.output_rename[k]) if k in self.output_rename else k for k in self.data_groups
+            "{} -> {}".format(k, self.output_rename[k])
+            if k in self.output_rename
+            else k
+            for k in self.data_groups
         ]
-        s = "{} m={}:\n\t({})".format(self.__class__.__name__, len(self), ", ".join(names))
+        s = "{} m={}:\n\t({})".format(
+            self.__class__.__name__, len(self), ", ".join(names)
+        )
         if self.transforms is not None:
-            s += "\n\t[Transforms: " + "->".join([repr(tr) for tr in self.transforms]) + "]"
+            s += (
+                "\n\t[Transforms: "
+                + "->".join([repr(tr) for tr in self.transforms])
+                + "]"
+            )
         return s
 
 
 class MovieSet(H5SequenceSet):
-    def __init__(self, filename, *data_groups, output_rename=None, transforms=None, stats_source=None):
-        super().__init__(filename, *data_groups, output_rename=output_rename, transforms=transforms)
+    def __init__(
+        self,
+        filename,
+        *data_groups,
+        output_rename=None,
+        transforms=None,
+        stats_source=None
+    ):
+        super().__init__(
+            filename, *data_groups, output_rename=output_rename, transforms=transforms
+        )
         self.shuffle_dims = {}
         self.stats_source = stats_source if stats_source is not None else "all"
 
@@ -197,7 +249,9 @@ class MovieSet(H5SequenceSet):
 
     @property
     def neurons(self):
-        return AttributeTransformer("neurons", self.data, self.transforms, data_group="responses")
+        return AttributeTransformer(
+            "neurons", self.data, self.transforms, data_group="responses"
+        )
 
     @property
     def n_neurons(self):
@@ -211,7 +265,10 @@ class MovieSet(H5SequenceSet):
         if stats_source is None:
             stats_source = self.stats_source
 
-        tmp = [np.atleast_1d(self.statistics[g][stats_source]["mean"][()]) for g in self.data_groups]
+        tmp = [
+            np.atleast_1d(self.statistics[g][stats_source]["mean"][()])
+            for g in self.data_groups
+        ]
         return self.transform(self.data_point(*tmp), exclude=(Subsequence, Delay))
 
     def rf_base(self, stats_source="all"):
@@ -224,7 +281,9 @@ class MovieSet(H5SequenceSet):
             behavior=np.ones((1, t, 1)) * mean("behavior")[None, None, :],
             responses=np.ones((1, t, 1)) * mean("responses")[None, None, :],
         )
-        return self.transform(self.data_point(*[d[dk] for dk in self.data_group]), exclude=Subsequence)
+        return self.transform(
+            self.data_point(*[d[dk] for dk in self.data_group]), exclude=Subsequence
+        )
 
     def rf_noise_stim(self, m, t, stats_source="all"):
         """
@@ -243,11 +302,16 @@ class MovieSet(H5SequenceSet):
         N, c, _, w, h = self.img_shape
         stat = lambda dk, what: self.statistics[dk][stats_source][what][()]
         mu, s = stat("inputs", "mean"), stat("inputs", "std")
-        h_filt = np.float64([[1 / 16, 1 / 8, 1 / 16], [1 / 8, 1 / 4, 1 / 8], [1 / 16, 1 / 8, 1 / 16]])
+        h_filt = np.float64(
+            [[1 / 16, 1 / 8, 1 / 16], [1 / 8, 1 / 4, 1 / 8], [1 / 16, 1 / 8, 1 / 16]]
+        )
         noise_input = (
-            np.stack([convolve2d(np.random.randn(w, h), h_filt, mode="same") for _ in range(m * t * c)]).reshape(
-                (m, c, t, w, h)
-            )
+            np.stack(
+                [
+                    convolve2d(np.random.randn(w, h), h_filt, mode="same")
+                    for _ in range(m * t * c)
+                ]
+            ).reshape((m, c, t, w, h))
             * s
             + mu
         )
@@ -263,7 +327,10 @@ class MovieSet(H5SequenceSet):
             responses=mean_resp.astype(np.float32),
         )
 
-        return self.transform(self.data_point(*[d[dk] for dk in self.data_groups.values()]), exclude=Subsequence)
+        return self.transform(
+            self.data_point(*[d[dk] for dk in self.data_groups.values()]),
+            exclude=Subsequence,
+        )
 
 
 default_datapoint = namedtuple("DefaultDataPoint", ["images", "responses"])
@@ -332,7 +399,10 @@ class H5ArraySet(StaticSet):
 
     def __repr__(self):
         return "\n".join(
-            ["Tensor {}: {} ".format(key, self.data[key].shape) for key in self.data_keys]
+            [
+                "Tensor {}: {} ".format(key, self.data[key].shape)
+                for key in self.data_keys
+            ]
             + ["Transforms: " + repr(self.transforms)]
         )
 
@@ -347,11 +417,15 @@ class H5ArraySet(StaticSet):
                 return item
             return item
         else:
-            raise AttributeError("Item {} not found in {}".format(item, self.__class__.__name__))
+            raise AttributeError(
+                "Item {} not found in {}".format(item, self.__class__.__name__)
+            )
 
 
 class StaticImageSet(H5ArraySet):
-    def __init__(self, filename, *data_keys, transforms=None, cache_raw=False, stats_source=None):
+    def __init__(
+        self, filename, *data_keys, transforms=None, cache_raw=False, stats_source=None
+    ):
         """
         Dataset for h5 files.
 
@@ -373,7 +447,9 @@ class StaticImageSet(H5ArraySet):
 
     @property
     def neurons(self):
-        return AttributeTransformer("neurons", self.data, self.transforms, data_group="responses")
+        return AttributeTransformer(
+            "neurons", self.data, self.transforms, data_group="responses"
+        )
 
     @property
     def info(self):
@@ -387,12 +463,17 @@ class StaticImageSet(H5ArraySet):
         if stats_source is None:
             stats_source = self.stats_source
 
-        tmp = [np.atleast_1d(self.statistics[dk][stats_source]["mean"][()]) for dk in self.data_keys]
+        tmp = [
+            np.atleast_1d(self.statistics[dk][stats_source]["mean"][()])
+            for dk in self.data_keys
+        ]
         return self.transform(self.data_point(*tmp))
 
     def __repr__(self):
         return super().__repr__() + (
-            "\n\t[Stats source: {}]".format(self.stats_source) if self.stats_source is not None else ""
+            "\n\t[Stats source: {}]".format(self.stats_source)
+            if self.stats_source is not None
+            else ""
         )
 
     def __dir__(self):
@@ -549,11 +630,13 @@ class FileTreeDataset(StaticSet):
 
         number_of_files = []
 
-        if dirname.endswith('.zip'):
+        if dirname.endswith(".zip"):
             if not Path(dirname[:-4]).exists():
                 self.unzip(dirname, Path(dirname).absolute().parent)
             else:
-                print('{} exists already. Not unpacking {}'.format(dirname[:-4], dirname))
+                print(
+                    "{} exists already. Not unpacking {}".format(dirname[:-4], dirname)
+                )
             dirname = dirname[:-4]
 
         self.basepath = Path(dirname).absolute()
@@ -649,7 +732,9 @@ class FileTreeDataset(StaticSet):
             print("Encountered {} unmatched elements".format(unmatched_counter))
         return np.array(target_idx, dtype=int), np.array(order, dtype=int)
 
-    def add_neuron_meta(self, name, animal_id, session, scan_idx, unit_id, values, fill_missing=None):
+    def add_neuron_meta(
+        self, name, animal_id, session, scan_idx, unit_id, values, fill_missing=None
+    ):
         """
         Add new meta information about neurons.
 
@@ -662,28 +747,51 @@ class FileTreeDataset(StaticSet):
             values:     new meta information. First dimension must refer to neurons.
             fill_missing:   fill the values of the new attribute with NaN if not provided
         """
-        if not len(animal_id) == len(session) == len(scan_idx) == len(unit_id) == len(values):
-            raise InconsistentDataException("number of trials and identifiers not consistent")
+        if (
+            not len(animal_id)
+            == len(session)
+            == len(scan_idx)
+            == len(unit_id)
+            == len(values)
+        ):
+            raise InconsistentDataException(
+                "number of trials and identifiers not consistent"
+            )
 
-        target = np.c_[(self.neurons.animal_ids, self.neurons.sessions, self.neurons.scan_idx, self.neurons.unit_ids)]
+        target = np.c_[
+            (
+                self.neurons.animal_ids,
+                self.neurons.sessions,
+                self.neurons.scan_idx,
+                self.neurons.unit_ids,
+            )
+        ]
         permuted = np.c_[(animal_id, session, scan_idx, unit_id)]
         vals = np.ones((len(target),) + values.shape[1:], dtype=values.dtype) * (
             np.nan if fill_missing is None else fill_missing
         )
-        tidx, idx = self.match_order(target, permuted, not_exist_ok=fill_missing is not None)
+        tidx, idx = self.match_order(
+            target, permuted, not_exist_ok=fill_missing is not None
+        )
 
-        assert np.sum(target[tidx] - permuted[idx, ...]) == 0, "Something went wrong in sorting"
+        assert (
+            np.sum(target[tidx] - permuted[idx, ...]) == 0
+        ), "Something went wrong in sorting"
 
         vals[tidx, ...] = values[idx, ...]
         np.save(self.basepath / "meta/neurons/{}.npy".format(name), vals)
-        self.add_log_entry("Added new neuron meta attribute {} to meta/neurons".format(name))
+        self.add_log_entry(
+            "Added new neuron meta attribute {} to meta/neurons".format(name)
+        )
 
     @staticmethod
     def initialize_from(filename, outpath=None, overwrite=False):
         """
         Convenience function. See `convert_static_h5_dataset_to_folder` in `.utils`
         """
-        convert_static_h5_dataset_to_folder(filename, outpath=outpath, overwrite=overwrite)
+        convert_static_h5_dataset_to_folder(
+            filename, outpath=outpath, overwrite=overwrite
+        )
 
     @property
     def change_log(self):
@@ -748,7 +856,9 @@ class FileTreeDataset(StaticSet):
 
     @property
     def statistics(self):
-        return DirectoryAttributeHandler(self.basepath / "meta/statistics", self.config["links"])
+        return DirectoryAttributeHandler(
+            self.basepath / "meta/statistics", self.config["links"]
+        )
 
     @property
     def img_shape(self):

@@ -133,7 +133,7 @@ class TransformDataset(Dataset):
 
 
 class H5SequenceSet(TransformDataset):
-    def __init__(self, filename, *data_groups, output_rename=None, transforms=None):
+    def __init__(self, filename, *data_keys, output_rename=None, transforms=None):
         super().__init__(transforms=transforms)
 
         if output_rename is None:
@@ -148,8 +148,9 @@ class H5SequenceSet(TransformDataset):
         self.data = self._fid
         self.data_loaded = False
 
+        # ensure that all elements of
         m = None
-        for key in data_groups:
+        for key in data_keys:
             assert key in self.data, "Could not find {} in file".format(key)
             l = len(self.data[key])
             if m is not None and l != m:
@@ -160,12 +161,12 @@ class H5SequenceSet(TransformDataset):
         # Specify which types of transforms are accepted
         self._transform_set = DataTransform
 
-        self.data_groups = data_groups
+        self.data_keys = data_keys
         self.transforms = transforms or []
 
-        self.data_point = namedtuple("DataPoint", data_groups)
+        self.data_point = namedtuple("DataPoint", data_keys)
         self.output_point = namedtuple(
-            "OutputPoint", [output_rename.get(k, k) for k in data_groups]
+            "OutputPoint", [output_rename.get(k, k) for k in data_keys]
         )
 
     def load_content(self):
@@ -183,7 +184,7 @@ class H5SequenceSet(TransformDataset):
         x = self.data_point(
             *(
                 np.array(self.data[g][item if self.data_loaded else str(item)])
-                for g in self.data_groups
+                for g in self.data_keys
             )
         )
         for tr in self.transforms:
@@ -201,21 +202,19 @@ class H5SequenceSet(TransformDataset):
             if isinstance(item, h5py.Dataset):
                 dtype = item.dtype
                 item = item[()]
-                if dtype.char == "S":  # convert bytes to univcode
+                if dtype.char == "S":  # convert bytes to unicode
                     item = item.astype(str)
                 return item
             return item
         else:
-            raise AttributeError(
-                "Item {} not found in {}".format(item, self.__class__.__name__)
-            )
+            return super().__getattr__(item)
 
     def __repr__(self):
         names = [
             "{} -> {}".format(k, self.output_rename[k])
             if k in self.output_rename
             else k
-            for k in self.data_groups
+            for k in self.data_keys
         ]
         s = "{} m={}:\n\t({})".format(
             self.__class__.__name__, len(self), ", ".join(names)
@@ -241,7 +240,6 @@ class MovieSet(H5SequenceSet):
         super().__init__(
             filename, *data_groups, output_rename=output_rename, transforms=transforms
         )
-        self.shuffle_dims = {}
         self.stats_source = stats_source if stats_source is not None else "all"
 
         # set to accept only MovieTransform

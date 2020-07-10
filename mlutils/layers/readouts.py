@@ -629,7 +629,7 @@ class FullGaussian2d(nn.Module):
 
     def __init__(self, in_shape, outdims, bias, init_mu_range=0.1, init_sigma=1, batch_sample=True,
                  align_corners=True, gauss_type='full', grid_mean_predictor=None,
-                 shared_features=None, shared_grid=None, source_grid=None, **kwargs):
+                 shared_features=None, shared_grid=None, source_grid=None, init_noise=1e-3, **kwargs):
 
         super().__init__()
 
@@ -642,6 +642,7 @@ class FullGaussian2d(nn.Module):
         # store statistics about the images and neurons
         self.in_shape = in_shape
         self.outdims = outdims
+        self.init_noise = init_noise
 
         # sample a different location per example
         self.batch_sample = batch_sample
@@ -800,7 +801,8 @@ class FullGaussian2d(nn.Module):
             self.sigma.data.fill_(self.init_sigma)
         else:
             self.sigma.data.uniform_(-self.init_sigma, self.init_sigma)
-        self._features.data.fill_(1 / self.in_shape[0])
+        #self._features.data.fill_(1 / self.in_shape[0])
+        self._features.data.normal_(0, self.init_noise) # should this be initialized when it is shared?
         if self._shared_features:
             self.scales.data.fill_(1.)
         if self.bias is not None:

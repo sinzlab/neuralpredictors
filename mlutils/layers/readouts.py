@@ -2,6 +2,7 @@ import warnings
 from collections import OrderedDict
 
 import numpy as np
+from scipy.stats import ortho_group
 import torch
 from torch import nn as nn
 from torch.nn import ModuleDict
@@ -801,8 +802,15 @@ class FullGaussian2d(nn.Module):
             self.sigma.data.fill_(self.init_sigma)
         else:
             self.sigma.data.uniform_(-self.init_sigma, self.init_sigma)
-        #self._features.data.fill_(1 / self.in_shape[0])
-        self._features.data.normal_(0, self.init_noise) # should this be initialized when it is shared?
+
+        self._features.data.normal_(0, self.init_noise)
+
+        if self._predicted_grid:
+            for layer in self.mu_transform:
+                layer.bias.data.fill_(0)
+            if len(self.mu_transform) == 1:
+                self.mu_transform[0].weight.data = torch.from_numpy(ortho_group.rvs(2).astype(np.float32))
+
         if self._shared_features:
             self.scales.data.fill_(1.)
         if self.bias is not None:

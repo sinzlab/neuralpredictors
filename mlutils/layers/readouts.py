@@ -10,11 +10,10 @@ from torch.nn import Parameter
 from torch.nn import functional as F
 
 from ..constraints import positive
-
+from ..utils import BiasNet
 
 class ConfigurationError(Exception):
     pass
-
 
 # ------------------ Base Classes -------------------------
 
@@ -626,11 +625,22 @@ class FullGaussian2d(nn.Module):
         source_grid (numpy.array):
                 Source grid for the grid_mean_predictor.
                 Needs to be of size neurons x grid_mean_predictor[input_dimensions]
+        shared_transform (torch.nn.Parameter or None):
+                This is only used if grid_mean_predictor is not None. If `shared_transform` is None, this readout will
+                create its own mu_transform. If it is set to a mu_transform Parameter of another readout, it will replace
+                 the mu_transform of this readout up to an additional unique bias.
+        init_noise (float):
+                Std of the normal distribution used to initialize the weights and biases.
+        init_transform_scale (float):
+                Only used if grid_mean_predictor is not None and shared_transform is None. Scale for the random
+                orthogonal matrix that the mu_transform is initialized with.
+
     """
 
     def __init__(self, in_shape, outdims, bias, init_mu_range=0.1, init_sigma=1, batch_sample=True,
                  align_corners=True, gauss_type='full', grid_mean_predictor=None,
-                 shared_features=None, shared_grid=None, source_grid=None, init_noise=1e-3, **kwargs):
+                 shared_features=None, shared_grid=None, source_grid=None, shared_transform=None, init_noise=1e-3,
+                 init_transform_scale=0.3, **kwargs):
 
         super().__init__()
 
@@ -644,7 +654,7 @@ class FullGaussian2d(nn.Module):
         self.in_shape = in_shape
         self.outdims = outdims
         self.init_noise = init_noise
-
+        self.init_transform_scale = init_transform_scale
         # sample a different location per example
         self.batch_sample = batch_sample
 
@@ -661,7 +671,7 @@ class FullGaussian2d(nn.Module):
         elif grid_mean_predictor is not None and shared_grid is not None:
             raise ConfigurationError('Shared grid_mean_predictor and shared_grid_mean cannot both be set')
         elif grid_mean_predictor is not None:
-            self.init_grid_predictor(source_grid=source_grid, **grid_mean_predictor)
+            self.init_grid_predictor(source_grid=source_grid, shared_transform=shared_transform, **grid_mean_predictor)
         elif shared_grid is not None:
             self.initialize_shared_grid(**(shared_grid or {}))
 
@@ -767,24 +777,26 @@ class FullGaussian2d(nn.Module):
                 torch.einsum('ancd,bnid->bnic', self.sigma, norm) + self.mu, min=-1, max=1
             )  # grid locations in feature space sampled randomly around the mean self.mu
 
-    def init_grid_predictor(self, source_grid, hidden_features=20, hidden_layers=0, final_tanh=False):
+    def init_grid_predictor(self, source_grid, hidden_features=20, hidden_layers=0, final_tanh=False, shared_transform=None):
         self._original_grid = False
-        layers = [
-            nn.Linear(source_grid.shape[1], hidden_features if hidden_layers > 0 else 2)
-        ]
+        if shared_transform is None:
+            layers = [
+                nn.Linear(source_grid.shape[1], hidden_features if hidden_layers > 0 else 2)
+            ]
 
-        for i in range(hidden_layers):
-            layers.extend([
-                nn.ELU(),
-                nn.Linear(hidden_features, hidden_features if i < hidden_layers - 1 else 2)
-            ])
+            for i in range(hidden_layers):
+                layers.extend([
+                    nn.ELU(),
+                    nn.Linear(hidden_features, hidden_features if i < hidden_layers - 1 else 2)
+                ])
 
-        if final_tanh:
-            layers.append(
-                nn.Tanh()
-            )
-        self.mu_transform = nn.Sequential(*layers)
-
+            if final_tanh:
+                layers.append(
+                    nn.Tanh()
+                )
+            self.mu_transform = nn.Sequential(*layers)
+        else:
+            self.mu_transform = BiasNet(base_net=shared_transform)
         source_grid = source_grid - source_grid.mean(axis=0, keepdims=True)
         source_grid = source_grid / np.abs(source_grid).max()
         self.register_buffer('source_grid', torch.from_numpy(source_grid.astype(np.float32)))
@@ -806,15 +818,22 @@ class FullGaussian2d(nn.Module):
         self._features.data.normal_(0, self.init_noise)
 
         if self._predicted_grid:
-            for layer in self.mu_transform:
-                layer.bias.data.fill_(0)
-            if len(self.mu_transform) == 1:
-                self.mu_transform[0].weight.data = torch.from_numpy(ortho_group.rvs(2).astype(np.float32))
+            if isinstance(self.mu_transform, nn.Sequential):
+                for layer in self.mu_transform:
+                    layer.bias.data.normal_(0, self.init_noise)
+                if len(self.mu_transform) == 1:
+                    self.mu_transform[0].weight.data = torch.from_numpy(self.init_transform_scale * ortho_group.rvs(2).astype(np.float32))
+            else:
+                self.mu_transform.bias.data.normal_(0, self.init_noise)
+
+        if self._shared_grid:
+            self.mu_transform.bias.data.normal_(0, self.init_noise)
+            self.mu_transform.weight.data = torch.eye(2)
 
         if self._shared_features:
-            self.scales.data.fill_(1.)
+            self.scales.data.normal_(1., self.init_noise)
         if self.bias is not None:
-            self.bias.data.fill_(0)
+            self.bias.data.normal_(0, self.init_noise)
 
     def initialize_features(self, match_ids=None, shared_features=None):
         """
@@ -859,8 +878,6 @@ class FullGaussian2d(nn.Module):
             self._mu = shared_grid
             self._original_grid = False
             self.mu_transform = nn.Linear(2, 2)
-            self.mu_transform.bias.data.fill_(0.)
-            self.mu_transform.weight.data = torch.eye(2)
         else:
             self._mu = Parameter(torch.Tensor(1, n_match_ids, 1, 2))  # feature weights for each channel of the core
         _, sharing_idx = np.unique(match_ids, return_inverse=True)

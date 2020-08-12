@@ -76,6 +76,7 @@ class GammaLoss(nn.Module):
         else:
             return loss.view(-1, loss.shape[-1]).mean(dim=0)
 
+
 class ExponentialLoss(nn.Module):
     def __init__(self, bias=1e-12, target_bias=1e-6, per_neuron=False):
         super().__init__()
@@ -88,7 +89,7 @@ class ExponentialLoss(nn.Module):
 
         target = (target + self.target_bias).detach()
 
-        loss =  target/output + torch.log(output)
+        loss = target / output + torch.log(output)
 
         if not self.per_neuron:
             return loss.mean()
@@ -97,18 +98,17 @@ class ExponentialLoss(nn.Module):
 
 
 class AnscombeMSE(nn.Module):
-
     def __init__(self, per_neuron=False):
         super().__init__()
         self.per_neuron = per_neuron
 
     @staticmethod
     def A(x):
-        return 2 * torch.sqrt(x+ 3 / 8)
+        return 2 * torch.sqrt(x + 3 / 8)
 
     def forward(self, output, target):
         target = self.A(target).detach()
-        output = self.A(output) - 1/(4 * output.sqrt())
+        output = self.A(output) - 1 / (4 * output.sqrt())
 
         loss = (target - output).pow(2)
 
@@ -150,6 +150,6 @@ def corr(y1, y2, axis=-1, eps=1e-8, **kwargs):
     Returns: correlation vector
 
     """
-    y1 = (y1 - y1.mean(axis=axis, keepdims=True)) / (y1.std(axis=axis, keepdims=True, ddof=1) + eps)
-    y2 = (y2 - y2.mean(axis=axis, keepdims=True)) / (y2.std(axis=axis, keepdims=True, ddof=1) + eps)
+    y1 = (y1 - y1.mean(axis=axis, keepdims=True)) / (y1.std(axis=axis, keepdims=True, ddof=0) + eps)
+    y2 = (y2 - y2.mean(axis=axis, keepdims=True)) / (y2.std(axis=axis, keepdims=True, ddof=0) + eps)
     return (y1 * y2).mean(axis=axis, **kwargs)

@@ -113,3 +113,25 @@ class PiecewiseLinearExpNonlinearity(nn.Module):
         h = torch.sum(torch.exp(self.a) * t, dim=1)
         
         return g * h
+    
+    def visualize(self, vmin=None, vmax=None, iters=1000, show=True, return_fig=False, neurons=range(10)):
+        if vmin is None:
+            vmin = self.vmin - 1
+        if vmax is None:
+            vmax = self.vmax + 1
+            
+        inpts = torch.from_numpy(np.tile(np.linspace(vmin, vmax, iters).astype(np.float32), [self.neurons, 1]).T).cuda()
+        outs = self.forward(inpts)
+        
+        f = plt.figure()
+        ax = f.add_subplot(1, 1, 1)
+        ax.plot(inpts.cpu().detach().numpy()[:, neurons], outs.cpu().detach().numpy()[:, neurons])
+        ax.set_xlabel('Response before alteration')
+        ax.set_ylabel('Response after alteration')
+        
+        plt.grid(which='both')
+        
+        if show:
+            f.show()
+        if return_fig:
+            return f

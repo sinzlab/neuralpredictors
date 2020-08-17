@@ -265,7 +265,7 @@ class MovieSet(H5SequenceSet):
 
         tmp = [
             np.atleast_1d(self.statistics[g][stats_source]["mean"][()])
-            for g in self.data_groups
+            for g in self.data_keys
         ]
         return self.transform(self.data_point(*tmp), exclude=(Subsequence, Delay))
 
@@ -280,7 +280,7 @@ class MovieSet(H5SequenceSet):
             responses=np.ones((1, t, 1)) * mean("responses")[None, None, :],
         )
         return self.transform(
-            self.data_point(*[d[dk] for dk in self.data_group]), exclude=Subsequence
+            self.data_point(*[d[dk] for dk in self.data_keys]), exclude=Subsequence
         )
 
     def rf_noise_stim(self, m, t, stats_source="all"):

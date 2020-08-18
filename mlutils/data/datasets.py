@@ -42,7 +42,7 @@ class AttributeHandler:
                 ret = ret.astype(str)
             return ret
         else:
-            return super().__getattr__(item)
+            raise AttributeError("Attribute {} not found".format(item))
 
     def __getitem__(self, item):
         return getattr(self, item)
@@ -207,6 +207,7 @@ class H5SequenceSet(TransformDataset):
                 return item
             return item
         else:
+            # TODO: check for a proper way to handle cases where super doesn't have __getattr__
             return super().__getattr__(item)
 
     def __repr__(self):
@@ -229,18 +230,23 @@ class H5SequenceSet(TransformDataset):
 
 
 class MovieSet(H5SequenceSet):
+    """
+    Extension to H5SequenceSet with specific HDF5 dataset assumed. Specifically,
+    it assumes that properties such as `neurons` and `stats` are present in the dataset.
+    """
+
     def __init__(
         self,
         filename,
         *data_groups,
         output_rename=None,
         transforms=None,
-        stats_source=None
+        stats_source="all"
     ):
         super().__init__(
             filename, *data_groups, output_rename=output_rename, transforms=transforms
         )
-        self.stats_source = stats_source if stats_source is not None else "all"
+        self.stats_source = stats_source
 
         # set to accept only MovieTransform
         self._transform_set = MovieTransform
@@ -257,7 +263,12 @@ class MovieSet(H5SequenceSet):
 
     @property
     def input_shape(self):
-        return (1,) + getattr(self[0], self.output_rename.get("inputs", "inputs")).shape
+        name = (
+            self.output_rename.get("inputs", "inputs")
+            if self.rename_output
+            else "inputs"
+        )
+        return (1,) + getattr(self[0], name).shape
 
     def transformed_mean(self, stats_source=None):
         if stats_source is None:
@@ -267,7 +278,10 @@ class MovieSet(H5SequenceSet):
             np.atleast_1d(self.statistics[g][stats_source]["mean"][()])
             for g in self.data_keys
         ]
-        return self.transform(self.data_point(*tmp), exclude=(Subsequence, Delay))
+        x = self.transform(self.data_point(*tmp), exclude=(Subsequence, Delay))
+        if self.rename_output:
+            x = self.output_point(*x)
+        return x
 
     def rf_base(self, stats_source="all"):
         N, c, t, w, h = self.img_shape
@@ -327,7 +341,7 @@ class MovieSet(H5SequenceSet):
 
         return self.transform(
             self.data_point(*[d[dk] for dk in self.data_groups.values()]),
-            exclude=Subsequence,
+            exclude=(Subsequence, Delay),
         )
 
 

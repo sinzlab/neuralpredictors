@@ -5,6 +5,7 @@ import torch
 from torch import nn as nn
 from torch.nn import Parameter
 
+
 def flatten_json(nested_dict, keep_nested_name=True):
     """Turns a nested dictionary into a flattened dictionary. Designed to facilitate the populating of Config.Part tables
     with the corresponding config json list of parameters from the Config master table.

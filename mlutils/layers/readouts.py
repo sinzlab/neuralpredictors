@@ -640,7 +640,7 @@ class FullGaussian2d(nn.Module):
     def __init__(self, in_shape, outdims, bias, init_mu_range=0.1, init_sigma=1, batch_sample=True,
                  align_corners=True, gauss_type='full', grid_mean_predictor=None,
                  shared_features=None, shared_grid=None, source_grid=None, shared_transform=None, init_noise=1e-3,
-                 init_transform_scale=0.3, **kwargs):
+                 init_transform_scale=0.2, **kwargs):
 
         super().__init__()
 

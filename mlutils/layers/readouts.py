@@ -37,7 +37,7 @@ class SpatialXFeatureLinear(nn.Module):
     Factorized fully connected layer. Weights are a sum of outer products between a spatial filter and a feature vector.
     """
 
-    def __init__(self, in_shape, outdims, bias, normalize=True, init_noise=1e-3, **kwargs):
+    def __init__(self, in_shape, outdims, bias, normalize=True, init_noise=1e-3, constrain_pos=False, **kwargs):
         super().__init__()
         self.in_shape = in_shape
         self.outdims = outdims
@@ -46,6 +46,7 @@ class SpatialXFeatureLinear(nn.Module):
         self.spatial = Parameter(torch.Tensor(self.outdims, w, h))
         self.features = Parameter(torch.Tensor(self.outdims, c))
         self.init_noise = init_noise
+        self.constrain_pos = constrain_pos
         if bias:
             bias = Parameter(torch.Tensor(self.outdims))
             self.register_parameter('bias', bias)
@@ -88,6 +89,10 @@ class SpatialXFeatureLinear(nn.Module):
             self.bias.data.fill_(0)
 
     def forward(self, x, shift=None):
+        if self.constrain_pos:
+            positive(self.features)
+            positive(self.normalized_spatial)
+            
         y = torch.einsum('ncwh,owh->nco', x, self.normalized_spatial)
         y = torch.einsum('nco,oc->no', y, self.features)
         if self.bias is not None:

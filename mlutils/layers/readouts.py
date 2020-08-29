@@ -943,9 +943,13 @@ class DeterministicGaussian2d(nn.Module):
         constrain_mode (str): ['default', 'abs', 'elu'] sets the way the weights are constrained, default: 'default'
     """
 
-    def __init__(self, in_shape, outdims, bias, positive=False, constrain_mode='default', **kwargs):
+    def __init__(self, in_shape, outdims, bias, init_mu_range=0.1, init_sigma=1, positive=False, constrain_mode='default', **kwargs):
 
         super().__init__()
+        
+        if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma <= 0.0:
+            raise ValueError("either init_mu_range doesn't belong to [0.0, 1.0] or init_sigma_range is non-positive")
+        
         self.in_shape = in_shape
         c, w, h = in_shape
         self.outdims = outdims
@@ -969,6 +973,9 @@ class DeterministicGaussian2d(nn.Module):
             self.register_parameter('bias', bias)
         else:
             self.register_parameter('bias', None)
+            
+        self.init_mu_range = init_mu_range
+        self.init_sigma = init_sigma
 
         self.initialize()
 
@@ -980,6 +987,9 @@ class DeterministicGaussian2d(nn.Module):
         return grid.repeat([self.outdims, 1, 1, 1])
 
     def mask(self, shift=None):
+        
+        self.mu.clamp_(min=-1, max=1)
+        
         variances = torch.exp(self.log_var).view(-1, 1, 1)
         
         if shift is None:
@@ -998,6 +1008,10 @@ class DeterministicGaussian2d(nn.Module):
         """
         initialize function initializes the mean, sigma for the Gaussian readout and features weights
         """
+        self.mu.data.uniform_(-self.init_mu_range, self.init_mu_range)
+        
+        self.log_var.data.fill_(np.log(self.init_sigma ** 2))
+        
         self.features.data.fill_(1 / self.in_shape[0])
 
         if self.bias is not None:
@@ -1024,23 +1038,6 @@ class DeterministicGaussian2d(nn.Module):
             return torch.exp(self.log_var).mean()
         else:
             return torch.exp(self.log_var).sum()
-        
-    def mean_l1(self, average=True, shift=None):
-        """
-        mean_l1 function returns the l1 regularization term either the mean or just the sum of weights
-        Args:
-            average(bool): if True, use mean of weights for regularization
-        """
-        
-        if shift is None:
-            mu = self.mu
-        else:
-            mu = self.mu + shift[None, ...]
-        
-        if average:
-            return mu.abs().mean()
-        else:
-            return mu.abs().sum()
 
     def forward(self, x, shift=None, out_idx=None):
         N, c, w, h = x.size()

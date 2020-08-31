@@ -58,8 +58,7 @@ class PiecewiseLinearExpNonlinearity(nn.Module):
         self.smooth_reg_weight = smooth_reg_weight
         self.smoothnes_reg_order = smoothnes_reg_order
         
-        k = int(num_bins / 2)
-        self.num_bins = 2 * k
+        self.num_bins = 2 * int(num_bins / 2)
         
         if self.bias:
             self.b = torch.nn.Parameter(torch.empty((number_of_neurons,), dtype=torch.float32).fill_(self.initial))
@@ -79,7 +78,7 @@ class PiecewiseLinearExpNonlinearity(nn.Module):
     def linstep(self, x, a, b):
         return torch.min(b - a, torch.max(self.zero, x - a)) / (b - a)
         
-    def smoothness_regularizer(self):
+    def smoothness_regularizer(self, verbose=False):
         penalty = 0
         kernel = torch.tensor(np.reshape([-1.0, 1.0], (1, 1, 2)), dtype=torch.float32).cuda()
         
@@ -88,7 +87,8 @@ class PiecewiseLinearExpNonlinearity(nn.Module):
             w = F.conv1d(w, kernel)
             penalty += torch.sum(torch.mean(w**2, 1))
         penalty = torch.sum(self.smooth_reg_weight * penalty)
-        print('penalty', penalty)
+        if verbose:
+            print('PieceWiseLinearExpNonLin, Smoothness penalty:', penalty)
         return penalty
     
     def forward(self, x):

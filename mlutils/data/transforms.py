@@ -213,16 +213,17 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
             1% of the mean std (to avoid division by 0)
     """
 
-    def __init__(self, data, stats_source="all", exclude=None):
+    def __init__(self, data, stats_source="all", exclude=None, inputs_mean=None, inputs_std=None):
 
         self.exclude = exclude or []
 
         in_name = "images" if "images" in data.statistics.keys() else "inputs"
+        out_name = "responses" if "responses" in data.statistics.keys() else "targets"
 
-        self._inputs_mean = data.statistics[in_name][stats_source]["mean"][()]
-        self._inputs_std = data.statistics[in_name][stats_source]["std"][()]
+        self._inputs_mean = data.statistics[in_name][stats_source]["mean"][()] if inputs_mean is None else inputs_mean
+        self._inputs_std = data.statistics[in_name][stats_source]["std"][()] if inputs_mean is None else inputs_std
 
-        s = np.array(data.statistics["responses"][stats_source]["std"])
+        s = np.array(data.statistics[out_name][stats_source]["std"])
 
         # TODO: consider other baselines
         threshold = 0.01 * s.mean()
@@ -236,8 +237,11 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
         itransforms[in_name] = lambda x: x * self._inputs_std + self._inputs_mean
 
         # -- responses
-        transforms["responses"] = lambda x: x * self._response_precision
-        itransforms["responses"] = lambda x: x / self._response_precision
+        transforms[out_name] = lambda x: x * self._response_precision
+        itransforms[out_name] = lambda x: x / self._response_precision
+
+        # -- behavior
+        transforms['behavior'] = lambda x: x
 
         if "eye_position" in data.data_keys:
             # -- eye position

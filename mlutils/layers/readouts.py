@@ -717,7 +717,7 @@ class FullGaussian2d(nn.Module):
             mu_dispersion(float): average dispersion of the mean 2d-position
         """
 
-        return self._mu.std()
+        return self._mu.squeeze().std(0).sum()
 
     def feature_l1(self, average=True):
         """

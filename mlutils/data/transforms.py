@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 from collections import namedtuple
-
+from skimage.transform import rescale
 
 class Invertible:
     def inv(self, y):
@@ -240,24 +240,23 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
         transforms[out_name] = lambda x: x * self._response_precision
         itransforms[out_name] = lambda x: x / self._response_precision
 
+
         # -- behavior
         transforms['behavior'] = lambda x: x
 
-        if "eye_position" in data.data_keys:
-            # -- eye position
-            self._eye_mean = np.array(data.statistics["eye_position"][stats_source]["mean"])
-            self._eye_std = np.array(data.statistics["eye_position"][stats_source]["std"])
-            transforms["eye_position"] = lambda x: (x - self._eye_mean) / self._eye_std
-            itransforms["eye_position"] = lambda x: x * self._eye_std + self._eye_mean
+        if "pupil_center" in data.data_keys:
+            self._eye_mean = np.array(data.statistics["pupil_center"][stats_source]["mean"])
+            self._eye_std = np.array(data.statistics["pupil_center"][stats_source]["std"])
+            transforms["pupil_center"] = lambda x: (x - self._eye_mean) / self._eye_std
+            itransforms["pupil_center"] = lambda x: x * self._eye_std + self._eye_mean
 
             s = np.array(data.statistics["behavior"][stats_source]["std"])
 
             # TODO: same as above - consider other baselines
-            threshold = 0.01 * s.mean()
+            threshold = 0.01 * s
             idx = s > threshold
             self._behavior_precision = np.ones_like(s) / threshold
             self._behavior_precision[idx] = 1 / s[idx]
-
             # -- behavior
             transforms["behavior"] = lambda x: x * self._behavior_precision
             itransforms["behavior"] = lambda x: x / self._behavior_precision
@@ -302,14 +301,18 @@ class AddBehaviorAsChannels(MovieTransform, StaticTransform, Invertible):
         )
         self.transforms["responses"] = lambda x: x
         self.transforms["behavior"] = lambda x: x
+        self.transforms["pupil_center"] = lambda x: x
 
     def __call__(self, x):
+
         key_vals = {k: v for k, v in zip(x._fields, x)}
         dd = {
             "images": self.transforms["images"](key_vals["images"], key_vals["behavior"]),
             "responses": self.transforms["responses"](key_vals["responses"]),
             "behavior": self.transforms["behavior"](key_vals["behavior"]),
         }
+        if "pupil_center" in key_vals:
+            dd["pupil_center"] = self.transforms["pupil_center"](key_vals["pupil_center"])
         return x.__class__(**dd)
 
 

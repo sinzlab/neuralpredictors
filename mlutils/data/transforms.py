@@ -326,3 +326,35 @@ class SelectInputChannel(StaticTransform):
         img = key_vals["images"]
         key_vals["images"] = img[:, (self.grab_channel,), ] if len(img.shape) == 4 else img[(self.grab_channel,), ]
         return x.__class__(**key_vals)
+
+
+class ScaleInputs(MovieTransform, StaticTransform, Invertible):
+    """
+    Given a StaticImage object that includes "images", will rescale the image with a given factor.
+    """
+
+    def __init__(self,
+                 scale,
+                 mode="reflect",
+                 multichannel=False,
+                 anti_aliasing=False,
+                 preserve_range=True,
+                 clip=True):
+        self.scale = scale
+        self.mode = mode
+        self.multichannel = multichannel
+        self.anti_aliasing = anti_aliasing
+        self.preserve_range = preserve_range
+        self.clip = clip
+
+    def __call__(self, x):
+        key_vals = {k: v for k, v in zip(x._fields, x)}
+        img = key_vals["images"]
+        key_vals["images"] = rescale(img,
+                                     scale=self.scale,
+                                     mode=self.mode,
+                                     multichannel=self.multichannel,
+                                     anti_aliasing=self.anti_aliasing,
+                                     clip=self.clip,
+                                     preserve_range=self.preserve_range)
+        return x.__class__(**key_vals)

@@ -250,6 +250,7 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
             transforms["pupil_center"] = lambda x: (x - self._eye_mean) / self._eye_std
             itransforms["pupil_center"] = lambda x: x * self._eye_std + self._eye_mean
 
+        if "behavior" in data.data_keys:
             s = np.array(data.statistics["behavior"][stats_source]["std"])
 
             # TODO: same as above - consider other baselines

@@ -1,6 +1,7 @@
 from torch import nn as nn
 from torch.nn import functional as F
 import torch
+import numpy as np
 
 
 def elu1(x):
@@ -47,7 +48,7 @@ class AdaptiveELU(nn.Module):
 
 
 class PiecewiseLinearExpNonlinearity(nn.Module):
-    def __init__(self, number_of_neurons, bias=True, initial_value=0.01, vmin=-3, vmax=6, num_bins=50, smooth_reg_weight=0, smoothnes_reg_order=2):
+    def __init__(self, number_of_neurons, bias=False, initial_value=0.01, vmin=-3, vmax=6, num_bins=50, smooth_reg_weight=0, smoothnes_reg_order=2):
         super().__init__()
         
         self.bias = bias
@@ -82,7 +83,7 @@ class PiecewiseLinearExpNonlinearity(nn.Module):
         penalty = 0
         kernel = torch.tensor(np.reshape([-1.0, 1.0], (1, 1, 2)), dtype=torch.float32).cuda()
         
-        w = torch.unsqueeze(self.a, 1)   # shape: neurons, 1, bins
+        w = torch.reshape(self.a, (-1, 1, self.num_bins)) # shape: neurons, 1, bins
         for k in range(self.smoothnes_reg_order):
             w = F.conv1d(w, kernel)
             penalty += torch.sum(torch.mean(w**2, 1))
@@ -135,3 +136,28 @@ class PiecewiseLinearExpNonlinearity(nn.Module):
             f.show()
         if return_fig:
             return f
+        
+class MultiplePiecewiseLinearExpNonlinearity(nn.ModuleDict):
+    def __init__(self, n_neurons_dict, bias=False, initial_value=0.01, vmin=-3, vmax=6, num_bins=50, smooth_reg_weight=0, smoothnes_reg_order=2):
+        # super init to get the _module attribute
+        super().__init__()
+        for k in n_neurons_dict:
+            n_neurons = n_neurons_dict[k]
+            self.add_module(k, PiecewiseLinearExpNonlinearity(number_of_neurons=n_neurons,
+                                            bias=bias,
+                                            initial_value=initial_value,
+                                            vmin=vmin,
+                                            vmax=vmax,
+                                            num_bins=num_bins,
+                                            smooth_reg_weight=smooth_reg_weight,
+                                            smoothnes_reg_order=smoothnes_reg_order)
+                            )
+
+    def forward(self, *args, data_key=None, **kwargs):
+        if data_key is None and len(self) == 1:
+            data_key = list(self.keys())[0]
+        return self[data_key](*args, **kwargs)
+
+
+    def regularizer(self, data_key):
+        return self[data_key].smoothness_regularizer()

@@ -56,13 +56,14 @@ class SpatialXFeatureLinear(nn.Module):
 
     @property
     def normalized_spatial(self):
-        positive(self.spatial)
         if self.normalize:
             norm = self.spatial.pow(2).sum(dim=1, keepdim=True)
             norm = norm.sum(dim=2, keepdim=True).sqrt().expand_as(self.spatial) + 1e-6
             weight = self.spatial / norm
         else:
             weight = self.spatial
+        if self.constrain_pos:
+            positive(weight)
         return weight
 
     @property
@@ -91,7 +92,6 @@ class SpatialXFeatureLinear(nn.Module):
     def forward(self, x, shift=None):
         if self.constrain_pos:
             positive(self.features)
-            positive(self.normalized_spatial)
             
         y = torch.einsum('ncwh,owh->nco', x, self.normalized_spatial)
         y = torch.einsum('nco,oc->no', y, self.features)

@@ -103,3 +103,7 @@ venv.bak/
 # mypy
 .mypy_cache/
 .idea
+fabee.yml*
+
+# misc
+.history.*

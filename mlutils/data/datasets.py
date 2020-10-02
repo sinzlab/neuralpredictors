@@ -133,8 +133,17 @@ class TransformDataset(Dataset):
 
 
 class H5SequenceSet(TransformDataset):
-    def __init__(self, filename, *data_keys, output_rename=None, transforms=None):
+    def __init__(
+        self,
+        filename,
+        *data_keys,
+        output_rename=None,
+        transforms=None,
+        output_dict=False
+    ):
         super().__init__(transforms=transforms)
+
+        self.output_dict = output_dict
 
         if output_rename is None:
             output_rename = {}
@@ -194,6 +203,9 @@ class H5SequenceSet(TransformDataset):
         # convert to output point
         if self.rename_output:
             x = self.output_point(*x)
+
+        if self.output_dict:
+            x = x._asdict
         return x
 
     def __getattr__(self, item):

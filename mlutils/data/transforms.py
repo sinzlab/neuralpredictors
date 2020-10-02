@@ -250,7 +250,8 @@ class Rename(MovieTransform, StaticTransform, Invertible):
 
 class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
     """
-    Note that this normalizer only works with MovieDataset of very specific formulation
+    Note that this normalizer only works with datasets that provide specific attributes information
+    of very specific formulation
 
     Normalizes a trial with fields: inputs, behavior, eye_position, and responses. The pair of
     behavior and eye_position can be missing. The following normalizations are applied:
@@ -265,6 +266,95 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
     def __init__(self, data, stats_source="all", exclude=None):
 
         self.exclude = exclude or []
+
+        in_name = "images" if "images" in data.statistics.keys() else "inputs"
+
+        self._inputs_mean = data.statistics[in_name][stats_source]["mean"][()]
+        self._inputs_std = data.statistics[in_name][stats_source]["std"][()]
+
+        s = np.array(data.statistics["responses"][stats_source]["std"])
+
+        # TODO: consider other baselines
+        threshold = 0.01 * s.mean()
+        idx = s > threshold
+        self._response_precision = np.ones_like(s) / threshold
+        self._response_precision[idx] = 1 / s[idx]
+        transforms, itransforms = {}, {}
+
+        # -- inputs
+        transforms[in_name] = lambda x: (x - self._inputs_mean) / self._inputs_std
+        itransforms[in_name] = lambda x: x * self._inputs_std + self._inputs_mean
+
+        # -- responses
+        transforms["responses"] = lambda x: x * self._response_precision
+        itransforms["responses"] = lambda x: x / self._response_precision
+
+        if "eye_position" in data.data_keys:
+            # -- eye position
+            self._eye_mean = np.array(
+                data.statistics["eye_position"][stats_source]["mean"]
+            )
+            self._eye_std = np.array(
+                data.statistics["eye_position"][stats_source]["std"]
+            )
+            transforms["eye_position"] = lambda x: (x - self._eye_mean) / self._eye_std
+            itransforms["eye_position"] = lambda x: x * self._eye_std + self._eye_mean
+
+            s = np.array(data.statistics["behavior"][stats_source]["std"])
+
+            # TODO: same as above - consider other baselines
+            threshold = 0.01 * s.mean()
+            idx = s > threshold
+            self._behavior_precision = np.ones_like(s) / threshold
+            self._behavior_precision[idx] = 1 / s[idx]
+
+            # -- behavior
+            transforms["behavior"] = lambda x: x * self._behavior_precision
+            itransforms["behavior"] = lambda x: x / self._behavior_precision
+
+        self._transforms = transforms
+        self._itransforms = itransforms
+
+    def __call__(self, x):
+        """
+        Apply transformation
+        """
+        return x.__class__(
+            **{
+                k: (self._transforms[k](v) if k not in self.exclude else v)
+                for k, v in zip(x._fields, x)
+            }
+        )
+
+    def inv(self, x):
+        return x.__class__(
+            **{
+                k: (self._itransforms[k](v) if k not in self.exclude else v)
+                for k, v in zip(x._fields, x)
+            }
+        )
+
+    def __repr__(self):
+        return super().__repr__() + (
+            "(not {})".format(", ".join(self.exclude))
+            if self.exclude is not None
+            else ""
+        )
+
+
+class Normalizer(MovieTransform, StaticTransform, Invertible):
+    """
+    Normalizes each field according to provided mus and stds. If either entry is missing, mu=0 and std=1 is assumed by default.
+
+    Generally, response of each field undergoes z-scoring:
+        output = (input - mu) / std
+    """
+
+    def __init__(self, mus=None, stds=None, exclude=None):
+
+        self.exclude = exclude or []
+
+        keys = set(mus.ke)
 
         in_name = "images" if "images" in data.statistics.keys() else "inputs"
 

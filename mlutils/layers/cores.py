@@ -8,11 +8,12 @@ import torchvision
 from .. import regularizers
 from . import Bias2DLayer, Scale2DLayer
 from .activations import AdaptiveELU
-from .hermite_layers import \
-        HermiteConv2D, \
-        RotationEquivariantBatchNorm2D, \
-        RotationEquivariantBias2DLayer, \
-        RotationEquivariantScale2DLayer
+from .hermite_layers import (
+    HermiteConv2D,
+    RotationEquivariantBatchNorm2D,
+    RotationEquivariantBias2DLayer,
+    RotationEquivariantScale2DLayer,
+)
 
 
 class Core:
@@ -326,6 +327,7 @@ class RotationEquivariant2dCore(Core2d, nn.Module):
         self.use_avg_reg = use_avg_reg
 
         if rot_eq_batch_norm:
+
             def BatchNormLayer(**kwargs):
                 return RotationEquivariantBatchNorm2D(num_rotations=num_rotations, **kwargs)
 
@@ -334,6 +336,7 @@ class RotationEquivariant2dCore(Core2d, nn.Module):
 
             def ScaleLayer(**kwargs):
                 return RotationEquivariantScale2DLayer(num_rotations=num_rotations, **kwargs)
+
         else:
             BatchNormLayer = nn.BatchNorm2d
             BiasLayer = Bias2DLayer
@@ -358,13 +361,15 @@ class RotationEquivariant2dCore(Core2d, nn.Module):
             filter_size=input_kern,
             stride=stride,
             padding=input_kern // 2 if pad_input else 0,
-            first_layer=True
+            first_layer=True,
         )
         if batch_norm:
             if independent_bn_bias:
                 layer["norm"] = BatchNormLayer(num_features=hidden_channels, momentum=momentum)
             else:
-                layer["norm"] = BatchNormLayer(num_features=hidden_channels, momentum=momentum, affine=bias and batch_norm_scale)
+                layer["norm"] = BatchNormLayer(
+                    num_features=hidden_channels, momentum=momentum, affine=bias and batch_norm_scale
+                )
                 if bias:
                     if not batch_norm_scale:
                         layer["bias"] = BiasLayer(channels=hidden_channels)
@@ -393,13 +398,15 @@ class RotationEquivariant2dCore(Core2d, nn.Module):
                 filter_size=hidden_kern[l - 1],
                 stride=stride,
                 padding=hidden_padding,
-                first_layer=False
+                first_layer=False,
             )
             if batch_norm:
                 if independent_bn_bias:
                     layer["norm"] = BatchNormLayer(num_features=hidden_channels, momentum=momentum)
                 else:
-                    layer["norm"] = BatchNormLayer(num_features=hidden_channels, momentum=momentum, affine=bias and batch_norm_scale)
+                    layer["norm"] = BatchNormLayer(
+                        num_features=hidden_channels, momentum=momentum, affine=bias and batch_norm_scale
+                    )
                     if bias:
                         if not batch_norm_scale:
                             layer["bias"] = BiasLayer(channels=hidden_channels)
@@ -426,7 +433,15 @@ class RotationEquivariant2dCore(Core2d, nn.Module):
     def group_sparsity(self):
         ret = 0
         for l in range(1, self.layers):
-            ret = ret + self.features[l].conv.weights_all_rotations.pow(2).sum(3, keepdim=True).sum(2, keepdim=True).sqrt().mean()
+            ret = (
+                ret
+                + self.features[l]
+                .conv.weights_all_rotations.pow(2)
+                .sum(3, keepdim=True)
+                .sum(2, keepdim=True)
+                .sqrt()
+                .mean()
+            )
         return ret / ((self.layers - 1) if self.layers > 1 else 1)
 
     def regularizer(self):

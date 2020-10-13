@@ -9,12 +9,12 @@ with open(path.join(here, "requirements.txt")) as f:
 
 
 setup(
-    name="ml-utils",
-    version="0.0.0",
-    description="Neuroscience and Machine Learning at Sinz-Lab ",
-    author="Fabian Sinz",
-    author_email="fabian.sinz@uni-tuebingen.de",
-    url="https://github.com/sinzlab/ml-utils",
+    name="neuralpredictors",
+    version="0.0.0rc2",
+    description="Sinz Lab Neural System Identification Utilities",
+    author="Sinz Lab",
+    author_email="software@sinzlab.net",
+    url="https://github.com/sinzlab/neuralpredictors",
     packages=find_packages(exclude=[]),
     install_requires=requirements,
 )

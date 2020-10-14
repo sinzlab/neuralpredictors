@@ -1,4 +1,4 @@
-from mlutils.utils import flatten_json
+from neuralpredictors.utils import flatten_json
 import pytest
 
 

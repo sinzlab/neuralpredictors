@@ -89,7 +89,7 @@ class Stacked2dCore(Core2d, nn.Module):
             hidden_kern:    kernel size of each hidden layer's kernel
             layers:         number of layers
             gamma_hidden:   regularizer factor for group sparsity
-            gamma_input:    regularizer factor for the input weights (default: LaplaceL2, see mlutils.regularizers)
+            gamma_input:    regularizer factor for the input weights (default: LaplaceL2, see neuralpredictors.regularizers)
             skip:           Adds a skip connection
             final_nonlinearity: Boolean, if true, appends an ELU layer after the last BatchNorm (if BN=True)
             elu_xshift, elu_yshift: final_nonlinearity(x) = Elu(x - elu_xshift) + elu_yshift
@@ -107,7 +107,7 @@ class Stacked2dCore(Core2d, nn.Module):
                 the kernel size (recommended). Setting Padding to 0 is not recommended and leads to artefacts,
                 zero is the default however to recreate backwards compatibility.
             normalize_laplace_regularizer: Boolean, if set to True, will use the LaplaceL2norm function from
-                mlutils.regularizers, which returns the regularizer as |laplace(filters)| / |filters|
+                neuralpredictors.regularizers, which returns the regularizer as |laplace(filters)| / |filters|
             input_regularizer:  String that must match one of the regularizers in ..regularizers
             stack:        Int or iterable. Selects which layers of the core should be stacked for the readout.
                             default value will stack all layers on top of each other.
@@ -274,7 +274,7 @@ class RotationEquivariant2dCore(Core2d, nn.Module):
             stride:         stride in convolutional layers
             upsampling:     upsampling scale of Hermite filters
             gamma_hidden:   regularizer factor for group sparsity
-            gamma_input:    regularizer factor for the input weights (default: LaplaceL2, see mlutils.regularizers)
+            gamma_input:    regularizer factor for the input weights (default: LaplaceL2, see neuralpredictors.regularizers)
             final_nonlinearity: Boolean, if true, appends an ELU layer after the last BatchNorm (if BN=True)
             elu_xshift, elu_yshift: final_nonlinearity(x) = Elu(x - elu_xshift) + elu_yshift
             bias:           Adds a bias layer.
@@ -290,7 +290,7 @@ class RotationEquivariant2dCore(Core2d, nn.Module):
                 the kernel size (recommended). Setting Padding to 0 is not recommended and leads to artefacts,
                 zero is the default however to recreate backwards compatibility.
             normalize_laplace_regularizer: Boolean, if set to True, will use the LaplaceL2norm function from
-                mlutils.regularizers, which returns the regularizer as |laplace(filters)| / |filters|
+                neuralpredictors.regularizers, which returns the regularizer as |laplace(filters)| / |filters|
             input_regularizer:  String that must match one of the regularizers in ..regularizers
             stack:        Int or iterable. Selects which layers of the core should be stacked for the readout.
                             default value will stack all layers on top of each other.

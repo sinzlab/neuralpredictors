@@ -8,7 +8,7 @@ from torch.nn import functional as F
 
 # TODO: make sure to either compute the inverse log det and add, or the forward logdet and subtract
 # TODO: how should x be handled when reverse = True
-from mlutils.constraints import positive, at_least
+from ..constraints import positive, at_least
 
 
 class ConditionalFlow(nn.ModuleList):

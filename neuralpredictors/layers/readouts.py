@@ -1,16 +1,14 @@
 import warnings
-from collections import OrderedDict
-
 import numpy as np
 from scipy.stats import ortho_group
 import torch
 from torch import nn as nn
-from torch.nn import ModuleDict
 from torch.nn import Parameter
 from torch.nn import functional as F
 
+from nnfabrik.utility.nn_helpers import get_module_output
 from ..constraints import positive
-from ..utils import BiasNet
+from .architectures import BiasNet
 
 
 class ConfigurationError(Exception):
@@ -112,34 +110,140 @@ class SpatialXFeatureLinear(nn.Module):
         )
 
 
-class ClonedReadout(Readout, nn.Module):
-    """
-    This readout clones another readout while applying a linear transformation on the output. Used for MultiDatasets
-    with matched neurons where the x-y positions in the grid stay the same but the predicted responses are rescaled due
-    to varying experimental conditions.
-    """
+class FullSXF(nn.Module):
 
-    def __init__(self, original_readout, **kwargs):
+    def __init__(self, in_shape, outdims, bias, normalize=True, init_noise=1e-3, shared_features=None, **kwargs):
+
         super().__init__()
 
-        self._source = original_readout
-        self.alpha = Parameter(torch.ones(self._source.features.shape[-1]))
-        self.beta = Parameter(torch.zeros(self._source.features.shape[-1]))
+        c, w, h = in_shape
+        self.in_shape = in_shape
+        self.outdims = outdims
 
-    def forward(self, x):
-        x = self._source(x) * self.alpha + self.beta
-        return x
+        self.init_noise = init_noise
+        self.normalize = normalize
 
-    def feature_l1(self, average=True):
-        """ Regularization is only applied on the scaled feature weights, not on the bias."""
-        if average:
-            return (self._source.features * self.alpha).abs().mean()
+        self._original_features = True
+        self.initialize_features(**(shared_features or {}))
+        self.spatial = nn.Parameter(torch.Tensor(self.outdims, w, h))
+
+        if bias:
+            bias = nn.Parameter(torch.Tensor(outdims))
+            self.register_parameter("bias", bias)
         else:
-            return (self._source.features * self.alpha).abs().sum()
+            self.register_parameter("bias", None)
+
+        self.initialize()
+
+    @property
+    def shared_features(self):
+        return self._features
+
+    @property
+    def features(self):
+        if self._shared_features:
+            return self.scales * self._features[self.feature_sharing_index, ...]
+        else:
+            return self._features
+
+    @property
+    def weight(self):
+        n = self.outdims
+        c, w, h = self.in_shape
+        return self.normalized_spatial.view(n, 1, w, h) * self.features.view(n, c, 1, 1)
+
+    @property
+    def normalized_spatial(self):
+        positive(self.spatial)
+        if self.normalize:
+            norm = self.spatial.pow(2).sum(dim=1, keepdim=True)
+            norm = norm.sum(dim=2, keepdim=True).sqrt().expand_as(self.spatial) + 1e-6
+            weight = self.spatial / norm
+        else:
+            weight = self.spatial
+        return weight
+
+    def l1(self, average=False):
+        n = self.outdims
+        c, w, h = self.in_shape
+
+        if self._original_features:
+            ret = (self.normalized_spatial.view(self.outdims, -1).abs().sum(dim=1, keepdim=True)
+                   * self.features.view(self.outdims, -1).abs().sum(dim=1)).sum()
+            if average:
+                ret = ret / (n * c * w * h)
+        else:
+            ret = self.normalized_spatial.view(self.outdims, -1).abs().sum()
+            if average:
+                ret = ret / (n * w * h)
+        return ret
 
     def initialize(self):
-        self.alpha.data.fill_(1.0)
-        self.beta.data.fill_(0.0)
+        """
+        Initializes the mean, and sigma of the Gaussian readout along with the features weights
+        """
+        self.spatial.data.normal_(0, self.init_noise)
+        self._features.data.normal_(0, self.init_noise)
+        #self._features.data.fill_(1 / self.in_shape[0])
+        if self._shared_features:
+            self.scales.data.fill_(1.)
+        if self.bias is not None:
+            self.bias.data.fill_(0)
+
+    def initialize_features(self, match_ids=None, shared_features=None):
+        """
+        The internal attribute `_original_features` in this function denotes whether this instance of the FullGuassian2d
+        learns the original features (True) or if it uses a copy of the features from another instance of FullGaussian2d
+        via the `shared_features` (False). If it uses a copy, the feature_l1 regularizer for this copy will return 0
+        """
+        c, w, h = self.in_shape
+        if match_ids is not None:
+            assert self.outdims == len(match_ids)
+
+            n_match_ids = len(np.unique(match_ids))
+            if shared_features is not None:
+                assert shared_features.shape == (n_match_ids, c), \
+                    f'shared features need to have shape ({n_match_ids}, {c})'
+                self._features = shared_features
+                self._original_features = False
+            else:
+                self._features = nn.Parameter(
+                    torch.Tensor(n_match_ids, c))  # feature weights for each channel of the core
+            self.scales = nn.Parameter(torch.Tensor(self.outdims, 1))  # feature weights for each channel of the core
+            _, sharing_idx = np.unique(match_ids, return_inverse=True)
+            self.register_buffer('feature_sharing_index', torch.from_numpy(sharing_idx))
+            self._shared_features = True
+        else:
+            self._features = nn.Parameter(
+                torch.Tensor(self.outdims, c))  # feature weights for each channel of the core
+            self._shared_features = False
+
+    def forward(self, x):
+        N, c, w, h = x.size()
+        c_in, w_in, h_in = self.in_shape
+        if (c_in, w_in, h_in) != (c, w, h):
+            raise ValueError("the specified feature map dimension is not the readout's expected input dimension")
+
+        y = torch.einsum('ncwh,owh->nco', x, self.normalized_spatial)
+        y = torch.einsum('nco,oc->no', y, self.features)
+        if self.bias is not None:
+            y = y + self.bias
+        return y
+
+    def __repr__(self):
+        c, w, h = self.in_shape
+        r = self.__class__.__name__ + " (" + "{} x {} x {}".format(c, w, h) + " -> " + str(self.outdims) + ")"
+        if self.bias is not None:
+            r += " with bias"
+        if self._shared_features:
+            r += ", with {} features".format('original' if self._original_features else 'shared')
+        if self.normalize:
+            r += ", normalized"
+        else:
+            r += ", unnormalized"
+        for ch in self.children():
+            r += "  -> " + ch.__repr__() + "\n"
+        return r
 
 
 class PointPooled2d(nn.Module):
@@ -1400,107 +1504,143 @@ class UltraSparse(nn.Module):
 # ------------ Multi Readouts ------------------------
 
 
-class MultiReadout(Readout, ModuleDict):
-    _base_readout = None
+class MultiReadout:
 
-    def __init__(self, in_shape, loaders, gamma_readout, clone_readout=False, **kwargs):
-        if self._base_readout is None:
-            raise ValueError("Attribute _base_readout must be set")
+    def forward(self, *args, data_key=None, **kwargs):
+        if data_key is None and len(self) == 1:
+            data_key = list(self.keys())[0]
+        return self[data_key](*args, **kwargs)
 
+    def regularizer(self, data_key):
+        l1_reg = self.gamma_readout * self[data_key].feature_l1(average=False)
+        return l1_reg
+
+
+class MultipleFullGaussian2d(MultiReadout, torch.nn.ModuleDict):
+    def __init__(self, core, in_shape_dict, n_neurons_dict, init_mu_range, init_sigma, bias, gamma_readout,
+                 gauss_type, grid_mean_predictor, grid_mean_predictor_type, source_grids,
+                 share_features, share_grid, share_transform, shared_match_ids, init_noise, init_transform_scale):
+        # super init to get the _module attribute
         super().__init__()
+        k0 = None
+        for i, k in enumerate(n_neurons_dict):
+            k0 = k0 or k
+            in_shape = get_module_output(core, in_shape_dict[k])[1:]
+            n_neurons = n_neurons_dict[k]
 
-        self.in_shape = in_shape
-        self.neurons = OrderedDict([(k, loader.dataset.n_neurons) for k, loader in loaders.items()])
-        if "positive" in kwargs:
-            self._positive = kwargs["positive"]
+            source_grid = None
+            shared_grid = None
+            shared_transform = None
+            if grid_mean_predictor is not None:
+                if grid_mean_predictor_type == 'cortex':
+                    source_grid = source_grids[k]
+                else:
+                    raise KeyError('grid mean predictor {} does not exist'.format(grid_mean_predictor_type))
+                if share_transform:
+                    shared_transform = None if i == 0 else self[k0].mu_transform
 
-        self.gamma_readout = gamma_readout  # regularisation strength
+            elif share_grid:
+                shared_grid = {
+                    'match_ids': shared_match_ids[k],
+                    'shared_grid': None if i == 0 else self[k0].shared_grid
+                }
 
-        for i, (k, n_neurons) in enumerate(self.neurons.items()):
-            if i == 0 or clone_readout is False:
-                self.add_module(k, self._base_readout(in_shape=in_shape, outdims=n_neurons, **kwargs))
-                original_readout = k
-            elif i > 0 and clone_readout is True:
-                self.add_module(k, ClonedReadout(self[original_readout], **kwargs))
+            if share_features:
+                shared_features = {
+                    'match_ids': shared_match_ids[k],
+                    'shared_features': None if i == 0 else self[k0].shared_features
+                }
+            else:
+                shared_features = None
 
-    def initialize(self, mean_activity_dict):
-        for k, mu in mean_activity_dict.items():
-            self[k].initialize()
-            if hasattr(self[k], "bias"):
-                self[k].bias.data = mu.squeeze() - 1
-
-    def regularizer(self, readout_key):
-        return self[readout_key].feature_l1() * self.gamma_readout
-
-    @property
-    def positive(self):
-        if hasattr(self, "_positive"):
-            return self._positive
-        else:
-            return False
-
-    @positive.setter
-    def positive(self, value):
-        self._positive = value
-        for k in self:
-            self[k].positive = value
-
-
-class MultiplePointPyramid2d(MultiReadout):
-    _base_readout = PointPyramid2d
-
-
-class MultipleGaussian3d(MultiReadout):
-    """
-    Instantiates multiple instances of Gaussian3d Readouts
-    usually used when dealing with different datasets or areas sharing the same core.
-    Args:
-        in_shape (list): shape of the input feature map [channels, width, height]
-        loaders (list):  a list of dataset objects
-        gamma_readout (float): regularisation term for the readout which is usally set to 0.0 for gaussian3d readout
-                               as it contains one dimensional weight
-
-    """
-
-    _base_readout = Gaussian3d
-
-    # Make sure this is not a bug
-    def regularizer(self, readout_key):
-        return self.gamma_readout
+            self.add_module(k, FullGaussian2d(
+                in_shape=in_shape,
+                outdims=n_neurons,
+                init_mu_range=init_mu_range,
+                init_sigma=init_sigma,
+                bias=bias,
+                gauss_type=gauss_type,
+                grid_mean_predictor=grid_mean_predictor,
+                shared_features=shared_features,
+                shared_grid=shared_grid,
+                source_grid=source_grid,
+                shared_transform=shared_transform,
+                init_noise=init_noise,
+                init_transform_scale=init_transform_scale,
+            )
+                            )
+        self.gamma_readout = gamma_readout
 
 
-class MultiplePointPooled2d(MultiReadout):
-    """
-    Instantiates multiple instances of PointPool2d Readouts
-    usually used when dealing with more than one dataset sharing the same core.
-    """
+class MultiplePointPooled2d(MultiReadout, torch.nn.ModuleDict):
+    def __init__(self, core, in_shape_dict, n_neurons_dict, pool_steps, pool_kern, bias, init_range, gamma_readout):
+        # super init to get the _module attribute
+        super(MultiplePointPooled2d, self).__init__()
+        for k in n_neurons_dict:
+            in_shape = get_module_output(core, in_shape_dict[k])[1:]
+            n_neurons = n_neurons_dict[k]
 
-    _base_readout = PointPooled2d
-
-
-class MultipleFullGaussian2d(MultiReadout):
-    """
-    Instantiates multiple instances of FullGaussian2d Readouts
-    usually used when dealing with more than one dataset sharing the same core.
-
-    Args:
-        in_shape (list): shape of the input feature map [channels, width, height]
-        loaders (list):  a list of dataloaders
-        gamma_readout (float): regularizer for the readout
-    """
-
-    _base_readout = FullGaussian2d
+            self.add_module(k, PointPooled2d(
+                in_shape,
+                n_neurons,
+                pool_steps=pool_steps,
+                pool_kern=pool_kern,
+                bias=bias,
+                init_range=init_range)
+                            )
+        self.gamma_readout = gamma_readout
 
 
-class MultipleUltraSparse(MultiReadout):
-    """
-    This class instantiates multiple instances of UltraSparseReadout
-    useful when dealing with multiple datasets
-    Args:
-        in_shape (list): shape of the input feature map [channels, width, height]
-        loaders (list):  a list of dataset objects
-        gamma_readout (float): regularisation term for the readout which is usally set to 0.0 for UltraSparseReadout readout
-                               as it contains one dimensional weight
-    """
+class MultipleSpatialXFeatureLinear(MultiReadout, torch.nn.ModuleDict):
+    def __init__(self, core, in_shape_dict, n_neurons_dict, init_noise, bias, normalize, gamma_readout):
+        # super init to get the _module attribute
+        super().__init__()
+        for k in n_neurons_dict:
+            in_shape = get_module_output(core, in_shape_dict[k])[1:]
+            n_neurons = n_neurons_dict[k]
 
-    _base_readout = UltraSparse
+            self.add_module(k, SpatialXFeatureLinear(
+                in_shape=in_shape,
+                outdims=n_neurons,
+                init_noise=init_noise,
+                bias=bias,
+                normalize=normalize
+            )
+                            )
+        self.gamma_readout = gamma_readout
+
+    def regularizer(self, data_key):
+        return self[data_key].l1(average=False) * self.gamma_readout
+
+
+class MultipleFullSXF(MultiReadout, torch.nn.ModuleDict):
+    def __init__(self, core, in_shape_dict, n_neurons_dict, init_noise, bias, normalize, gamma_readout, share_features, shared_match_ids):
+        # super init to get the _module attribute
+        super().__init__()
+        k0 = None
+        for i, k in enumerate(n_neurons_dict):
+            k0 = k0 or k
+            in_shape = get_module_output(core, in_shape_dict[k])[1:]
+            n_neurons = n_neurons_dict[k]
+
+            if share_features:
+                shared_features = {
+                    'match_ids': shared_match_ids[k],
+                    'shared_features': None if i == 0 else self[k0].shared_features
+                }
+            else:
+                shared_features = None
+
+            self.add_module(k, FullSXF(
+                in_shape=in_shape,
+                outdims=n_neurons,
+                bias=bias,
+                normalize=normalize,
+                init_noise=init_noise,
+                shared_features=shared_features,
+            )
+                            )
+        self.gamma_readout = gamma_readout
+
+    def regularizer(self, data_key):
+        return self[data_key].l1(average=False) * self.gamma_readout

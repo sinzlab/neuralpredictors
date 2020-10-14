@@ -463,6 +463,7 @@ class TransferLearningCore(Core2d, nn.Module):
         final_nonlinearity=True,
         momentum=0.1,
         fine_tune=False,
+        initialize_like_pytorch=True,
         **kwargs
     ):
         """
@@ -488,6 +489,9 @@ class TransferLearningCore(Core2d, nn.Module):
 
         self.input_channels = input_channels
         self.momentum = momentum
+        self.initialize_like_pytorch = initialize_like_pytorch
+        if not initialize_like_pytorch:
+            assert not pretrained, "Re-initializing weights even though pretrained weights were loaded!"
 
         # Download model and cut after specified layer
         TL_model = getattr(torchvision.models, tl_model_name)(pretrained=pretrained)
@@ -537,6 +541,8 @@ class TransferLearningCore(Core2d, nn.Module):
 
     def initialize(self, cuda=False):
         # Overwrite parent class's initialize function because initialization is done by the 'pretrained' parameter
+        if not self.initialize_like_pytorch:
+            self.apply(self.init_conv)
         self.put_to_cuda(cuda=cuda)
 
 

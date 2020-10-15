@@ -1,2 +1,2 @@
-# ml-utils
-Machine Learning Utils of Sinzlab
+# Neuralpredictors
+[Sinz Lab](https://sinzlab.org/) Neural System Identification Utilities for [PyTorch](https://pytorch.org/).

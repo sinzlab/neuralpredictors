@@ -7,8 +7,7 @@ from torch import nn
 from torch.nn import Parameter
 from torch.nn import functional as F
 
-from neuralpredictors.layers.readouts import Readout, PointPyramid2d, Gaussian3d, PointPooled2d, \
-    FullGaussian2d, UltraSparse
+from ..layers.readouts import Readout, PointPyramid2d, Gaussian3d, PointPooled2d, FullGaussian2d, UltraSparse
 
 
 class Gaussian2d(nn.Module):

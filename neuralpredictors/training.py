@@ -15,6 +15,7 @@ def cycle(iterable):
         except StopIteration:
             iterator = iter(iterable)
 
+
 def copy_state(model):
     """
     Given PyTorch module `model`, makes a copy of the state onto CPU.
@@ -84,17 +85,17 @@ def eval_state(model):
 
 @contextmanager
 def device_state(model, device):
-    original_device = 'cuda' if next(model.parameters()).is_cuda else 'cpu'
-    if not(torch.cuda.is_available()) and (device == 'cuda'):
-        device = 'cpu'
-        warnings.warn('CUDA not found, using CPU')  
+    original_device = "cuda" if next(model.parameters()).is_cuda else "cpu"
+    if not (torch.cuda.is_available()) and (device == "cuda"):
+        device = "cpu"
+        warnings.warn("CUDA not found, using CPU")
     try:
         model.to(device)
         yield model
     finally:
         model.to(original_device)
-        
-    
+
+
 def early_stopping(
     model,
     objective_closure,

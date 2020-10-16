@@ -25,12 +25,24 @@ class Corr(nn.Module):
 
 class PoissonLoss(nn.Module):
     def __init__(self, bias=1e-12, per_neuron=False, avg=True):
+        """
+        Computes Poisson loss between the output and target. Loss is evaluated by computing log likelihood
+        (up to a constant offset dependent on the target) that
+        output prescribes the mean of the Poisson distribution and target is a sample from the distribution.
+
+        Args:
+            bias (float, optional): Value used to numerically stabilize evalution of the log-likelihood. This value is effecitvely added to the output during evaluation. Defaults to 1e-12.
+            per_neuron (bool, optional): If set to True, the average/total Poisson loss is returned for each entry of the last dimension (assumed to be enumeration neurons) separately. Defaults to False.
+            avg (bool, optional): If set to True, return mean loss. Otherwise returns the sum of loss. Defaults to True.
+        """
         super().__init__()
         self.bias = bias
         self.per_neuron = per_neuron
         self.avg = avg
         if self.avg:
-            warnings.warn("Poissonloss is averaged per batch. It's recommended so use sum instead")
+            warnings.warn(
+                "Poissonloss is averaged per batch. It's recommended so use sum instead"
+            )
 
     def forward(self, output, target):
         target = target.detach()
@@ -150,6 +162,10 @@ def corr(y1, y2, axis=-1, eps=1e-8, **kwargs):
     Returns: correlation vector
 
     """
-    y1 = (y1 - y1.mean(axis=axis, keepdims=True)) / (y1.std(axis=axis, keepdims=True, ddof=0) + eps)
-    y2 = (y2 - y2.mean(axis=axis, keepdims=True)) / (y2.std(axis=axis, keepdims=True, ddof=0) + eps)
+    y1 = (y1 - y1.mean(axis=axis, keepdims=True)) / (
+        y1.std(axis=axis, keepdims=True, ddof=0) + eps
+    )
+    y2 = (y2 - y2.mean(axis=axis, keepdims=True)) / (
+        y2.std(axis=axis, keepdims=True, ddof=0) + eps
+    )
     return (y1 * y2).mean(axis=axis, **kwargs)

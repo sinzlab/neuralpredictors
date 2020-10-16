@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 from torch.autograd import Variable
 from functools import partial
-from mlutils.layers.cores import TransferLearningCore
+from neuralpredictors.layers.cores import TransferLearningCore
 from utils_for_tests import compare_vars
 
 

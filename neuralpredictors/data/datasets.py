@@ -567,7 +567,7 @@ class FileTreeDataset(StaticSet):
     def __init__(self, dirname, *data_keys, transforms=None):
         """
         Dataset stored as a file tree. The tree needs to have the subdirs data, meta, meta/neurons, meta/statistics,
-        and meta/trials. Please refer to convert_static_h5_dataset_to_folder in mlutils.data.utils
+        and meta/trials. Please refer to convert_static_h5_dataset_to_folder in neuralpredictors.data.utils
         how to export an hdf5 file into that structure.
 
 
@@ -661,6 +661,7 @@ class FileTreeDataset(StaticSet):
                 print(
                     "{} exists already. Not unpacking {}".format(dirname[:-4], dirname)
                 )
+
             dirname = dirname[:-4]
 
         self.basepath = Path(dirname).absolute()

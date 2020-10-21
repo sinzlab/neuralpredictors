@@ -34,38 +34,131 @@ def copy_state(model):
 
 
 class Tracker:
-    def log_objective(self, obj):
-        raise NotImplementedError()
+    """
+    Abstract Tracker class to serve as the bass class for all trackers.
+    Defines the two interfacing methods of `log_objective` and `finalize`.
+
+    """
+
+    def log_objective(self, obj=None):
+        """
+        Logs the provided object
+
+        Args:
+            obj (Any, optional): Object to be logged
+
+        Raises:
+            NotImplementedError: Override this method to provide a functional behavior.
+        """
+        raise NotImplementedError(
+            "Please override this method to provide functional behavior"
+        )
 
     def finalize(self, obj):
         pass
 
 
 class TimeObjectiveTracker(Tracker):
-    def __init__(self):
-        self.tracker = np.array([[time.time(), 0.0]])
+    """
+    Provides basic tracking of any object with a timestamp. Invoking `finalize()` will
+    make all recorded timestamps relative to the first event tracked unless a specific
+    time value to relativize against is provided.
+    """
+
+    def __init__(self, add_creation_event=False):
+        """
+        Initializes the tracker. If `add_creation_event` is True, then an entry is created with value
+        `0.0` with the timestamp corresponding to the creation fo this tracker object.
+
+        Args:
+            add_creation_event (bool, optional): If set to True, an event for creation with value of 0.0 is added to the log. Defaults to False.
+        """
+        self.tracker = (
+            np.array([[time.time(), 0.0]]) if add_creation_event else np.empty((0, 0))
+        )
 
     def log_objective(self, obj):
+        """
+        Logs the provided object paired with the timestamp. Before finalizing by invoking `finalize()`, all events
+        are logged with absolute time in epoch time in seconds. 
+
+        Args:
+            obj (Any): Object to be logged.
+        """
         new_track_point = np.array([[time.time(), obj]])
         self.tracker = np.concatenate((self.tracker, new_track_point), axis=0)
 
-    def finalize(self):
-        self.tracker[:, 0] -= self.tracker[0, 0]
+    def finalize(self, reference=None):
+        """
+        When invoked, all logs time entries are relativized against the first log entry time.
+        Pass value `reference` to set the time relative to the passed-in value instead.
+
+        Args:
+            reference (float, optional): Timestamp to relativize all logged even times to. If None, relativizes all
+                time entries to first time entry of the log. Defaults to None. 
+        """
+        # relativize to the first entry of the tracked events unless reference provided
+        reference = self.tracker[0, 0] if reference is None else reference
+        # relativize the entry
+        self.tracker[:, 0] -= reference
 
 
 class MultipleObjectiveTracker(Tracker):
-    def __init__(self, **objectives):
+    """
+    Given a dictionary of functions, this will invoke all functions and log the returned values against
+    the invocation timestamp. Calling `finalize` relativizes the timestamps to the first entry (i.e. first
+    log_objective call) made.
+    """
+
+    def __init__(self, default_name=None, **objectives):
+        """
+        Initializes the tracker. Pass any additional objective functions as keywords arguments.
+
+        Args:
+            default_name (string, optional): Name under which the objective value passed into `log_objective` is saved under. 
+                If set to None, the passed in value is NOT saved. Defaults to None.
+        """
+        self._default_name = default_name
         self.objectives = objectives
         self.log = defaultdict(list)
         self.time = []
 
-    def log_objective(self, obj):
-        t = time.time()
-        for name, objective in self.objectives.items():
-            self.log[name].append(objective())
-        self.time.append(t)
+    def log_objective(self, obj=None):
+        """
+        Log the objective and also returned values of any list of objective functions this tracker
+        is configured with. The passed in value of `obj` is logged only if `default_name` was set to
+        something except for None.
 
-    def finalize(self):
+        Args:
+            obj (Any, optional): Value to be logged if `default_name` is not None. Defaults to None.
+        """
+        t = time.time()
+        # iterate through and invoke each objective function and accumulate the
+        # returns. This is performed separately from actual logging so that any
+        # error in one of the objective evaluation will halt the whole timestamp
+        # logging, and avoid leaving partial results
+        values = {}
+        # log the passed in value only if `default_name` was given
+        if self._default_name is not None:
+            values[self._default_name] = obj
+
+        for name, objective in self.objectives.items():
+            values[name] = objective()
+
+        # Actually log all values
+        self.time.append(t)
+        for name, value in values.items():
+            self.log[name].append(value)
+
+    def finalize(self, reference=None):
+        """
+        When invoked, all logs are convereted into numpy arrays and are relativized against the first log entry time.
+        Pass value `reference` to set the time relative to the passed-in value instead.
+
+        Args:
+            reference (float, optional): Timestamp to relativize all logged even times to. If None, relativizes all
+                time entries to first time entry of the log. Defaults to None. 
+        """
         self.time = np.array(self.time)
         self.time -= self.time[0]
         for k, l in self.log.items():
@@ -74,6 +167,17 @@ class MultipleObjectiveTracker(Tracker):
 
 @contextmanager
 def eval_state(model):
+    """
+    Context manager, within which the model will be under `eval` mode.
+    Upon existing, the model will return to whatever training state it
+    was as it entered into the context.
+
+    Args:
+        model (PyTorch Module): PyTorch Module whose train/eval state is to be managed.
+
+    Yields:
+        PyTorch Module: The model switched to eval state.
+    """
     training_status = model.training
 
     try:
@@ -85,11 +189,30 @@ def eval_state(model):
 
 @contextmanager
 def device_state(model, device):
-    # TODO: consider reimplementation of this to simply use device property of the parameter
-    original_device = "cuda" if next(model.parameters()).is_cuda else "cpu"
-    if not (torch.cuda.is_available()) and (device == "cuda"):
+    """
+    Within the context, attemps to place the `model` onto the specified
+    `device`. If `device` is CUDA and the specified device does not exist, 
+    the context falls back to using `cpu`. Upon existing the context, the model
+    will be placed back on to the original device inferred based on the first entry
+    of the model's parameter.
+
+    Args:
+        model (PyTorch Module): PyTorch Module object to swtich device.
+        device (Any): target device descriptor. Any valid PyTorch device descriptor may be used.
+
+    Yields:
+        PyTorch Module: Model placed on the new device
+    """
+    # infer the original device based on the device the first parameter is placed on
+    original_device = next(model.parameters()).device
+
+    # create device spec
+    device = torch.device(device)
+    if device.type == "cuda" and device.index >= torch.cuda.device_count():
+        # fall back to using CPU
+        warnings.warn("Incompatible CUDA spec. Falling back to CPU usage")
         device = "cpu"
-        warnings.warn("CUDA not found, using CPU")
+
     try:
         model.to(device)
         yield model
@@ -129,7 +252,7 @@ def early_stopping(
         objective: objective function that is used for early stopping. The function must accept single positional argument `model`
             and return a single scalar quantity.
         interval:  interval at which objective is evaluated to consider early stopping
-        patience:  number of times the objective is allow to not become better before the iterator terminates
+        patience:  number of continuous epochs the objective could remain without improvement before the iterator terminates
         start:     start value for iteration (used to check against `max_iter`)
         max_iter:  maximum number of iterations before the iterator terminated
         maximize:  whether the objective is maximized of minimized
@@ -139,7 +262,7 @@ def early_stopping(
                      after the evaluation.
         restore_best: whether to restore the best scoring model state at the end of early stopping
         tracker (Tracker):
-            for tracking training time & stopping objective
+            Tracker to be invoked for every epoch. `log_objective` is invoked with the current value of `objective`.
 
         scheduler:  scheduler object, which automatically reduces decreases the LR by a specified amount.
                     The scheduler should be defined outside of early stopping, and should take as inputs the same

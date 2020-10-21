@@ -164,6 +164,22 @@ class MultipleObjectiveTracker(Tracker):
         for k, l in self.log.items():
             self.log[k] = np.array(l)
 
+    def asdict(self, time_key="time", make_copy=True):
+        """
+        Output the cotent of the tracker as a single dictionary. The time value 
+
+
+        Args:
+            time_key (str, optional): Name of the key to save the time information as. Defaults to "time".
+            make_copy (bool, optional): If True, the returned log times will be a (shallow) copy. Defaults to True.
+
+        Returns:
+            dict: Dictionary containing tracked values as well as the time
+        """
+        log_copy = {k: np.copy(v) if make_copy else v for k, v in self.log.items()}
+        log_copy[time_key] = np.copy(self.time) if make_copy else self.time
+        return log_copy
+
 
 @contextmanager
 def eval_state(model):

@@ -160,7 +160,8 @@ class MultipleObjectiveTracker(Tracker):
                 time entries to first time entry of the log. Defaults to None. 
         """
         self.time = np.array(self.time)
-        self.time -= self.time[0]
+        reference = self.time[0] if reference is None else reference
+        self.time -= reference
         for k, l in self.log.items():
             self.log[k] = np.array(l)
 

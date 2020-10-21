@@ -262,11 +262,10 @@ def early_stopping(
                      after the evaluation.
         restore_best: whether to restore the best scoring model state at the end of early stopping
         tracker (Tracker):
-            Tracker to be invoked for every epoch. `log_objective` is invoked with the current value of `objective`.
-
+            Tracker to be invoked for every epoch. `log_objective` is invoked with the current value of `objective`. Note that `finalize`
+            method is NOT invoked.
         scheduler:  scheduler object, which automatically reduces decreases the LR by a specified amount.
-                    The scheduler should be defined outside of early stopping, and should take as inputs the same
-                    arguments for patience, and tolerance, as early stopping
+                    The scheduler's `step` method is invoked, passing in the current value of `objective`
         lr_decay_steps: Number of times the learning rate should be reduced before stopping the training.
 
     """
@@ -374,18 +373,20 @@ def alternate(*args):
 
 def cycle_datasets(loaders):
     """
-    Cycles through datasets of train loaders.
+    Given a dictionary mapping data_key into dataloader objects, returns a generator that alternately yields 
+    output from the loaders in the dictionary. The order of data_key traversal is determined by the first invocation to `.keys()`.
+    To obtain deterministic behavior of key traversal, recommended to use OrderedDict.
+
+    The generator terminates as soon as any one of the constituent loaders is exhausted.
 
     Args:
-        loaders: OrderedDict with trainloaders as values
+        loaders (dict): Dict mapping a data_key to a dataloader object. 
 
     Yields:
-        data key, input, targets
-
+        string, Any: data_key  and and the next output from the data loader corresponding to the data_key
     """
-
-    # assert isinstance(trainloaders, OrderedDict), 'trainloaders must be an ordered dict'
     keys = list(loaders.keys())
+    # establish a consistent ordering across loaders
     ordered_loaders = [loaders[k] for k in keys]
     for data_key, outputs in zip(cycle(loaders.keys()), alternate(*ordered_loaders)):
         yield data_key, outputs
@@ -393,8 +394,8 @@ def cycle_datasets(loaders):
 
 class Exhauster:
     """
-    Cycles through loaders until they are exhausted. Needed for dataloaders that are of unequal size
-        (as in the monkey data)
+    Given a dictionary of data loaders, mapping data_key into a data loader, steps through each data loader, moving onto the next data loader
+    only upon exhausing the content of the current data loader. 
     """
 
     def __init__(self, loaders):

@@ -1,3 +1,6 @@
+# Ignore the old package name
+mlutils
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

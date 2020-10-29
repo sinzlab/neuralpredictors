@@ -1,6 +1,9 @@
 import warnings
 import numpy as np
 import h5py
+import torch
+from torch import nn as nn
+from torch.nn import Parameter
 
 
 def flatten_json(nested_dict, keep_nested_name=True):
@@ -59,12 +62,12 @@ def gini(x):
 
 def load_dict_from_hdf5(filename):
     """
-    Given a `filename` of a HDF5 file, opens the file and 
+    Given a `filename` of a HDF5 file, opens the file and
     load the entire content as a (nested) dictionary.
 
     Args:
         filename - name of HDF5 file
-    
+
     Returns:
         (nested) dictionary corresponding to the content of the HDF5 file.
     """
@@ -80,7 +83,7 @@ def recursively_load_dict_contents_from_group(h5file, path="/"):
     Args:
         h5file - h5py object
         path - Path within the h5py file to load the content of recursively.
-    
+
     Returns:
         (nested) dictionary corresponding to the content of the HDF5 file at the path.
     """
@@ -98,3 +101,17 @@ def recursively_load_dict_contents_from_group(h5file, path="/"):
             else:
                 ans[key] = recursively_load_dict_contents_from_group(h5file, path + key + "/")
     return ans
+
+
+class BiasNet(nn.Module):
+    """
+    Small helper network that adds a learnable bias to an already instantiated base network
+    """
+
+    def __init__(self, base_net):
+        super(BiasNet, self).__init__()
+        self.bias = Parameter(torch.Tensor(2))
+        self.base_net = base_net
+
+    def forward(self, x):
+        return self.base_net(x) + self.bias

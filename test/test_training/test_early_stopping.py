@@ -5,7 +5,7 @@ import pytest
 import torch
 from torch import nn
 
-from mlutils.training import early_stopping
+from neuralpredictors.training import early_stopping
 
 
 class CounterModel(nn.Module):

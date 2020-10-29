@@ -15,6 +15,7 @@ def cycle(iterable):
         except StopIteration:
             iterator = iter(iterable)
 
+
 def copy_state(model):
     """
     Given PyTorch module `model`, makes a copy of the state onto CPU.
@@ -84,20 +85,21 @@ def eval_state(model):
 
 @contextmanager
 def device_state(model, device):
-    original_device = 'cuda' if next(model.parameters()).is_cuda else 'cpu'
-    if not(torch.cuda.is_available()) and (device == 'cuda'):
-        device = 'cpu'
-        warnings.warn('CUDA not found, using CPU')  
+    # TODO: consider reimplementation of this to simply use device property of the parameter
+    original_device = "cuda" if next(model.parameters()).is_cuda else "cpu"
+    if not (torch.cuda.is_available()) and (device == "cuda"):
+        device = "cpu"
+        warnings.warn("CUDA not found, using CPU")
     try:
         model.to(device)
         yield model
     finally:
         model.to(original_device)
-        
-    
+
+
 def early_stopping(
     model,
-    objective_closure,
+    objective,
     interval=5,
     patience=20,
     start=0,
@@ -124,8 +126,8 @@ def early_stopping(
 
     Args:
         model:     model that is being optimized
-        objective_closue: objective function that is used for early stopping. Must be of the form objective() and
-                          encapsulate the model. Should return the best objective
+        objective: objective function that is used for early stopping. The function must accept single positional argument `model`
+            and return a single scalar quantity.
         interval:  interval at which objective is evaluated to consider early stopping
         patience:  number of times the objective is allow to not become better before the iterator terminates
         start:     start value for iteration (used to check against `max_iter`)
@@ -150,7 +152,7 @@ def early_stopping(
     def _objective():
         if switch_mode:
             model.eval()
-        ret = objective_closure(model)
+        ret = objective(model)
         if switch_mode:
             model.train(training_status)
         return ret
@@ -159,13 +161,21 @@ def early_stopping(
         old_objective = _objective()
         if restore_best:
             model.load_state_dict(best_state_dict)
-            print("Restoring best model after lr decay! {:.6f} ---> {:.6f}".format(old_objective, _objective()))
+            print(
+                "Restoring best model after lr decay! {:.6f} ---> {:.6f}".format(
+                    old_objective, _objective()
+                )
+            )
 
     def finalize(model, best_state_dict):
         old_objective = _objective()
         if restore_best:
             model.load_state_dict(best_state_dict)
-            print("Restoring best model! {:.6f} ---> {:.6f}".format(old_objective, _objective()))
+            print(
+                "Restoring best model! {:.6f} ---> {:.6f}".format(
+                    old_objective, _objective()
+                )
+            )
         else:
             print("Final best model! objective {:.6f}".format(_objective()))
 
@@ -198,7 +208,9 @@ def early_stopping(
 
             if current_objective * maximize < best_objective * maximize - tolerance:
                 print(
-                    "[{:03d}|{:02d}/{:02d}] ---> {}".format(epoch, patience_counter, patience, current_objective),
+                    "[{:03d}|{:02d}/{:02d}] ---> {}".format(
+                        epoch, patience_counter, patience, current_objective
+                    ),
                     flush=True,
                 )
                 best_state_dict = copy_state(model)
@@ -207,7 +219,9 @@ def early_stopping(
             else:
                 patience_counter += 1
                 print(
-                    "[{:03d}|{:02d}/{:02d}] -/-> {}".format(epoch, patience_counter, patience, current_objective),
+                    "[{:03d}|{:02d}/{:02d}] -/-> {}".format(
+                        epoch, patience_counter, patience, current_objective
+                    ),
                     flush=True,
                 )
 
@@ -285,7 +299,9 @@ class LongCycler:
     def __iter__(self):
         cycles = [cycle(loader) for loader in self.loaders.values()]
         for k, loader, _ in zip(
-            cycle(self.loaders.keys()), (cycle(cycles)), range(len(self.loaders) * self.max_batches)
+            cycle(self.loaders.keys()),
+            (cycle(cycles)),
+            range(len(self.loaders) * self.max_batches),
         ):
             yield k, next(loader)
 
@@ -306,7 +322,9 @@ class ShortCycler:
     def __iter__(self):
         cycles = [cycle(loader) for loader in self.loaders.values()]
         for k, loader, _ in zip(
-            cycle(self.loaders.keys()), (cycle(cycles)), range(len(self.loaders) * self.min_batches)
+            cycle(self.loaders.keys()),
+            (cycle(cycles)),
+            range(len(self.loaders) * self.min_batches),
         ):
             yield k, next(loader)
 

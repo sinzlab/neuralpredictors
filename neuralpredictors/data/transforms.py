@@ -424,18 +424,22 @@ class ScaleInputs(MovieTransform, StaticTransform, Invertible):
                  multichannel=False,
                  anti_aliasing=False,
                  preserve_range=True,
-                 clip=True):
+                 clip=True,
+                 in_name="images",
+                 ):
+
         self.scale = scale
         self.mode = mode
         self.multichannel = multichannel
         self.anti_aliasing = anti_aliasing
         self.preserve_range = preserve_range
         self.clip = clip
+        self.in_name = in_name
 
     def __call__(self, x):
         key_vals = {k: v for k, v in zip(x._fields, x)}
-        img = key_vals["images"]
-        key_vals["images"] = rescale(img,
+        img = key_vals[self.in_name]
+        key_vals[self.in_name] = rescale(img,
                                      scale=self.scale,
                                      mode=self.mode,
                                      multichannel=self.multichannel,

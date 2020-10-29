@@ -15,7 +15,7 @@ before_script:
     - chmod +x ./cc-test-reporter
     - ./cc-test-reporter before-build
 script:
-  - pytest --cov=mlutils
+  - pytest --cov=neuralpredictors
   - echo $MY_ENV
   - echo "Testing output"
 after_script:

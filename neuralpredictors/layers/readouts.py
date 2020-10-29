@@ -1002,6 +1002,181 @@ class FullGaussian2d(nn.Module):
         return r
 
 
+class DeterministicGaussian2d(nn.Module):
+    """
+    'DeterministicGaussian2d' class instantiates an object that can be used to learn a
+    Normal distribution in the core feature space for each neuron, this is
+    applied to the pixel grid to give a simple weighting.
+
+    The variance should be decreased over training to achieve localization.
+    The readout receives the shape of the core as 'in_shape', the number of units/neurons being predicted as
+    'outdims', 'bias' specifying whether or not bias term is to be used.
+
+    From the mean and and variance, a filter unique for each outdim is built, that is of the 2d density of
+    the normal distribution. The filter is applied only on the spatial dimensions of the input.
+
+    Args:
+        in_shape (list): shape of the input feature map [channels, width, height]
+        outdims (int): number of output units
+        bias (bool): adds a bias term
+        positive (bool): if True, all weights will be constrained to have positive values, default: False
+        constrain_mode (str): ['default', 'abs', 'elu'] sets the way the weights are constrained, default: 'default'
+
+    Written by Claudius Gruner.
+    """
+
+    def __init__(self,
+                 in_shape,
+                 outdims,
+                 bias,
+                 init_mu_range=0.1,
+                 init_sigma=1,
+                 positive=False,
+                 constrain_mode='default',
+                 ):
+
+        super().__init__()
+
+        if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma <= 0.0:
+            raise ValueError("either init_mu_range doesn't belong to [0.0, 1.0] or init_sigma_range is non-positive")
+
+        self.in_shape = in_shape
+        c, w, h = in_shape
+        self.outdims = outdims
+        self.positive = positive
+
+        if constrain_mode not in ['default', 'abs', 'elu']:
+            raise ValueError("Value of parameter constrain_mode = "+str(constrain_mode)+" is invalid. Value must be in ['default', 'abs', 'elu'] ")
+        self.constrain_mode = constrain_mode
+
+        self.mu = Parameter(
+            data=torch.zeros(outdims, 2), requires_grad=True)
+        self.log_var = Parameter(
+            data=torch.zeros(outdims,), requires_grad=True)
+        self.grid = torch.nn.Parameter(
+            data=self.make_mask_grid(), requires_grad=False)
+
+        self.features = Parameter(torch.Tensor(c, outdims))  # saliency  weights for each channel from core
+
+        if bias:
+            bias = Parameter(torch.Tensor(outdims))
+            self.register_parameter('bias', bias)
+        else:
+            self.register_parameter('bias', None)
+
+        self.init_mu_range = init_mu_range
+        self.init_sigma = init_sigma
+
+        self.initialize()
+
+    def make_mask_grid(self):
+        xx, yy = torch.meshgrid(
+            [torch.linspace(-1, 1, self.in_shape[1]),
+             torch.linspace(-1, 1, self.in_shape[2])])
+        grid = torch.stack([xx, yy], 2)[None, ...]
+        return grid.repeat([self.outdims, 1, 1, 1])
+
+    def mask(self, shift=None):
+
+        self.mu.clamp_(min=-1, max=1)
+
+        variances = torch.exp(self.log_var).view(-1, 1, 1)
+
+        if shift is None:
+            mu = self.mu
+        else:
+            mu = self.mu + shift[None, ...]
+        mean = mu.view(self.outdims, 1, 1, -1)
+        pdf = self.grid - mean
+        pdf = torch.sum(pdf**2, dim=-1) / variances
+        pdf = torch.exp(-.5 * pdf)
+        # normalize to sum=1
+        pdf = pdf / torch.sum(pdf, dim=(1, 2), keepdim=True)
+        return pdf
+
+    def initialize(self):
+        """
+        initialize function initializes the mean, sigma for the Gaussian readout and features weights
+        """
+        self.mu.data.uniform_(-self.init_mu_range, self.init_mu_range)
+
+        self.log_var.data.fill_(np.log(self.init_sigma ** 2))
+
+        self.features.data.fill_(1 / self.in_shape[0])
+
+        if self.bias is not None:
+            self.bias.data.fill_(0)
+
+    def feature_l1(self, average=True):
+        """
+        feature_l1 function returns the l1 regularization term either the mean or just the sum of weights
+        Args:
+            average(bool): if True, use mean of weights for regularization
+        """
+        if average:
+            return self.features.abs().mean()
+        else:
+            return self.features.abs().sum()
+
+    def variance_l1(self, average=True):
+        """
+        variance_l1 function returns the l1 regularization term either the mean or just the sum of weights
+        Args:
+            average(bool): if True, use mean of weights for regularization
+        """
+        if average:
+            return torch.exp(self.log_var).mean()
+        else:
+            return torch.exp(self.log_var).sum()
+
+    def forward(self, x, shift=None, out_idx=None):
+        N, c, w, h = x.size()
+        feat = self.features
+
+        if out_idx is None:
+            grid = self.grid
+            bias = self.bias
+            outdims = self.outdims
+        else:
+            feat = feat[:, out_idx]
+            grid = self.grid[:, out_idx]
+            if self.bias is not None:
+                bias = self.bias[out_idx]
+            outdims = len(out_idx)
+
+        if shift is None:
+            mask = self.mask()
+        else:
+            mask = self.mask(shift=shift)
+
+        if self.positive:
+            if self.constrain_mode == 'default':
+                positive(mask)
+                positive(feat)
+            elif self.constrain_mode == 'abs':
+                mask = torch.abs(mask)
+                feat = torch.abs(feat)
+            elif self.constrain_mode == 'elu':
+                mask = F.elu(mask) + 1
+                feat = F.elu(feat) + 1
+
+        y = torch.einsum('bcij,nij,cn->bn', x, mask, feat)
+
+        if self.bias is not None:
+            y = y + bias
+        return y
+
+    def __repr__(self):
+        c, w, h = self.in_shape
+        r = self.__class__.__name__ + \
+            ' (' + '{} x {} x {}'.format(c, w, h) + ' -> ' + str(self.outdims) + ')'
+        if self.bias is not None:
+            r += ' with bias'
+        for ch in self.children():
+            r += '  -> ' + ch.__repr__() + '\n'
+        return r
+
+
 class Gaussian3d(nn.Module):
     """
     This readout instantiates an object that can used to learn a point in the core feature space for each neuron,

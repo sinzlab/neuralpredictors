@@ -1,15 +1,19 @@
 from pathlib import Path
-import h5py as h5
+import h5py
 import numpy as np
 from tqdm import tqdm
+from collections import Mapping
 
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def zip_dir(zip_name: str, source_dir):
     """
-    Zips all files in `source_dir` into a zip file names `zip_name`.
+    Zips all files in `source_dir` into a zip file named `zip_name`.
     """
     src_path = Path(source_dir).absolute().resolve(strict=True)
     with ZipFile(zip_name, "w", ZIP_DEFLATED) as zf:
@@ -19,13 +23,91 @@ def zip_dir(zip_name: str, source_dir):
 
 def _savenpy(path, val, overwrite):
 
-    if not np.isscalar(val) and val[0].dtype.char == "S":  # convert bytes to univcode
+    if not np.isscalar(val) and val[0].dtype.char == "S":  # convert bytes to unicode
         val = val.astype(str)
     if not path.exists() or overwrite:
-        print("Saving", path)
+        logger.info("Saving", path)
         np.save(path, val)
     else:
-        print("Not overwriting", path)
+        logger.warn("Not overwriting", path)
+
+
+def convert_movies_h5_dataset_to_folder(
+    filename,
+    outpath=None,
+    overwrite=False,
+    data_keys=("inputs", "responses", "behavior", "eye_position"),
+):
+    """
+    Converts an HDF5 dataset used for mouse movie data into a directory structure 
+    that can be used by the FileTreeDataset.
+
+    Args:
+        filename:       filename of the hdf5 file
+        outpath:        location of the FileTreeDataset (default .)
+        overwrite:      overwrite existing files
+    """
+    if not isinstance(data_keys, Mapping):
+        data_keys = {k: k for k in data_keys}
+
+    h5file = Path(filename)
+    outpath = Path(outpath) or h5file.with_suffix(
+        ""
+    )  # drop extension to form target output
+
+    with h5py.File(filename, "r") as fid:
+        for data_key, mapped_name in data_keys.items():
+            subpath = outpath / "data/{}".format(mapped_name)
+            subpath.mkdir(exist_ok=True, parents=True)
+            for key in tqdm(fid[data_key].keys(), desc="Saving {}".format(data_key),):
+                outfile = subpath / "{}.npy".format(key)
+                _savenpy(outfile, fid[data_key][key][()], overwrite)
+
+        # map data for trials
+        trial_info_keys = [
+            "durations",
+            "condition_hashes",
+            "movie_names",
+            "tiers",
+            "trial_idx",
+            "types",
+        ]
+
+        # save tiers
+        subpath = outpath / "meta/trials"
+        subpath.mkdir(exist_ok=True, parents=True)
+        for trial_info_key in trial_info_keys:
+            _savenpy(
+                subpath / "{}.npy".format(trial_info_key),
+                fid[trial_info_key][()],
+                overwrite,
+            )
+
+        # save nested fields:
+        nested_keys = {"neurons": "neurons"}
+        for meta_type, target in nested_keys.items():
+            for meta_key in fid[meta_type].keys():
+                subpath = outpath / "meta/{}".format(target)
+                subpath.mkdir(exist_ok=True, parents=True)
+
+                _savenpy(
+                    subpath / "{}.npy".format(meta_key),
+                    fid[meta_type][meta_key][()],
+                    overwrite,
+                )
+
+        # save statistics
+        def statistics_func(name, node):
+            name = name.replace(".", "_").lower()
+            if isinstance(node, h5py.Dataset):
+                data_file = outpath / "meta/statistics/{}.npy".format(name)
+                data_file.parent.mkdir(exist_ok=True, parents=True)
+                _savenpy(
+                    data_file, node[()], overwrite,
+                )
+
+        logger.info("Saving statistics")
+        fid["statistics"].visititems(statistics_func)
 
 
 def convert_static_h5_dataset_to_folder(filename, outpath=None, overwrite=False):
@@ -41,12 +123,14 @@ def convert_static_h5_dataset_to_folder(filename, outpath=None, overwrite=False)
     h5file = Path(filename)
     outpath = outpath or (h5file.parent / h5file.stem)
 
-    with h5.File(filename) as fid:
+    with h5py.File(filename) as fid:
         for data_key in ["images", "responses", "behavior", "pupil_center"]:
             subpath = outpath / "data/{}".format(data_key)
             subpath.mkdir(exist_ok=True, parents=True)
             for i, value in tqdm(
-                enumerate(fid[data_key]), total=fid[data_key].shape[0], desc="Saving {}".format(data_key)
+                enumerate(fid[data_key]),
+                total=fid[data_key].shape[0],
+                desc="Saving {}".format(data_key),
             ):
                 outfile = subpath / "{}.npy".format(i)
                 if not outfile.exists() or overwrite:
@@ -56,7 +140,9 @@ def convert_static_h5_dataset_to_folder(filename, outpath=None, overwrite=False)
         for data_key in ["tiers"]:
             subpath = outpath / "meta/trials"
             subpath.mkdir(exist_ok=True, parents=True)
-            _savenpy(subpath / "{}.npy".format(data_key), fid[data_key].value, overwrite)
+            _savenpy(
+                subpath / "{}.npy".format(data_key), fid[data_key].value, overwrite
+            )
 
         # save meta info
         for meta_type, target in zip(["item_info", "neurons"], ["trials", "neurons"]):
@@ -64,15 +150,23 @@ def convert_static_h5_dataset_to_folder(filename, outpath=None, overwrite=False)
                 subpath = outpath / "meta/{}".format(target)
                 subpath.mkdir(exist_ok=True, parents=True)
 
-                _savenpy(subpath / "{}.npy".format(meta_key), fid[meta_type][meta_key].value, overwrite)
+                _savenpy(
+                    subpath / "{}.npy".format(meta_key),
+                    fid[meta_type][meta_key].value,
+                    overwrite,
+                )
 
         # save statistics
         def statistics_func(name, node):
             name = name.replace(".", "_").lower()
-            if not isinstance(node, h5.Dataset):
+            if not isinstance(node, h5py.Dataset):
                 subpath = outpath / "meta/statistics" / name
                 subpath.mkdir(exist_ok=True, parents=True)
             else:
-                _savenpy(outpath / "meta/statistics" / "{}.npy".format(name), node.value, overwrite)
+                _savenpy(
+                    outpath / "meta/statistics" / "{}.npy".format(name),
+                    node.value,
+                    overwrite,
+                )
 
         fid["statistics"].visititems(statistics_func)

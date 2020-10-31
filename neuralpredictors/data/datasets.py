@@ -887,11 +887,6 @@ class FileTreeDatasetBase(TransformDataset):
         self._save_config(config)
 
     @property
-    def n_neurons(self):
-        target_group = "responses" if "responses" in self.data_keys else "targets"
-        return len(getattr(self[0], target_group))
-
-    @property
     def neurons(self):
         return DirectoryAttributeTransformer(
             self.basepath / "meta/neurons",
@@ -1010,4 +1005,47 @@ class FileTreeDataset(FileTreeDatasetBase):
     @property
     def img_shape(self):
         return (1,) + self[0].images.shape
+
+    @property
+    def n_neurons(self):
+        target_group = "responses" if "responses" in self.data_keys else "targets"
+        return len(getattr(self[0], target_group))
+
+
+class MovieFileTreeDataset(FileTreeDatasetBase):
+    _transform_types = (MovieTransform,)
+
+    def __init__(self, *args, stats_source=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.stats_source = stats_source if stats_source is not None else "all"
+
+    # the followings are provided for compatibility with MovieSet
+    @property
+    def types(self):
+        return self.trial_info.types
+
+    @property
+    def tiers(self):
+        return self.trial_info.tiers
+
+    @property
+    def n_neurons(self):
+        target_group = "responses" if "responses" in self.data_keys else "targets"
+        # check if output has been renamed
+        if self.rename_output:
+            target_group = self._output_rename.get(target_group, target_group)
+        return (getattr(self[0], target_group)).shape[-1]
+
+    def transformed_mean(self, stats_source=None):
+        if stats_source is None:
+            stats_source = self.stats_source
+
+        tmp = [
+            np.atleast_1d(self.statistics[g][stats_source]["mean"][()])
+            for g in self.data_keys
+        ]
+        x = self.transform(self.data_point(*tmp), exclude=(Subsequence, Delay))
+        if self.rename_output:
+            x = self._output_point(*x)
+        return x
 

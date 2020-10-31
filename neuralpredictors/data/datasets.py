@@ -1009,7 +1009,12 @@ class FileTreeDataset(FileTreeDatasetBase):
     @property
     def n_neurons(self):
         target_group = "responses" if "responses" in self.data_keys else "targets"
-        return len(getattr(self[0], target_group))
+        val = self[0]
+        if hasattr(val, target_group):
+            val = getattr(val, target_group)
+        else:
+            val = val[target_group]
+        return len(val)
 
 
 class MovieFileTreeDataset(FileTreeDatasetBase):
@@ -1034,7 +1039,13 @@ class MovieFileTreeDataset(FileTreeDatasetBase):
         # check if output has been renamed
         if self.rename_output:
             target_group = self._output_rename.get(target_group, target_group)
-        return (getattr(self[0], target_group)).shape[-1]
+
+        val = self[0]
+        if hasattr(val, target_group):
+            val = getattr(val, target_group)
+        else:
+            val = val[target_group]
+        return val.shape[-1]
 
     def transformed_mean(self, stats_source=None):
         if stats_source is None:

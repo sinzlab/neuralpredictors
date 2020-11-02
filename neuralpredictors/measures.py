@@ -113,7 +113,7 @@ class PoissonLoss(nn.Module):
         self.avg = avg
         if self.avg:
             warnings.warn(
-                "Poissonloss is averaged per batch. It's recommended so use sum instead"
+                "Poissonloss is averaged per batch. It's recommended to use `sum` instead"
             )
 
     def forward(self, output, target):

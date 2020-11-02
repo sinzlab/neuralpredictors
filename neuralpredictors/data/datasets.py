@@ -594,6 +594,7 @@ class DirectoryAttributeTransformer(DirectoryAttributeHandler):
 
 class FileTreeDatasetBase(TransformDataset):
     _default_config = {"links": {}}
+    # specify list of transform types that are acceptable
     _transform_types = (DataTransform,)
 
     def __init__(

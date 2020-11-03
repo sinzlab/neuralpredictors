@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 from collections import namedtuple
-
+from skimage.transform import rescale
 
 class Invertible:
     def inv(self, y):
@@ -173,9 +173,9 @@ class Subsample(MovieTransform, StaticTransform):
             idx (numpy index specifier): Indices to be selected. Must be a valid NumPy index specification (e.g. list of indicies, boolean array, etc.)
             target_group (string or iterable of strings): Specifies the taget data key to perform subselection on. If given a string, it is assumed as the direct name of data_key
                 Otherwise, it is assumed to be an iterable over string values of all data_keys
-            target_index (optional, dict): If provided a dictionary, the key is asssumed to be the name of data_key and value the index position to perform subselection on. If not provided, index position of -1 (last position) is used. 
+            target_index (optional, dict): If provided a dictionary, the key is asssumed to be the name of data_key and value the index position to perform subselection on. If not provided, index position of -1 (last position) is used.
         """
-        
+
         self.idx = idx
         if isinstance(target_group, str):
             self.target_groups = (target_group,)
@@ -275,16 +275,17 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
             1% of the mean std (to avoid division by 0)
     """
 
-    def __init__(self, data, stats_source="all", exclude=None):
+    def __init__(self, data, stats_source="all", exclude=None, inputs_mean=None, inputs_std=None):
 
         self.exclude = exclude or []
 
         in_name = "images" if "images" in data.statistics.keys() else "inputs"
+        out_name = "responses" if "responses" in data.statistics.keys() else "targets"
 
-        self._inputs_mean = data.statistics[in_name][stats_source]["mean"][()]
-        self._inputs_std = data.statistics[in_name][stats_source]["std"][()]
+        self._inputs_mean = data.statistics[in_name][stats_source]["mean"][()] if inputs_mean is None else inputs_mean
+        self._inputs_std = data.statistics[in_name][stats_source]["std"][()] if inputs_mean is None else inputs_std
 
-        s = np.array(data.statistics["responses"][stats_source]["std"])
+        s = np.array(data.statistics[out_name][stats_source]["std"])
 
         # TODO: consider other baselines
         threshold = 0.01 * s.mean()
@@ -298,24 +299,24 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
         itransforms[in_name] = lambda x: x * self._inputs_std + self._inputs_mean
 
         # -- responses
-        transforms["responses"] = lambda x: x * self._response_precision
-        itransforms["responses"] = lambda x: x / self._response_precision
+        transforms[out_name] = lambda x: x * self._response_precision
+        itransforms[out_name] = lambda x: x / self._response_precision
 
-        if "eye_position" in data.data_keys:
-            # -- eye position
-            self._eye_mean = np.array(
-                data.statistics["eye_position"][stats_source]["mean"]
-            )
-            self._eye_std = np.array(
-                data.statistics["eye_position"][stats_source]["std"]
-            )
-            transforms["eye_position"] = lambda x: (x - self._eye_mean) / self._eye_std
-            itransforms["eye_position"] = lambda x: x * self._eye_std + self._eye_mean
 
+        # -- behavior
+        transforms['behavior'] = lambda x: x
+
+        if "pupil_center" in data.data_keys:
+            self._eye_mean = np.array(data.statistics["pupil_center"][stats_source]["mean"])
+            self._eye_std = np.array(data.statistics["pupil_center"][stats_source]["std"])
+            transforms["pupil_center"] = lambda x: (x - self._eye_mean) / self._eye_std
+            itransforms["pupil_center"] = lambda x: x * self._eye_std + self._eye_mean
+
+        if "behavior" in data.data_keys:
             s = np.array(data.statistics["behavior"][stats_source]["std"])
 
             # TODO: same as above - consider other baselines
-            threshold = 0.01 * s.mean()
+            threshold = 0.01 * s
             idx = s > threshold
             self._behavior_precision = np.ones_like(s) / threshold
             self._behavior_precision[idx] = 1 / s[idx]
@@ -376,8 +377,10 @@ class AddBehaviorAsChannels(MovieTransform, StaticTransform, Invertible):
         )
         self.transforms["responses"] = lambda x: x
         self.transforms["behavior"] = lambda x: x
+        self.transforms["pupil_center"] = lambda x: x
 
     def __call__(self, x):
+
         key_vals = {k: v for k, v in zip(x._fields, x)}
         dd = {
             "images": self.transforms["images"](
@@ -386,6 +389,8 @@ class AddBehaviorAsChannels(MovieTransform, StaticTransform, Invertible):
             "responses": self.transforms["responses"](key_vals["responses"]),
             "behavior": self.transforms["behavior"](key_vals["behavior"]),
         }
+        if "pupil_center" in key_vals:
+            dd["pupil_center"] = self.transforms["pupil_center"](key_vals["pupil_center"])
         return x.__class__(**dd)
 
 
@@ -405,4 +410,40 @@ class SelectInputChannel(StaticTransform):
             if len(img.shape) == 4
             else img[(self.grab_channel,)]
         )
+        return x.__class__(**key_vals)
+
+
+class ScaleInputs(MovieTransform, StaticTransform, Invertible):
+    """
+    Given a StaticImage object that includes "images", will rescale the image with a given factor.
+    """
+
+    def __init__(self,
+                 scale,
+                 mode="reflect",
+                 multichannel=False,
+                 anti_aliasing=False,
+                 preserve_range=True,
+                 clip=True,
+                 in_name="images",
+                 ):
+
+        self.scale = scale
+        self.mode = mode
+        self.multichannel = multichannel
+        self.anti_aliasing = anti_aliasing
+        self.preserve_range = preserve_range
+        self.clip = clip
+        self.in_name = in_name
+
+    def __call__(self, x):
+        key_vals = {k: v for k, v in zip(x._fields, x)}
+        img = key_vals[self.in_name]
+        key_vals[self.in_name] = rescale(img,
+                                     scale=self.scale,
+                                     mode=self.mode,
+                                     multichannel=self.multichannel,
+                                     anti_aliasing=self.anti_aliasing,
+                                     clip=self.clip,
+                                     preserve_range=self.preserve_range)
         return x.__class__(**key_vals)

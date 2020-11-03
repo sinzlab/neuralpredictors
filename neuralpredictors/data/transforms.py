@@ -394,6 +394,42 @@ class AddBehaviorAsChannels(MovieTransform, StaticTransform, Invertible):
         return x.__class__(**dd)
 
 
+class AddPupilCenterAsChannels(MovieTransform, StaticTransform, Invertible):
+    """
+    Given a StaticImage object that includes "images", "responses", and "pupil center", it returns three variables:
+        - input image concatenated with eye position as new channel(s)
+        - responses
+        - behavior
+        - pupil center
+    """
+    def __init__(self):
+        self.transforms, self.itransforms = {}, {}
+        self.transforms["images"] = lambda img, pupil_center: np.concatenate(
+            (
+                img,
+                np.ones((1, *img.shape[-(len(img.shape) - 1) :]))
+                * np.expand_dims(pupil_center, axis=((len(img.shape) - 2), (len(img.shape) - 1))),
+            ),
+            axis=len(img.shape) - 3,
+        )
+        self.transforms["responses"] = lambda x: x
+        self.transforms["behavior"] = lambda x: x
+        self.transforms["pupil_center"] = lambda x: x
+
+    def __call__(self, x):
+
+        key_vals = {k: v for k, v in zip(x._fields, x)}
+        dd = {
+            "images": self.transforms["images"](key_vals["images"], key_vals["pupil_center"]),
+            "responses": self.transforms["responses"](key_vals["responses"]),
+        }
+        if "behavior" in key_vals:
+            dd["behavior"] = self.transforms["behavior"](key_vals["behavior"])
+        dd["pupil_center"] = self.transforms["pupil_center"](key_vals["pupil_center"])
+
+        return x.__class__(**dd)
+
+
 class SelectInputChannel(StaticTransform):
     """
     Given a StaticImage object that includes "images", it will select a particular input channel.

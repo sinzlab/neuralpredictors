@@ -6,6 +6,7 @@ import torch
 from torch import nn
 from torch.nn import Parameter
 from torch.nn import functional as F
+from torch.nn import ModuleDict
 
 from .readouts import Readout, PointPyramid2d, Gaussian3d, PointPooled2d, FullGaussian2d, UltraSparse
 

@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from collections import namedtuple
+from collections import namedtuple, Iterable
 from skimage.transform import rescale
 
 class Invertible:
@@ -400,7 +400,7 @@ class SelectInputChannel(StaticTransform):
     """
 
     def __init__(self, grab_channel):
-        self.grab_channel = grab_channel
+        self.grab_channel = grab_channel if isinstance(grab_channel, Iterable) else [grab_channel]
 
     def __call__(self, x):
         key_vals = {k: v for k, v in zip(x._fields, x)}
@@ -408,7 +408,7 @@ class SelectInputChannel(StaticTransform):
         key_vals["images"] = (
             img[:, (self.grab_channel,)]
             if len(img.shape) == 4
-            else img[(self.grab_channel,)]
+            else img[self.grab_channel, ...]
         )
         return x.__class__(**key_vals)
 

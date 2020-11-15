@@ -189,6 +189,10 @@ class H5SequenceSet(TransformDataset):
             "OutputPoint", [output_rename.get(k, k) for k in data_keys]
         )
 
+    def __dir__(self):
+        attrs = set(super().__dir__())
+        return attrs.union(set(self._fid.keys()))
+
     def load_content(self):
         self.data = recursively_load_dict_contents_from_group(self._fid)
         self.data_loaded = True
@@ -745,7 +749,7 @@ class FileTreeDatasetBase(TransformDataset):
         Given a data_key, resolves the folder within self.basepath/data directory. If relevant "links"
         entry exists in the config, the name mapping is performed. Finally, the resultant path is checked
         for validness (is it a directory that exists) and raises an exception if not found. Otherwise, the
-        resultant path object is returned.  
+        resultant path object is returned.
 
         Args:
             data_key (str): data_key to find corresponding subdirectory under `self.basepath/data`
@@ -1060,4 +1064,3 @@ class MovieFileTreeDataset(FileTreeDatasetBase):
         if self.rename_output:
             x = self._output_point(*x)
         return x
-

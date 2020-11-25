@@ -719,7 +719,7 @@ class FileTreeDataset(StaticSet):
                 ret.append(self._cache[data_key][item])
             else:
                 if data_key in self.trial_info.keys():
-                    val = self.trial_info[data_key][item]
+                    val = self.trial_info[data_key][item:item+1]
                 else:
                     datapath = self.resolve_data_path(data_key)
                     val = np.load(datapath / "{}.npy".format(item))

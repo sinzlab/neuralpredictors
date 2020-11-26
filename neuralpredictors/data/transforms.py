@@ -302,9 +302,14 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
         transforms[out_name] = lambda x: x * self._response_precision
         itransforms[out_name] = lambda x: x / self._response_precision
 
-
         # -- behavior
         transforms['behavior'] = lambda x: x
+
+        # -- trial_idx
+        trial_idx_mean = np.arange(data._len).mean()
+        trial_idx_std = np.arange(data._len).std()
+        transforms["trial_idx"] = lambda x: (x - trial_idx_mean) / trial_idx_std
+        itransforms["trial_idx"] = lambda x: x * trial_idx_std + trial_idx_mean
 
         if "pupil_center" in data.data_keys:
             self._eye_mean = np.array(data.statistics["pupil_center"][stats_source]["mean"])
@@ -378,6 +383,7 @@ class AddBehaviorAsChannels(MovieTransform, StaticTransform, Invertible):
         self.transforms["responses"] = lambda x: x
         self.transforms["behavior"] = lambda x: x
         self.transforms["pupil_center"] = lambda x: x
+        self.transforms["trial_idx"] = lambda x: x
 
     def __call__(self, x):
 
@@ -391,6 +397,8 @@ class AddBehaviorAsChannels(MovieTransform, StaticTransform, Invertible):
         }
         if "pupil_center" in key_vals:
             dd["pupil_center"] = self.transforms["pupil_center"](key_vals["pupil_center"])
+        if "trial_idx" in key_vals:
+            dd["trial_idx"] = self.transforms["trial_idx"](key_vals["trial_idx"])
         return x.__class__(**dd)
 
 

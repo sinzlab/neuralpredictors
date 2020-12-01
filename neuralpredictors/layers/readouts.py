@@ -93,7 +93,7 @@ class SpatialXFeatureLinear(nn.Module):
         if self.constrain_pos:
             positive(self.features)
             positive(self.normalized_spatial)
-            
+
         y = torch.einsum('ncwh,owh->nco', x, self.normalized_spatial)
         y = torch.einsum('nco,oc->no', y, self.features)
         if self.bias is not None:
@@ -934,6 +934,74 @@ class FullGaussian2d(nn.Module):
             r += "  -> " + ch.__repr__() + "\n"
         return r
 
+
+class RemappedGaussian2d(FullGaussian2d):
+
+    def __init__(self, *args, remap_layers=2, remap_kernel=3, max_remap_amplitude=.2, **kwargs):
+
+        super().__init__(*args, **kwargs)
+        channels, width, height = self.in_shape
+        remapper = nn.Sequential()
+        for i in range(remap_layers - 1):
+            remapper.add_module(f'conv{i}', nn.Conv2d(channels, channels, remap_kernel, padding=True))
+            remapper.add_module(f'norm{i}', nn.BatchNorm2d(channels))
+            remapper.add_module(f'nonlin{i}', nn.ELU())
+        else:
+            remapper.add_module(f'conv{remap_layers}', nn.Conv2d(channels, 2, remap_kernel, padding=True))
+            remapper.add_module(f'norm{remap_layers}', nn.BatchNorm2d(2))
+            remapper.add_module(f'nonlin{remap_layers}', nn.Tanh())
+        self.remap_field = remapper
+        self.max_remap_amplitude = max_remap_amplitude
+
+    @staticmethod
+    def init_conv(m):
+        if isinstance(m, nn.Conv2d):
+            nn.init.xavier_normal_(m.weight.data)
+            if m.bias is not None:
+                m.bias.data.fill_(0)
+
+    def initialize_remap_field(self):
+        self.apply(self.init_conv)
+
+    def forward(self, x, sample=None, shift=None, out_idx=None):
+        offset_field = self.remap_field(x) * self.max_remap_amplitude
+
+        N, c, w, h = x.size()
+        c_in, w_in, h_in = self.in_shape
+        if (c_in, w_in, h_in) != (c, w, h):
+            raise ValueError("the specified feature map dimension is not the readout's expected input dimension")
+        feat = self.features.view(1, c, self.outdims)
+        bias = self.bias
+        outdims = self.outdims
+
+        if self.batch_sample:
+            # sample the grid_locations separately per image per batch
+            grid = self.sample_grid(batch_size=N, sample=sample)  # sample determines sampling from Gaussian
+        else:
+            # use one sampled grid_locations for all images in the batch
+            grid = self.sample_grid(batch_size=1, sample=sample).expand(N, outdims, 1, 2)
+
+        if out_idx is not None:
+            if isinstance(out_idx, np.ndarray):
+                if out_idx.dtype == bool:
+                    out_idx = np.where(out_idx)[0]
+            feat = feat[:, :, out_idx]
+            grid = grid[:, out_idx]
+            if bias is not None:
+                bias = bias[out_idx]
+            outdims = len(out_idx)
+
+        offsets = F.grid_sample(offset_field, grid, align_corners=self.align_corners)
+        grid = grid + offsets.permute(0, 2, 3, 1)
+        if shift is not None:
+            grid = grid + shift[:, None, None, :]
+
+        y = F.grid_sample(x, grid, align_corners=self.align_corners)
+        y = (y.squeeze(-1) * feat).sum(1).view(N, outdims)
+
+        if self.bias is not None:
+            y = y + bias
+        return y
 
 class Gaussian3d(nn.Module):
     """

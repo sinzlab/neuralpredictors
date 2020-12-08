@@ -17,6 +17,31 @@ def laplace():
     return np.array([[0, -1, 0], [-1, 4, -1], [0, -1, 0]]).astype(np.float32)[None, None, ...]
 
 
+def laplace5x5():
+    """
+    Returns a 5x5 laplace filter.
+
+    """
+    return np.array([[0, 0, 1, 0, 0],
+                     [0, 1, 2, 1, 0],
+                     [1, 2, -16, 2, 1],
+                     [0, 1, 2, 1, 0],
+                     [0, 0, 1, 0, 0]]).astype(np.float32)[None, None, ...]
+
+
+def laplace7x7():
+    """
+    Returns a 5x5 laplace filter.
+
+    """
+    return np.array([[0, 0, 1, 1, 1, 0, 0],
+                     [0, 1, 3, 3, 3, 1, 0],
+                     [1, 3, 0, -7, 0, 3, 1],
+                     [1, 3, -7, -24, -7, 3, 1],
+                     [1, 3, 0, -7, 0, 3, 1],
+                     [0, 1, 3, 3, 3, 1, 0],
+                     [0, 0, 1, 1, 1, 0, 0]]).astype(np.float32)[None, None, ...]
+
 def laplace3d():
     l = np.zeros((3, 3, 3))
     l[1, 1, 1] = -6.0
@@ -77,7 +102,7 @@ class Laplace(nn.Module):
     Laplace filter for a stack of data. Utilized as the input weight regularizer.
     """
 
-    def __init__(self, padding=None):
+    def __init__(self, padding=None, filter_size=3):
         """
         Laplace filter for a stack of data.
 
@@ -91,7 +116,14 @@ class Laplace(nn.Module):
                 before convolution operation.
         """
         super().__init__()
-        self.register_buffer("filter", torch.from_numpy(laplace()))
+        if filter_size == 3:
+            kernel = laplace()
+        elif filter_size == 5:
+            kernel = laplace5x5()
+        elif filter_size == 7:
+            kernel = laplace7x7()
+
+        self.register_buffer("filter", torch.from_numpy(kernel))
         self.padding_size = self.filter.shape[-1] // 2 if padding is None else padding
 
     def forward(self, x):
@@ -112,9 +144,9 @@ class LaplaceL2(nn.Module):
 
     """
 
-    def __init__(self, padding=None):
+    def __init__(self, padding=None, filter_size=3):
         super().__init__()
-        self.laplace = Laplace(padding=padding)
+        self.laplace = Laplace(padding=padding, filter_size=filter_size)
         warnings.warn("LaplaceL2 Regularizer is deprecated. Use LaplaceL2norm instead.")
 
     def forward(self, x, avg=True):

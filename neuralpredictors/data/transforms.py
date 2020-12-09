@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from collections import namedtuple
+from collections import namedtuple, Iterable
 from skimage.transform import rescale
 
 class Invertible:
@@ -306,6 +306,12 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
         # -- behavior
         transforms['behavior'] = lambda x: x
 
+        # -- trial_idx
+        trial_idx_mean = np.arange(data._len).mean()
+        trial_idx_std = np.arange(data._len).std()
+        transforms["trial_idx"] = lambda x: (x - trial_idx_mean) / trial_idx_std
+        itransforms["trial_idx"] = lambda x: x * trial_idx_std + trial_idx_mean
+
         if "pupil_center" in data.data_keys:
             self._eye_mean = np.array(data.statistics["pupil_center"][stats_source]["mean"])
             self._eye_std = np.array(data.statistics["pupil_center"][stats_source]["std"])
@@ -378,6 +384,7 @@ class AddBehaviorAsChannels(MovieTransform, StaticTransform, Invertible):
         self.transforms["responses"] = lambda x: x
         self.transforms["behavior"] = lambda x: x
         self.transforms["pupil_center"] = lambda x: x
+        self.transforms["trial_idx"] = lambda x: x
 
     def __call__(self, x):
 
@@ -427,6 +434,8 @@ class AddPupilCenterAsChannels(MovieTransform, StaticTransform, Invertible):
             dd["behavior"] = self.transforms["behavior"](key_vals["behavior"])
         dd["pupil_center"] = self.transforms["pupil_center"](key_vals["pupil_center"])
 
+        if "trial_idx" in key_vals:
+            dd["trial_idx"] = self.transforms["trial_idx"](key_vals["trial_idx"])
         return x.__class__(**dd)
 
 
@@ -436,7 +445,7 @@ class SelectInputChannel(StaticTransform):
     """
 
     def __init__(self, grab_channel):
-        self.grab_channel = grab_channel
+        self.grab_channel = grab_channel if isinstance(grab_channel, Iterable) else [grab_channel]
 
     def __call__(self, x):
         key_vals = {k: v for k, v in zip(x._fields, x)}
@@ -444,7 +453,7 @@ class SelectInputChannel(StaticTransform):
         key_vals["images"] = (
             img[:, (self.grab_channel,)]
             if len(img.shape) == 4
-            else img[(self.grab_channel,)]
+            else img[self.grab_channel, ...]
         )
         return x.__class__(**key_vals)
 

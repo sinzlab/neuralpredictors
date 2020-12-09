@@ -670,9 +670,13 @@ class FileTreeDataset(StaticSet):
         if not self._config_file.exists():
             self._save_config(self._default_config)
 
+
         for data_key in data_keys:
-            datapath = self.resolve_data_path(data_key)
-            number_of_files.append(len(list(datapath.glob("*"))))
+            if data_key not in self.trial_info.keys():
+                datapath = self.resolve_data_path(data_key)
+                number_of_files.append(len(list(datapath.glob("*"))))
+            else:
+                number_of_files.append(len(self.trial_info[data_key]))
 
         if not np.all(np.diff(number_of_files) == 0):
             raise InconsistentDataException("Number of data points is not equal")
@@ -714,8 +718,11 @@ class FileTreeDataset(StaticSet):
             if item in self._cache[data_key]:
                 ret.append(self._cache[data_key][item])
             else:
-                datapath = self.resolve_data_path(data_key)
-                val = np.load(datapath / "{}.npy".format(item))
+                if data_key in self.trial_info.keys():
+                    val = self.trial_info[data_key][item:item+1]
+                else:
+                    datapath = self.resolve_data_path(data_key)
+                    val = np.load(datapath / "{}.npy".format(item))
                 self._cache[data_key][item] = val
                 ret.append(val)
 

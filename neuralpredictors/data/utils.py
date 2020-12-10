@@ -18,8 +18,7 @@ def zip_dir(zip_name: str, source_dir):
 
 
 def _savenpy(path, val, overwrite):
-
-    if not np.isscalar(val) and val[0].dtype.char == "S":  # convert bytes to univcode
+    if not np.isscalar(val) and len(val.shape) > 0 and val[0].dtype.char == "S":  # convert bytes to univcode
         val = val.astype(str)
     if not path.exists() or overwrite:
         print("Saving", path)
@@ -57,7 +56,7 @@ def convert_static_h5_dataset_to_folder(filename, outpath=None, overwrite=False,
         for data_key in ["tiers"]:
             subpath = outpath / "meta/trials"
             subpath.mkdir(exist_ok=True, parents=True)
-            _savenpy(subpath / "{}.npy".format(data_key), fid[data_key].value, overwrite)
+            _savenpy(subpath / "{}.npy".format(data_key), fid[data_key][...], overwrite)
 
         # save meta info
         for meta_type, target in zip(["item_info", "neurons"], ["trials", "neurons"]):
@@ -65,7 +64,7 @@ def convert_static_h5_dataset_to_folder(filename, outpath=None, overwrite=False,
                 subpath = outpath / "meta/{}".format(target)
                 subpath.mkdir(exist_ok=True, parents=True)
 
-                _savenpy(subpath / "{}.npy".format(meta_key), fid[meta_type][meta_key].value, overwrite)
+                _savenpy(subpath / "{}.npy".format(meta_key), fid[meta_type][meta_key][...], overwrite)
 
         # save statistics
         def statistics_func(name, node):
@@ -74,6 +73,6 @@ def convert_static_h5_dataset_to_folder(filename, outpath=None, overwrite=False,
                 subpath = outpath / "meta/statistics" / name
                 subpath.mkdir(exist_ok=True, parents=True)
             else:
-                _savenpy(outpath / "meta/statistics" / "{}.npy".format(name), node.value, overwrite)
+                _savenpy(outpath / "meta/statistics" / "{}.npy".format(name), node[...], overwrite)
 
         fid["statistics"].visititems(statistics_func)

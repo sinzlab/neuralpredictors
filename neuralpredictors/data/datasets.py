@@ -817,12 +817,12 @@ class FileTreeDataset(StaticSet):
         )
 
     @staticmethod
-    def initialize_from(filename, outpath=None, overwrite=False):
+    def initialize_from(filename, outpath=None, overwrite=False, ignore_all_behaviors=False):
         """
         Convenience function. See `convert_static_h5_dataset_to_folder` in `.utils`
         """
         convert_static_h5_dataset_to_folder(
-            filename, outpath=outpath, overwrite=overwrite
+            filename, outpath=outpath, overwrite=overwrite, ignore_all_behaviors=ignore_all_behaviors
         )
 
     @property

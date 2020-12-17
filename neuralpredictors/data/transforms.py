@@ -398,6 +398,8 @@ class AddBehaviorAsChannels(MovieTransform, StaticTransform, Invertible):
         }
         if "pupil_center" in key_vals:
             dd["pupil_center"] = self.transforms["pupil_center"](key_vals["pupil_center"])
+        if "trial_idx" in key_vals:
+            dd["trial_idx"] = self.transforms["trial_idx"](key_vals["trial_idx"])
         return x.__class__(**dd)
 
 

@@ -98,7 +98,7 @@ class Subsequence(MovieTransform):
 class Delay(MovieTransform):
     """
     Delay the specified target gorups by delay frames. In other words,
-    given non-delayed group g(t) and delayed group d(t), 
+    given non-delayed group g(t) and delayed group d(t),
     g(T:N-delay) will be returned with d(T+delay:N) where `delay` is the specified amount
     of delay, and N is the last frame in the dataset.
     """
@@ -111,11 +111,7 @@ class Delay(MovieTransform):
     def __call__(self, x):
         first_group = x._fields[0]
         t = getattr(x, first_group).shape[int(first_group in self.channel_first)]
-        assert (
-            t > self.delay
-        ), "The sequence length {} has to be longer than the delay {}".format(
-            t, self.delay
-        )
+        assert t > self.delay, "The sequence length {} has to be longer than the delay {}".format(t, self.delay)
         key_entry = {}
         for k in x._fields:
             if k in self.delay_groups:
@@ -124,11 +120,7 @@ class Delay(MovieTransform):
                 start = 0
                 stop = t - self.delay
 
-            key_entry[k] = (
-                getattr(x, k)[:, start:stop]
-                if k in self.channel_first
-                else getattr(x, k)[start:stop]
-            )
+            key_entry[k] = getattr(x, k)[:, start:stop] if k in self.channel_first else getattr(x, k)[start:stop]
 
         return x.__class__(**key_entry)
 
@@ -140,11 +132,7 @@ class Delay(MovieTransform):
         first_group = list(id_map.keys())[0]
         v_fg = id_map[first_group]
         t = v_fg.shape[int(first_group in self.channel_first)]
-        assert (
-            t > self.delay
-        ), "The sequence length {} has to be longer than the delay {}".format(
-            t, self.delay
-        )
+        assert t > self.delay, "The sequence length {} has to be longer than the delay {}".format(t, self.delay)
 
         for k, v in id_map.items():
             if k in self.delay_groups:
@@ -157,9 +145,7 @@ class Delay(MovieTransform):
         return new_map
 
     def __repr__(self):
-        return self.__class__.__name__ + "({} on {})".format(
-            self.delay, self.delay_groups
-        )
+        return self.__class__.__name__ + "({} on {})".format(self.delay, self.delay_groups)
 
 
 class Subsample(MovieTransform, StaticTransform):
@@ -173,9 +159,9 @@ class Subsample(MovieTransform, StaticTransform):
             idx (numpy index specifier): Indices to be selected. Must be a valid NumPy index specification (e.g. list of indicies, boolean array, etc.)
             target_group (string or iterable of strings): Specifies the taget data key to perform subselection on. If given a string, it is assumed as the direct name of data_key
                 Otherwise, it is assumed to be an iterable over string values of all data_keys
-            target_index (optional, dict): If provided a dictionary, the key is asssumed to be the name of data_key and value the index position to perform subselection on. If not provided, index position of -1 (last position) is used. 
+            target_index (optional, dict): If provided a dictionary, the key is asssumed to be the name of data_key and value the index position to perform subselection on. If not provided, index position of -1 (last position) is used.
         """
-        
+
         self.idx = idx
         if isinstance(target_group, str):
             self.target_groups = (target_group,)
@@ -193,9 +179,7 @@ class Subsample(MovieTransform, StaticTransform):
     def __call__(self, x):
         return x.__class__(
             **{
-                k: np.take(getattr(x, k), self.idx, self.target_index[k])
-                if k in self.target_groups
-                else getattr(x, k)
+                k: np.take(getattr(x, k), self.idx, self.target_index[k]) if k in self.target_groups else getattr(x, k)
                 for k in x._fields
             }
         )
@@ -204,9 +188,7 @@ class Subsample(MovieTransform, StaticTransform):
         return self.__class__.__name__ + "(n={})".format(len(self.idx))
 
     def id_transform(self, id_map):
-        return {
-            k: v[self.idx] if k in self.target_groups else v for k, v in id_map.items()
-        }
+        return {k: v[self.idx] if k in self.target_groups else v for k, v in id_map.items()}
 
 
 class ToTensor(MovieTransform, StaticTransform, Invertible):
@@ -303,12 +285,8 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
 
         if "eye_position" in data.data_keys:
             # -- eye position
-            self._eye_mean = np.array(
-                data.statistics["eye_position"][stats_source]["mean"]
-            )
-            self._eye_std = np.array(
-                data.statistics["eye_position"][stats_source]["std"]
-            )
+            self._eye_mean = np.array(data.statistics["eye_position"][stats_source]["mean"])
+            self._eye_std = np.array(data.statistics["eye_position"][stats_source]["std"])
             transforms["eye_position"] = lambda x: (x - self._eye_mean) / self._eye_std
             itransforms["eye_position"] = lambda x: x * self._eye_std + self._eye_mean
 
@@ -332,26 +310,16 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
         Apply transformation
         """
         return x.__class__(
-            **{
-                k: (self._transforms[k](v) if k not in self.exclude else v)
-                for k, v in zip(x._fields, x)
-            }
+            **{k: (self._transforms[k](v) if k not in self.exclude else v) for k, v in zip(x._fields, x)}
         )
 
     def inv(self, x):
         return x.__class__(
-            **{
-                k: (self._itransforms[k](v) if k not in self.exclude else v)
-                for k, v in zip(x._fields, x)
-            }
+            **{k: (self._itransforms[k](v) if k not in self.exclude else v) for k, v in zip(x._fields, x)}
         )
 
     def __repr__(self):
-        return super().__repr__() + (
-            "(not {})".format(", ".join(self.exclude))
-            if self.exclude is not None
-            else ""
-        )
+        return super().__repr__() + ("(not {})".format(", ".join(self.exclude)) if self.exclude is not None else "")
 
 
 class AddBehaviorAsChannels(MovieTransform, StaticTransform, Invertible):
@@ -368,9 +336,7 @@ class AddBehaviorAsChannels(MovieTransform, StaticTransform, Invertible):
             (
                 img,
                 np.ones((1, *img.shape[-(len(img.shape) - 1) :]))
-                * np.expand_dims(
-                    behavior, axis=((len(img.shape) - 2), (len(img.shape) - 1))
-                ),
+                * np.expand_dims(behavior, axis=((len(img.shape) - 2), (len(img.shape) - 1))),
             ),
             axis=len(img.shape) - 3,
         )
@@ -380,9 +346,7 @@ class AddBehaviorAsChannels(MovieTransform, StaticTransform, Invertible):
     def __call__(self, x):
         key_vals = {k: v for k, v in zip(x._fields, x)}
         dd = {
-            "images": self.transforms["images"](
-                key_vals["images"], key_vals["behavior"]
-            ),
+            "images": self.transforms["images"](key_vals["images"], key_vals["behavior"]),
             "responses": self.transforms["responses"](key_vals["responses"]),
             "behavior": self.transforms["behavior"](key_vals["behavior"]),
         }
@@ -400,9 +364,5 @@ class SelectInputChannel(StaticTransform):
     def __call__(self, x):
         key_vals = {k: v for k, v in zip(x._fields, x)}
         img = key_vals["images"]
-        key_vals["images"] = (
-            img[:, (self.grab_channel,)]
-            if len(img.shape) == 4
-            else img[(self.grab_channel,)]
-        )
+        key_vals["images"] = img[:, (self.grab_channel,)] if len(img.shape) == 4 else img[(self.grab_channel,)]
         return x.__class__(**key_vals)

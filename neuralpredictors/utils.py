@@ -39,7 +39,7 @@ def flatten_json(nested_dict, keep_nested_name=True):
 
 
 def gini(x):
-    """ Calculates the Gini coefficient from a list of numbers. The Gini coefficient is used as a measure of (in)equality
+    """Calculates the Gini coefficient from a list of numbers. The Gini coefficient is used as a measure of (in)equality
     where a Gini coefficient of 1 (or 100%) expresses maximal inequality among values. A value greater than one may occur
      if some value represents negative contribution.
 

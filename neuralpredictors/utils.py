@@ -117,7 +117,7 @@ class BiasNet(nn.Module):
     def forward(self, x):
         return self.base_net(x) + self.bias
 
-    
+
 class HiddenPrints:
     def __enter__(self):
         self._original_stdout = sys.stdout
@@ -126,4 +126,3 @@ class HiddenPrints:
     def __exit__(self, exc_type, exc_val, exc_tb):
         sys.stdout.close()
         sys.stdout = self._original_stdout
-

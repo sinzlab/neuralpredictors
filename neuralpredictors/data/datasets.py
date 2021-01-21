@@ -19,7 +19,7 @@ from .transforms import (
     Delay,
 )
 from .utils import convert_static_h5_dataset_to_folder, zip_dir
-from ..utils import recursively_load_dict_contents_from_group
+from ..utils import recursively_load_dict_contents_from_group, HiddenPrints
 
 
 class AttributeHandler:
@@ -593,7 +593,8 @@ class FileTreeDataset(StaticSet):
                 print("{} exists already. Not unpacking {}".format(dirname[:-4], dirname))
 
             dirname = dirname[:-4]
-
+            
+        self.dirname = dirname
         self.basepath = Path(dirname).absolute()
         self._config_file = self.basepath / "config.json"
 
@@ -706,6 +707,12 @@ class FileTreeDataset(StaticSet):
             values:     new meta information. First dimension must refer to neurons.
             fill_missing:   fill the values of the new attribute with NaN if not provided
         """
+        with HiddenPrints():
+            temp = NewFileTreeDataset(self.dirname, 'responses');
+        if not len(temp.neurons.unit_ids) == len(values):
+            raise InconsistentDataException("Number of values is not same as total number of neurons in the dataset. \
+            Do you maybe have an active subsample restriction..?")
+        
         if not len(animal_id) == len(session) == len(scan_idx) == len(unit_id) == len(values):
             raise InconsistentDataException("number of trials and identifiers not consistent")
 

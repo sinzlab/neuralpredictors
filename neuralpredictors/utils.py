@@ -5,6 +5,8 @@ import torch
 from torch import nn as nn
 from torch.nn import Parameter
 
+from .training import eval_state
+
 
 def flatten_json(nested_dict, keep_nested_name=True):
     """Turns a nested dictionary into a flattened dictionary. Designed to facilitate the populating of Config.Part tables
@@ -101,6 +103,33 @@ def recursively_load_dict_contents_from_group(h5file, path="/"):
             else:
                 ans[key] = recursively_load_dict_contents_from_group(h5file, path + key + "/")
     return ans
+
+
+def get_module_output(model, input_shape, use_cuda=True):
+    """
+    Returns the output shape of the model when fed in an array of `input_shape`.
+    Note that a zero array of shape `input_shape` is fed into the model and the
+    shape of the output of the model is returned.
+
+    Args:
+        model (nn.Module): PyTorch module for which to compute the output shape
+        input_shape (tuple): Shape specification for the input array into the model
+        use_cuda (bool, optional): If True, model will be evaluated on CUDA if available. Othewrise
+            model evaluation will take place on CPU. Defaults to True.
+
+    Returns:
+        tuple: output shape of the model
+
+    """
+    # infer the original device
+    initial_device = next(iter(model.parameters())).device
+    device = "cuda" if torch.cuda.is_available() and use_cuda else "cpu"
+    with eval_state(model):
+        with torch.no_grad():
+            input = torch.zeros(1, *input_shape[1:], device=device)
+            output = model.to(device)(input)
+    model.to(initial_device)
+    return output.shape
 
 
 class BiasNet(nn.Module):

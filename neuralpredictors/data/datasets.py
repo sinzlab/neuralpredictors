@@ -10,23 +10,15 @@ from scipy.signal import convolve2d
 from torch.utils.data import Dataset
 
 from .exceptions import InconsistentDataException, DoesNotExistException
-from .transforms import (
-    DataTransform,
-    MovieTransform,
-    StaticTransform,
-    Invertible,
-    Subsequence,
-    Delay,
-)
+from .transforms import DataTransform, MovieTransform, StaticTransform, Invertible, Subsequence, Delay
 from .utils import convert_static_h5_dataset_to_folder, zip_dir
-from ..utils import recursively_load_dict_contents_from_group
+from ..utils import recursively_load_dict_contents_from_group, HiddenPrints
 
 
 class AttributeHandler:
     def __init__(self, name, h5_handle):
         """
         Can be used to turn a dataset within a hdf5 dataset into an attribute.
-
         Args:
             name:       name of the dataset in the hdf5 file
             h5_handle:  file handle for the hdf5 file
@@ -60,7 +52,6 @@ class AttributeTransformer(AttributeHandler):
         """
         Allows for id_transform of transforms to be applied to the
         specified attribute. Otherwise behaves like an AttributeHandler
-
         Args:
             name:       see AttributeHandler
             h5_handle:  see AttributeHandler
@@ -85,7 +76,6 @@ class TransformDataset(Dataset):
         """
         Abstract Class for Datasets with transformations, providing `transform` and `invert` functions
         to apply data transformation on the elements.
-
         Args:
             transforms: list of transforms to be applied to each data point
         """
@@ -94,11 +84,9 @@ class TransformDataset(Dataset):
     def transform(self, x, exclude=None):
         """
         Apply transform on a data element from the dataset
-
         Args:
             x (tuple): a data element from the dataset
             exclude (Transform, optional): Type of data transformer to be excluded from transform list. Defaults to None.
-
         Returns:
             tuple: transformed data element
         """
@@ -265,14 +253,11 @@ class MovieSet(H5SequenceSet):
         Generates a Gaussian white noise stimulus filtered with a 3x3 Gaussian filter
         for the computation of receptive fields. The mean and variance of the Gaussian
         noise are set to the mean and variance of the stimulus ensemble.
-
         The behvavior, eye movement statistics, and responses are set to their respective means.
         Args:
             m: number of noise samples
             t: length in time
-
         Returns: tuple of input, behavior, eye, and response
-
         """
         N, c, _, w, h = self.img_shape
         stat = lambda dk, what: self.statistics[dk][stats_source][what][()]
@@ -298,8 +283,7 @@ class MovieSet(H5SequenceSet):
         )
 
         return self.transform(
-            self.data_point(*[d[dk] for dk in self.data_groups.values()]),
-            exclude=(Subsequence, Delay),
+            self.data_point(*[d[dk] for dk in self.data_groups.values()]), exclude=(Subsequence, Delay)
         )
 
 
@@ -326,7 +310,6 @@ class H5ArraySet(StaticSet):
     def __init__(self, filename, *data_keys, transforms=None):
         """
         Dataset for static data stored in hdf5 files.
-
         Args:
             filename:      filename of the hdf5 file
             *data_keys:    data keys to be read from the file
@@ -391,7 +374,6 @@ class StaticImageSet(H5ArraySet):
     def __init__(self, filename, *data_keys, transforms=None, cache_raw=False, stats_source=None):
         """
         Dataset for h5 files.
-
         Args:
             filename:       filename of the hdf5 file
             *data_keys:     datasets to be extracted
@@ -442,7 +424,6 @@ class DirectoryAttributeHandler:
         """
         Class that can be used to represent a subdirectory of a FileTree as a property in a FileTree dataset.
         Caches already loaded data items.
-
         Args:
             path: path to the subdiretory (pathlib.Path object)
         """
@@ -479,7 +460,6 @@ class DirectoryAttributeTransformer(DirectoryAttributeHandler):
         Class that can be used to represent a subdirectory of a FileTree as a property in a FileTree dataset.
         Like DirectoryAttributeHandler but allows for id_transform of transforms to be applied to the
         specified attribute.
-
         Args:
             path: path to the subdiretory (pathlib.Path object)
         """
@@ -501,82 +481,78 @@ class FileTreeDataset(StaticSet):
         Dataset stored as a file tree. The tree needs to have the subdirs data, meta, meta/neurons, meta/statistics,
         and meta/trials. Please refer to convert_static_h5_dataset_to_folder in neuralpredictors.data.utils
         how to export an hdf5 file into that structure.
-
-
         Here is an example. Data directories with too many entries have trials as .npy files
         named 0.npy, 1.npy, ...
         The meta/trials subdirectory must have single .npy files with arrays that provide additional trial based
         meta data.
-
         static22564-2-13-preproc0
         ├── data
-        │   ├── behavior [5955 entries exceeds filelimit, not opening dir]
-        │   ├── images [5955 entries exceeds filelimit, not opening dir]
-        │   ├── pupil_center [5955 entries exceeds filelimit, not opening dir]
-        │   └── responses [5955 entries exceeds filelimit, not opening dir]
+        │   ├── behavior [5955 entries exceeds filelimit, not opening dir]
+        │   ├── images [5955 entries exceeds filelimit, not opening dir]
+        │   ├── pupil_center [5955 entries exceeds filelimit, not opening dir]
+        │   └── responses [5955 entries exceeds filelimit, not opening dir]
         └── meta
             ├── neurons
-            │   ├── animal_ids.npy
-            │   ├── area.npy
-            │   ├── layer.npy
-            │   ├── scan_idx.npy
-            │   ├── sessions.npy
-            │   └── unit_ids.npy
+            │   ├── animal_ids.npy
+            │   ├── area.npy
+            │   ├── layer.npy
+            │   ├── scan_idx.npy
+            │   ├── sessions.npy
+            │   └── unit_ids.npy
             ├── statistics
-            │   ├── behavior
-            │   │   ├── all
-            │   │   │   ├── max.npy
-            │   │   │   ├── mean.npy
-            │   │   │   ├── median.npy
-            │   │   │   ├── min.npy
-            │   │   │   └── std.npy
-            │   │   └── stimulus_frame
-            │   │       ├── max.npy
-            │   │       ├── mean.npy
-            │   │       ├── median.npy
-            │   │       ├── min.npy
-            │   │       └── std.npy
-            │   ├── images
-            │   │   ├── all
-            │   │   │   ├── max.npy
-            │   │   │   ├── mean.npy
-            │   │   │   ├── median.npy
-            │   │   │   ├── min.npy
-            │   │   │   └── std.npy
-            │   │   └── stimulus_frame
-            │   │       ├── max.npy
-            │   │       ├── mean.npy
-            │   │       ├── median.npy
-            │   │       ├── min.npy
-            │   │       └── std.npy
-            │   ├── pupil_center
-            │   │   ├── all
-            │   │   │   ├── max.npy
-            │   │   │   ├── mean.npy
-            │   │   │   ├── median.npy
-            │   │   │   ├── min.npy
-            │   │   │   └── std.npy
-            │   │   └── stimulus_frame
-            │   │       ├── max.npy
-            │   │       ├── mean.npy
-            │   │       ├── median.npy
-            │   │       ├── min.npy
-            │   │       └── std.npy
-            │   └── responses
-            │       ├── all
-            │       │   ├── max.npy
-            │       │   ├── mean.npy
-            │       │   ├── median.npy
-            │       │   ├── min.npy
-            │       │   └── std.npy
-            │       └── stimulus_frame
-            │           ├── max.npy
-            │           ├── mean.npy
-            │           ├── median.npy
-            │           ├── min.npy
-            │           └── std.npy
+            │   ├── behavior
+            │   │   ├── all
+            │   │   │   ├── max.npy
+            │   │   │   ├── mean.npy
+            │   │   │   ├── median.npy
+            │   │   │   ├── min.npy
+            │   │   │   └── std.npy
+            │   │   └── stimulus_frame
+            │   │       ├── max.npy
+            │   │       ├── mean.npy
+            │   │       ├── median.npy
+            │   │       ├── min.npy
+            │   │       └── std.npy
+            │   ├── images
+            │   │   ├── all
+            │   │   │   ├── max.npy
+            │   │   │   ├── mean.npy
+            │   │   │   ├── median.npy
+            │   │   │   ├── min.npy
+            │   │   │   └── std.npy
+            │   │   └── stimulus_frame
+            │   │       ├── max.npy
+            │   │       ├── mean.npy
+            │   │       ├── median.npy
+            │   │       ├── min.npy
+            │   │       └── std.npy
+            │   ├── pupil_center
+            │   │   ├── all
+            │   │   │   ├── max.npy
+            │   │   │   ├── mean.npy
+            │   │   │   ├── median.npy
+            │   │   │   ├── min.npy
+            │   │   │   └── std.npy
+            │   │   └── stimulus_frame
+            │   │       ├── max.npy
+            │   │       ├── mean.npy
+            │   │       ├── median.npy
+            │   │       ├── min.npy
+            │   │       └── std.npy
+            │   └── responses
+            │       ├── all
+            │       │   ├── max.npy
+            │       │   ├── mean.npy
+            │       │   ├── median.npy
+            │       │   ├── min.npy
+            │       │   └── std.npy
+            │       └── stimulus_frame
+            │           ├── max.npy
+            │           ├── mean.npy
+            │           ├── median.npy
+            │           ├── min.npy
+            │           └── std.npy
             └── trials [12 entries exceeds filelimit, not opening dir]
-
         Args:
             dirname:     root directory name
             *data_keys:  data items to be extraced (must be subdirectories of root/data)
@@ -594,6 +570,7 @@ class FileTreeDataset(StaticSet):
 
             dirname = dirname[:-4]
 
+        self.dirname = dirname
         self.basepath = Path(dirname).absolute()
         self._config_file = self.basepath / "config.json"
 
@@ -671,10 +648,8 @@ class FileTreeDataset(StaticSet):
     def match_order(target, permuted, not_exist_ok=False):
         """
         Matches the order or rows in permuted to by returning an index array such that.
-
         Args:
             not_exist_ok: if the element does not exist, don't return an index
-
         Returns: index array `idx` such that `target == permuted[idx, :]`
         """
 
@@ -696,7 +671,6 @@ class FileTreeDataset(StaticSet):
     def add_neuron_meta(self, name, animal_id, session, scan_idx, unit_id, values, fill_missing=None):
         """
         Add new meta information about neurons.
-
         Args:
             name:       name of the new meta information
             animal_id:  array with animal_ids per first dimension of values
@@ -706,17 +680,18 @@ class FileTreeDataset(StaticSet):
             values:     new meta information. First dimension must refer to neurons.
             fill_missing:   fill the values of the new attribute with NaN if not provided
         """
+        with HiddenPrints():
+            temp = NewFileTreeDataset(self.dirname, "responses")
+        if not len(temp.neurons.unit_ids) == len(values):
+            raise InconsistentDataException(
+                "Number of values is not same as total number of neurons in the dataset. \
+            Do you maybe have an active subsample restriction..?"
+            )
+
         if not len(animal_id) == len(session) == len(scan_idx) == len(unit_id) == len(values):
             raise InconsistentDataException("number of trials and identifiers not consistent")
 
-        target = np.c_[
-            (
-                self.neurons.animal_ids,
-                self.neurons.sessions,
-                self.neurons.scan_idx,
-                self.neurons.unit_ids,
-            )
-        ]
+        target = np.c_[(self.neurons.animal_ids, self.neurons.sessions, self.neurons.scan_idx, self.neurons.unit_ids)]
         permuted = np.c_[(animal_id, session, scan_idx, unit_id)]
         vals = np.ones((len(target),) + values.shape[1:], dtype=values.dtype) * (
             np.nan if fill_missing is None else fill_missing
@@ -745,7 +720,6 @@ class FileTreeDataset(StaticSet):
     def zip(self, filename=None):
         """
         Zips current dataset.
-
         Args:
             filename:  Filename for the zip. Directory name + zip by default.
         """
@@ -762,9 +736,7 @@ class FileTreeDataset(StaticSet):
     def add_link(self, attr, new_name):
         """
         Add a new dataset that links to an existing dataset.
-
         For instance `targets` that links to `responses`
-
         Args:
             attr:       existing attribute such as `responses`
             new_name:   name of the new attribute reference.

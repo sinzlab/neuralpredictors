@@ -685,10 +685,9 @@ class FileTreeDataset(StaticSet):
 
             if not self.n_neurons == len(values):
                 raise InconsistentDataException(
-                    f"Number of values ({len(values)}) is not same as total number of \
-                    neurons (self.n_neurons) in the dataset. \
-                    Note that transforms are disabled."
-                )
+                    " ".join([f"Number of values ({len(values)}) is not same as", 
+                              f"total number of neurons ({self.n_neurons}) in the dataset.", 
+                              "Note that transforms are disabled."]))
 
             if not len(animal_id) == len(session) == len(scan_idx) == len(unit_id) == len(values):
                 raise InconsistentDataException("number of trials and identifiers not consistent")

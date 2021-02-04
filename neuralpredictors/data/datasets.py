@@ -12,7 +12,7 @@ from torch.utils.data import Dataset
 from .exceptions import InconsistentDataException, DoesNotExistException
 from .transforms import DataTransform, MovieTransform, StaticTransform, Invertible, Subsequence, Delay
 from .utils import convert_static_h5_dataset_to_folder, zip_dir
-from ..utils import recursively_load_dict_contents_from_group, HiddenPrints
+from ..utils import recursively_load_dict_contents_from_group, no_transforms
 
 
 class AttributeHandler:
@@ -680,29 +680,32 @@ class FileTreeDataset(StaticSet):
             values:     new meta information. First dimension must refer to neurons.
             fill_missing:   fill the values of the new attribute with NaN if not provided
         """
-        with HiddenPrints():
-            temp = NewFileTreeDataset(self.dirname, "responses")
-        if not len(temp.neurons.unit_ids) == len(values):
-            raise InconsistentDataException(
-                "Number of values is not same as total number of neurons in the dataset. \
-            Do you maybe have an active subsample restriction..?"
+
+        with no_transforms(self):
+
+            if not self.n_neurons == len(values):
+                raise InconsistentDataException(
+                    "Number of values is not same as total number of neurons in the dataset. \
+                Note that transforms are disabled."
+                )
+
+            if not len(animal_id) == len(session) == len(scan_idx) == len(unit_id) == len(values):
+                raise InconsistentDataException("number of trials and identifiers not consistent")
+
+            target = np.c_[
+                (self.neurons.animal_ids, self.neurons.sessions, self.neurons.scan_idx, self.neurons.unit_ids)
+            ]
+            permuted = np.c_[(animal_id, session, scan_idx, unit_id)]
+            vals = np.ones((len(target),) + values.shape[1:], dtype=values.dtype) * (
+                np.nan if fill_missing is None else fill_missing
             )
+            tidx, idx = self.match_order(target, permuted, not_exist_ok=fill_missing is not None)
 
-        if not len(animal_id) == len(session) == len(scan_idx) == len(unit_id) == len(values):
-            raise InconsistentDataException("number of trials and identifiers not consistent")
+            assert np.sum(target[tidx] - permuted[idx, ...]) == 0, "Something went wrong in sorting"
 
-        target = np.c_[(self.neurons.animal_ids, self.neurons.sessions, self.neurons.scan_idx, self.neurons.unit_ids)]
-        permuted = np.c_[(animal_id, session, scan_idx, unit_id)]
-        vals = np.ones((len(target),) + values.shape[1:], dtype=values.dtype) * (
-            np.nan if fill_missing is None else fill_missing
-        )
-        tidx, idx = self.match_order(target, permuted, not_exist_ok=fill_missing is not None)
-
-        assert np.sum(target[tidx] - permuted[idx, ...]) == 0, "Something went wrong in sorting"
-
-        vals[tidx, ...] = values[idx, ...]
-        np.save(self.basepath / "meta/neurons/{}.npy".format(name), vals)
-        self.add_log_entry("Added new neuron meta attribute {} to meta/neurons".format(name))
+            vals[tidx, ...] = values[idx, ...]
+            np.save(self.basepath / "meta/neurons/{}.npy".format(name), vals)
+            self.add_log_entry("Added new neuron meta attribute {} to meta/neurons".format(name))
 
     @staticmethod
     def initialize_from(filename, outpath=None, overwrite=False):

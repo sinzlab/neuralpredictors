@@ -1,5 +1,6 @@
 import os, sys
 import warnings
+from contextlib import contextmanager
 import numpy as np
 import h5py
 import torch
@@ -155,3 +156,13 @@ class HiddenPrints:
     def __exit__(self, exc_type, exc_val, exc_tb):
         sys.stdout.close()
         sys.stdout = self._original_stdout
+
+
+@contextmanager
+def no_transforms(dat):
+    transforms = dat.transforms
+    try:
+        dat.transforms = []
+        yield dat
+    finally:
+        dat.transforms = transforms

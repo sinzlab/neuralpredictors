@@ -72,40 +72,26 @@ class PiecewiseLinearExpNonlinearity(nn.Module):
         self.num_bins = 2 * int(num_bins / 2)
 
         if self.bias:
-            self.b = torch.nn.Parameter(
-                torch.empty((number_of_neurons,), dtype=torch.float32).fill_(
-                    self.initial
-                )
-            )
-        self.a = torch.nn.Parameter(
-            torch.empty((self.num_bins, self.neurons), dtype=torch.float32).fill_(0)
-        )
+            self.b = torch.nn.Parameter(torch.empty((number_of_neurons,), dtype=torch.float32).fill_(self.initial))
+        self.a = torch.nn.Parameter(torch.empty((self.num_bins, self.neurons), dtype=torch.float32).fill_(0))
 
-        bins = np.linspace(
-            self.vmin, self.vmax, self.num_bins + 1, endpoint=True
-        ).reshape(1, -1)
+        bins = np.linspace(self.vmin, self.vmax, self.num_bins + 1, endpoint=True).reshape(1, -1)
         bins_mtx = np.tile(bins, [1, self.neurons, 1])
         bins_mtx = np.transpose(bins_mtx, (0, 2, 1)).astype(np.float32)
         # shape: 1, num_bins, num_neurons
         self.bins = torch.nn.Parameter(torch.from_numpy(bins_mtx), requires_grad=False)
 
-        self.zero = torch.nn.Parameter(
-            torch.zeros((1,), dtype=torch.float32), requires_grad=False
-        )
+        self.zero = torch.nn.Parameter(torch.zeros((1,), dtype=torch.float32), requires_grad=False)
 
     def tent(self, x, a, b):
-        return torch.min(
-            torch.max(self.zero, x - a), torch.max(self.zero, 2 * b - a - x)
-        ) / (b - a)
+        return torch.min(torch.max(self.zero, x - a), torch.max(self.zero, 2 * b - a - x)) / (b - a)
 
     def linstep(self, x, a, b):
         return torch.min(b - a, torch.max(self.zero, x - a)) / (b - a)
 
     def smoothness_regularizer(self, verbose=False):
         penalty = 0
-        kernel = torch.tensor(
-            np.reshape([-1.0, 1.0], (1, 1, 2)), dtype=torch.float32
-        ).cuda()
+        kernel = torch.tensor(np.reshape([-1.0, 1.0], (1, 1, 2)), dtype=torch.float32).cuda()
 
         w = torch.reshape(self.a, (-1, 1, self.num_bins))  # shape: neurons, 1, bins
         for k in range(self.smoothnes_reg_order):
@@ -136,33 +122,18 @@ class PiecewiseLinearExpNonlinearity(nn.Module):
 
         return g * h
 
-    def visualize(
-        self,
-        vmin=None,
-        vmax=None,
-        iters=1000,
-        show=True,
-        return_fig=False,
-        neurons=range(10),
-    ):
+    def visualize(self, vmin=None, vmax=None, iters=1000, show=True, return_fig=False, neurons=range(10)):
         if vmin is None:
             vmin = self.vmin - 1
         if vmax is None:
             vmax = self.vmax + 1
 
-        inpts = torch.from_numpy(
-            np.tile(
-                np.linspace(vmin, vmax, iters).astype(np.float32), [self.neurons, 1]
-            ).T
-        ).cuda()
+        inpts = torch.from_numpy(np.tile(np.linspace(vmin, vmax, iters).astype(np.float32), [self.neurons, 1]).T).cuda()
         outs = self.forward(inpts)
 
         f = plt.figure()
         ax = f.add_subplot(1, 1, 1)
-        ax.plot(
-            inpts.cpu().detach().numpy()[:, neurons],
-            outs.cpu().detach().numpy()[:, neurons],
-        )
+        ax.plot(inpts.cpu().detach().numpy()[:, neurons], outs.cpu().detach().numpy()[:, neurons])
         ax.set_xlabel("Response before alteration")
         ax.set_ylabel("Response after alteration")
 

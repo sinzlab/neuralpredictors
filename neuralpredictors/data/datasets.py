@@ -670,7 +670,6 @@ class FileTreeDataset(StaticSet):
         if not self._config_file.exists():
             self._save_config(self._default_config)
 
-
         for data_key in data_keys:
             if data_key not in self.trial_info.keys():
                 datapath = self.resolve_data_path(data_key)
@@ -719,7 +718,7 @@ class FileTreeDataset(StaticSet):
                 ret.append(self._cache[data_key][item])
             else:
                 if data_key in self.trial_info.keys():
-                    val = self.trial_info[data_key][item:item+1]
+                    val = self.trial_info[data_key][item : item + 1]
                 else:
                     datapath = self.resolve_data_path(data_key)
                     val = np.load(datapath / "{}.npy".format(item))
@@ -817,12 +816,17 @@ class FileTreeDataset(StaticSet):
         )
 
     @staticmethod
-    def initialize_from(filename, outpath=None, overwrite=False, ignore_all_behaviors=False):
+    def initialize_from(
+        filename, outpath=None, overwrite=False, ignore_all_behaviors=False
+    ):
         """
         Convenience function. See `convert_static_h5_dataset_to_folder` in `.utils`
         """
         convert_static_h5_dataset_to_folder(
-            filename, outpath=outpath, overwrite=overwrite, ignore_all_behaviors=ignore_all_behaviors
+            filename,
+            outpath=outpath,
+            overwrite=overwrite,
+            ignore_all_behaviors=ignore_all_behaviors,
         )
 
     @property

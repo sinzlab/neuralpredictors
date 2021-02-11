@@ -45,7 +45,7 @@ class SubsetSequentialSampler(Sampler):
 
 
 class SampledSubsetRandomSampler(Sampler):
-    """"
+    """ "
     Samples elements randomly from sampled subset of indices.
     Arguments:
         indices (sequence): a sequence of indices

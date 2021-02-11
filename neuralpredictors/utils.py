@@ -39,7 +39,7 @@ def flatten_json(nested_dict, keep_nested_name=True):
 
 
 def gini(x):
-    """ Calculates the Gini coefficient from a list of numbers. The Gini coefficient is used as a measure of (in)equality
+    """Calculates the Gini coefficient from a list of numbers. The Gini coefficient is used as a measure of (in)equality
     where a Gini coefficient of 1 (or 100%) expresses maximal inequality among values. A value greater than one may occur
      if some value represents negative contribution.
 
@@ -99,7 +99,9 @@ def recursively_load_dict_contents_from_group(h5file, path="/"):
             if item.attrs.get("_iterable", False):
                 ans[key] = [item[str(i)][()] for i in range(len(item))]
             else:
-                ans[key] = recursively_load_dict_contents_from_group(h5file, path + key + "/")
+                ans[key] = recursively_load_dict_contents_from_group(
+                    h5file, path + key + "/"
+                )
     return ans
 
 

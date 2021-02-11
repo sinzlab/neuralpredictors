@@ -29,9 +29,9 @@ class Readout:
         s += " [{} regularizers: ".format(self.__class__.__name__)
         ret = []
         for attr in filter(
-                lambda x: not x.startswith("_")
-                          and ("gamma" in x or "pool" in x or "positive" in x),
-                dir(self),
+            lambda x: not x.startswith("_")
+            and ("gamma" in x or "pool" in x or "positive" in x),
+            dir(self),
         ):
             ret.append("{} = {}".format(attr, getattr(self, attr)))
         return s + "|".join(ret) + "]\n"
@@ -43,14 +43,14 @@ class SpatialXFeatureLinear(nn.Module):
     """
 
     def __init__(
-            self,
-            in_shape,
-            outdims,
-            bias,
-            normalize=True,
-            init_noise=1e-3,
-            constrain_pos=False,
-            **kwargs,
+        self,
+        in_shape,
+        outdims,
+        bias,
+        normalize=True,
+        init_noise=1e-3,
+        constrain_pos=False,
+        **kwargs,
     ):
         super().__init__()
         self.in_shape = in_shape
@@ -93,10 +93,10 @@ class SpatialXFeatureLinear(nn.Module):
         n = self.outdims
         c, w, h = self.in_shape
         ret = (
-                self.normalized_spatial.view(self.outdims, -1)
-                .abs()
-                .sum(dim=1, keepdim=True)
-                * self.features.view(self.outdims, -1).abs().sum(dim=1)
+            self.normalized_spatial.view(self.outdims, -1)
+            .abs()
+            .sum(dim=1, keepdim=True)
+            * self.features.view(self.outdims, -1).abs().sum(dim=1)
         ).sum()
         if average:
             ret = ret / (n * c * w * h)
@@ -112,22 +112,21 @@ class SpatialXFeatureLinear(nn.Module):
         if self.constrain_pos:
             positive(self.features)
 
-            
-        y = torch.einsum('ncwh,owh->nco', x, self.normalized_spatial)
-        y = torch.einsum('nco,oc->no', y, self.features)
+        y = torch.einsum("ncwh,owh->nco", x, self.normalized_spatial)
+        y = torch.einsum("nco,oc->no", y, self.features)
         if self.bias is not None:
             y = y + self.bias
         return y
 
     def __repr__(self):
         return (
-                ("normalized " if self.normalize else "")
-                + self.__class__.__name__
-                + " ("
-                + "{} x {} x {}".format(*self.in_shape)
-                + " -> "
-                + str(self.outdims)
-                + ")"
+            ("normalized " if self.normalize else "")
+            + self.__class__.__name__
+            + " ("
+            + "{} x {} x {}".format(*self.in_shape)
+            + " -> "
+            + str(self.outdims)
+            + ")"
         )
 
 
@@ -163,15 +162,15 @@ class ClonedReadout(Readout, nn.Module):
 
 class PointPooled2d(nn.Module):
     def __init__(
-            self,
-            in_shape,
-            outdims,
-            pool_steps,
-            bias,
-            pool_kern,
-            init_range,
-            align_corners=True,
-            **kwargs,
+        self,
+        in_shape,
+        outdims,
+        pool_steps,
+        bias,
+        pool_kern,
+        init_range,
+        align_corners=True,
+        **kwargs,
     ):
         """
         This readout learns a point in the core feature space for each neuron, with help of torch.grid_sample, that best
@@ -231,7 +230,7 @@ class PointPooled2d(nn.Module):
     @pool_steps.setter
     def pool_steps(self, value):
         assert (
-                value >= 0 and int(value) - value == 0
+            value >= 0 and int(value) - value == 0
         ), "new pool steps must be a non-negative integer"
         if value != self._pool_steps:
             print("Resizing readout features")
@@ -284,7 +283,7 @@ class PointPooled2d(nn.Module):
             )
 
         m = (
-                self.pool_steps + 1
+            self.pool_steps + 1
         )  # the input feature is considered the first pooling stage
         feat = self.features.view(1, m * c, self.outdims)
         if out_idx is None:
@@ -326,12 +325,12 @@ class PointPooled2d(nn.Module):
     def __repr__(self):
         c, w, h = self.in_shape
         r = (
-                self.__class__.__name__
-                + " ("
-                + "{} x {} x {}".format(c, w, h)
-                + " -> "
-                + str(self.outdims)
-                + ")"
+            self.__class__.__name__
+            + " ("
+            + "{} x {} x {}".format(c, w, h)
+            + " -> "
+            + str(self.outdims)
+            + ")"
         )
         if self.bias is not None:
             r += " with bias"
@@ -343,18 +342,18 @@ class PointPooled2d(nn.Module):
 
 class SpatialTransformerPooled3d(nn.Module):
     def __init__(
-            self,
-            in_shape,
-            outdims,
-            pool_steps=1,
-            positive=False,
-            bias=True,
-            init_range=0.05,
-            kernel_size=2,
-            stride=2,
-            grid=None,
-            stop_grad=False,
-            align_corners=True,
+        self,
+        in_shape,
+        outdims,
+        pool_steps=1,
+        positive=False,
+        bias=True,
+        init_range=0.05,
+        kernel_size=2,
+        stride=2,
+        grid=None,
+        stop_grad=False,
+        align_corners=True,
     ):
         super().__init__()
         self._pool_steps = pool_steps
@@ -390,7 +389,7 @@ class SpatialTransformerPooled3d(nn.Module):
     @pool_steps.setter
     def pool_steps(self, value):
         assert (
-                value >= 0 and int(value) - value == 0
+            value >= 0 and int(value) - value == 0
         ), "new pool steps must be a non-negative integer"
         if value != self._pool_steps:
             print("Resizing readout features")
@@ -428,7 +427,7 @@ class SpatialTransformerPooled3d(nn.Module):
         if self.features.grad is None:
             raise ValueError("You need to run backward first")
         self._prune_scores += (
-                0.5 * self.features.grad.pow(2) * self.features.pow(2)
+            0.5 * self.features.grad.pow(2) * self.features.pow(2)
         ).detach()
 
     @property
@@ -491,12 +490,12 @@ class SpatialTransformerPooled3d(nn.Module):
     def __repr__(self):
         c, _, w, h = self.in_shape
         r = (
-                self.__class__.__name__
-                + " ("
-                + "{} x {} x {}".format(c, w, h)
-                + " -> "
-                + str(self.outdims)
-                + ")"
+            self.__class__.__name__
+            + " ("
+            + "{} x {} x {}".format(c, w, h)
+            + " -> "
+            + str(self.outdims)
+            + ")"
         )
         if self.bias is not None:
             r += " with bias"
@@ -524,7 +523,7 @@ class Pyramid(nn.Module):
             [[1 / 16, 1 / 8, 1 / 16], [1 / 8, 1 / 4, 1 / 8], [1 / 16, 1 / 8, 1 / 16]]
         ),
         "laplace5x5": np.outer(np.float32([1, 4, 6, 4, 1]), np.float32([1, 4, 6, 4, 1]))
-                      / 256,
+        / 256,
     }
 
     def __init__(self, scale_n=4, type="gauss5x5", downsample=True):
@@ -590,17 +589,17 @@ class Pyramid(nn.Module):
 
 class PointPyramid2d(nn.Module):
     def __init__(
-            self,
-            in_shape,
-            outdims,
-            scale_n,
-            positive,
-            bias,
-            init_range,
-            downsample,
-            type,
-            align_corners=True,
-            **kwargs,
+        self,
+        in_shape,
+        outdims,
+        scale_n,
+        positive,
+        bias,
+        init_range,
+        downsample,
+        type,
+        align_corners=True,
+        **kwargs,
     ):
         super().__init__()
         self.in_shape = in_shape
@@ -633,14 +632,14 @@ class PointPyramid2d(nn.Module):
         ret = 0
         for chunk in range(0, f, group_size):
             ret = (
-                    ret
-                    + (
-                            self.features[:, chunk: chunk + group_size, ...].pow(2).mean(1)
-                            + 1e-12
-                    )
-                    .sqrt()
-                    .mean()
-                    / n
+                ret
+                + (
+                    self.features[:, chunk : chunk + group_size, ...].pow(2).mean(1)
+                    + 1e-12
+                )
+                .sqrt()
+                .mean()
+                / n
             )
         return ret
 
@@ -677,12 +676,12 @@ class PointPyramid2d(nn.Module):
     def __repr__(self):
         c, w, h = self.in_shape
         r = (
-                self.__class__.__name__
-                + " ("
-                + "{} x {} x {}".format(c, w, h)
-                + " -> "
-                + str(self.outdims)
-                + ")"
+            self.__class__.__name__
+            + " ("
+            + "{} x {} x {}".format(c, w, h)
+            + " -> "
+            + str(self.outdims)
+            + ")"
         )
         if self.bias is not None:
             r += " with bias"
@@ -744,20 +743,20 @@ class FullGaussian2d(nn.Module):
     """
 
     def __init__(
-            self,
-            in_shape,
-            outdims,
-            bias,
-            init_mu_range=0.1,
-            init_sigma=1,
-            batch_sample=True,
-            align_corners=True,
-            gauss_type="full",
-            grid_mean_predictor=None,
-            shared_features=None,
-            shared_grid=None,
-            source_grid=None,
-            **kwargs,
+        self,
+        in_shape,
+        outdims,
+        bias,
+        init_mu_range=0.1,
+        init_sigma=1,
+        batch_sample=True,
+        align_corners=True,
+        gauss_type="full",
+        grid_mean_predictor=None,
+        shared_features=None,
+        shared_grid=None,
+        source_grid=None,
+        **kwargs,
     ):
 
         super().__init__()
@@ -924,7 +923,7 @@ class FullGaussian2d(nn.Module):
             )  # grid locations in feature space sampled randomly around the mean self.mu
 
     def init_grid_predictor(
-            self, source_grid, hidden_features=20, hidden_layers=0, final_tanh=False
+        self, source_grid, hidden_features=20, hidden_layers=0, final_tanh=False
     ):
         self._original_grid = False
         layers = [
@@ -1098,12 +1097,12 @@ class FullGaussian2d(nn.Module):
         c, w, h = self.in_shape
         r = self.gauss_type + " "
         r += (
-                self.__class__.__name__
-                + " ("
-                + "{} x {} x {}".format(c, w, h)
-                + " -> "
-                + str(self.outdims)
-                + ")"
+            self.__class__.__name__
+            + " ("
+            + "{} x {} x {}".format(c, w, h)
+            + " -> "
+            + str(self.outdims)
+            + ")"
         )
         if self.bias is not None:
             r += " with bias"
@@ -1141,7 +1140,7 @@ class RemappedGaussian2d(FullGaussian2d):
     """
 
     def __init__(
-            self, *args, remap_layers=2, remap_kernel=3, max_remap_amplitude=0.2, **kwargs
+        self, *args, remap_layers=2, remap_kernel=3, max_remap_amplitude=0.2, **kwargs
     ):
 
         super().__init__(*args, **kwargs)
@@ -1214,7 +1213,8 @@ class RemappedGaussian2d(FullGaussian2d):
 
         y = F.grid_sample(x, grid, align_corners=self.align_corners)
         y = (y.squeeze(-1) * feat).sum(1).view(N, outdims)
-        
+
+
 class DeterministicGaussian2d(nn.Module):
     """
     'DeterministicGaussian2d' class instantiates an object that can be used to learn a
@@ -1238,44 +1238,55 @@ class DeterministicGaussian2d(nn.Module):
     Written by Claudius Gruner.
     """
 
-    def __init__(self,
-                 in_shape,
-                 outdims,
-                 bias,
-                 init_mu_range=0.1,
-                 init_sigma=1,
-                 positive=False,
-                 constrain_mode='default',
-                 ):
+    def __init__(
+        self,
+        in_shape,
+        outdims,
+        bias,
+        init_mu_range=0.1,
+        init_sigma=1,
+        positive=False,
+        constrain_mode="default",
+    ):
 
         super().__init__()
 
         if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma <= 0.0:
-            raise ValueError("either init_mu_range doesn't belong to [0.0, 1.0] or init_sigma_range is non-positive")
+            raise ValueError(
+                "either init_mu_range doesn't belong to [0.0, 1.0] or init_sigma_range is non-positive"
+            )
 
         self.in_shape = in_shape
         c, w, h = in_shape
         self.outdims = outdims
         self.positive = positive
 
-        if constrain_mode not in ['default', 'abs', 'elu']:
-            raise ValueError("Value of parameter constrain_mode = "+str(constrain_mode)+" is invalid. Value must be in ['default', 'abs', 'elu'] ")
+        if constrain_mode not in ["default", "abs", "elu"]:
+            raise ValueError(
+                "Value of parameter constrain_mode = "
+                + str(constrain_mode)
+                + " is invalid. Value must be in ['default', 'abs', 'elu'] "
+            )
         self.constrain_mode = constrain_mode
 
-        self.mu = Parameter(
-            data=torch.zeros(outdims, 2), requires_grad=True)
+        self.mu = Parameter(data=torch.zeros(outdims, 2), requires_grad=True)
         self.log_var = Parameter(
-            data=torch.zeros(outdims,), requires_grad=True)
-        self.grid = torch.nn.Parameter(
-            data=self.make_mask_grid(), requires_grad=False)
+            data=torch.zeros(
+                outdims,
+            ),
+            requires_grad=True,
+        )
+        self.grid = torch.nn.Parameter(data=self.make_mask_grid(), requires_grad=False)
 
-        self.features = Parameter(torch.Tensor(c, outdims))  # saliency  weights for each channel from core
+        self.features = Parameter(
+            torch.Tensor(c, outdims)
+        )  # saliency  weights for each channel from core
 
         if bias:
             bias = Parameter(torch.Tensor(outdims))
-            self.register_parameter('bias', bias)
+            self.register_parameter("bias", bias)
         else:
-            self.register_parameter('bias', None)
+            self.register_parameter("bias", None)
 
         self.init_mu_range = init_mu_range
         self.init_sigma = init_sigma
@@ -1284,8 +1295,11 @@ class DeterministicGaussian2d(nn.Module):
 
     def make_mask_grid(self):
         xx, yy = torch.meshgrid(
-            [torch.linspace(-1, 1, self.in_shape[1]),
-             torch.linspace(-1, 1, self.in_shape[2])])
+            [
+                torch.linspace(-1, 1, self.in_shape[1]),
+                torch.linspace(-1, 1, self.in_shape[2]),
+            ]
+        )
         grid = torch.stack([xx, yy], 2)[None, ...]
         return grid.repeat([self.outdims, 1, 1, 1])
 
@@ -1301,8 +1315,8 @@ class DeterministicGaussian2d(nn.Module):
             mu = self.mu + shift[None, ...]
         mean = mu.view(self.outdims, 1, 1, -1)
         pdf = self.grid - mean
-        pdf = torch.sum(pdf**2, dim=-1) / variances
-        pdf = torch.exp(-.5 * pdf)
+        pdf = torch.sum(pdf ** 2, dim=-1) / variances
+        pdf = torch.exp(-0.5 * pdf)
         # normalize to sum=1
         pdf = pdf / torch.sum(pdf, dim=(1, 2), keepdim=True)
         return pdf
@@ -1363,31 +1377,36 @@ class DeterministicGaussian2d(nn.Module):
             mask = self.mask(shift=shift)
 
         if self.positive:
-            if self.constrain_mode == 'default':
+            if self.constrain_mode == "default":
                 positive(mask)
                 positive(feat)
-            elif self.constrain_mode == 'abs':
+            elif self.constrain_mode == "abs":
                 mask = torch.abs(mask)
                 feat = torch.abs(feat)
-            elif self.constrain_mode == 'elu':
+            elif self.constrain_mode == "elu":
                 mask = F.elu(mask) + 1
                 feat = F.elu(feat) + 1
 
-        y = torch.einsum('bcij,nij,cn->bn', x, mask, feat)
+        y = torch.einsum("bcij,nij,cn->bn", x, mask, feat)
 
         if self.bias is not None:
             y = y + bias
         return y
 
-
     def __repr__(self):
         c, w, h = self.in_shape
-        r = self.__class__.__name__ + \
-            ' (' + '{} x {} x {}'.format(c, w, h) + ' -> ' + str(self.outdims) + ')'
+        r = (
+            self.__class__.__name__
+            + " ("
+            + "{} x {} x {}".format(c, w, h)
+            + " -> "
+            + str(self.outdims)
+            + ")"
+        )
         if self.bias is not None:
-            r += ' with bias'
+            r += " with bias"
         for ch in self.children():
-            r += '  -> ' + ch.__repr__() + '\n'
+            r += "  -> " + ch.__repr__() + "\n"
         return r
 
 
@@ -1422,16 +1441,16 @@ class Gaussian3d(nn.Module):
     """
 
     def __init__(
-            self,
-            in_shape,
-            outdims,
-            bias,
-            init_mu_range=0.5,
-            init_sigma_range=0.5,
-            batch_sample=True,
-            align_corners=True,
-            fixed_sigma=False,
-            **kwargs,
+        self,
+        in_shape,
+        outdims,
+        bias,
+        init_mu_range=0.5,
+        init_sigma_range=0.5,
+        batch_sample=True,
+        align_corners=True,
+        fixed_sigma=False,
+        **kwargs,
     ):
         super().__init__()
         if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma_range <= 0.0:
@@ -1611,18 +1630,18 @@ class UltraSparse(nn.Module):
     """
 
     def __init__(
-            self,
-            in_shape,
-            outdims,
-            bias,
-            init_mu_range,
-            init_sigma_range,
-            batch_sample=True,
-            num_filters=1,
-            shared_mean=False,
-            align_corners=True,
-            fixed_sigma=False,
-            **kwargs,
+        self,
+        in_shape,
+        outdims,
+        bias,
+        init_mu_range,
+        init_sigma_range,
+        batch_sample=True,
+        num_filters=1,
+        shared_mean=False,
+        align_corners=True,
+        fixed_sigma=False,
+        **kwargs,
     ):
 
         super().__init__()
@@ -1824,7 +1843,7 @@ class UltraSparse(nn.Module):
             outdims = len(out_idx)
 
         if (
-                shift is not None
+            shift is not None
         ):  # it might not be valid now but have kept it for future devop.
             grid = grid + shift[:, None, None, :]
 
@@ -1843,12 +1862,12 @@ class UltraSparse(nn.Module):
     def __repr__(self):
         c, w, h = self.in_shape
         r = (
-                self.__class__.__name__
-                + " ("
-                + "{} x {} x {}".format(c, w, h)
-                + " -> "
-                + str(self.outdims)
-                + ")"
+            self.__class__.__name__
+            + " ("
+            + "{} x {} x {}".format(c, w, h)
+            + " -> "
+            + str(self.outdims)
+            + ")"
         )
         if self.bias is not None:
             r += " with bias"
@@ -1858,16 +1877,15 @@ class UltraSparse(nn.Module):
 
 
 class AttentionReadout(nn.Module):
-
     def __init__(
-            self,
-            in_shape,
-            outdims,
-            bias,
-            init_noise=1e-3,
-            attention_kernel=1,
-            attention_layers=1,
-            **kwargs,
+        self,
+        in_shape,
+        outdims,
+        bias,
+        init_noise=1e-3,
+        attention_kernel=1,
+        attention_layers=1,
+        **kwargs,
     ):
         super().__init__()
         self.in_shape = in_shape
@@ -1878,7 +1896,8 @@ class AttentionReadout(nn.Module):
         attention = nn.Sequential()
         for i in range(attention_layers - 1):
             attention.add_module(
-                f"conv{i}", nn.Conv2d(c, c, attention_kernel, padding=attention_kernel > 1)
+                f"conv{i}",
+                nn.Conv2d(c, c, attention_kernel, padding=attention_kernel > 1),
             )
             attention.add_module(f"norm{i}", nn.BatchNorm2d(c))
             attention.add_module(f"nonlin{i}", nn.ELU())
@@ -1923,20 +1942,20 @@ class AttentionReadout(nn.Module):
         attention = self.attention(x)
         b, c, w, h = attention.shape
         attention = F.softmax(attention.view(b, c, -1), dim=-1).view(b, c, w, h)
-        y = torch.einsum('bnwh,bcwh->bcn', attention, x)
-        y = torch.einsum('bcn,nc->bn', y, self.features)
+        y = torch.einsum("bnwh,bcwh->bcn", attention, x)
+        y = torch.einsum("bcn,nc->bn", y, self.features)
         if self.bias is not None:
             y = y + self.bias
         return y
 
     def __repr__(self):
         return (
-                self.__class__.__name__
-                + " ("
-                + "{} x {} x {}".format(*self.in_shape)
-                + " -> "
-                + str(self.outdims)
-                + ")"
+            self.__class__.__name__
+            + " ("
+            + "{} x {} x {}".format(*self.in_shape)
+            + " -> "
+            + str(self.outdims)
+            + ")"
         )
 
 

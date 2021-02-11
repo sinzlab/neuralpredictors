@@ -3,6 +3,7 @@ import torch
 from collections import namedtuple, Iterable
 from skimage.transform import rescale
 
+
 class Invertible:
     def inv(self, y):
         raise NotImplemented("Subclasses of Invertible must implement an inv method")
@@ -98,7 +99,7 @@ class Subsequence(MovieTransform):
 class Delay(MovieTransform):
     """
     Delay the specified target gorups by delay frames. In other words,
-    given non-delayed group g(t) and delayed group d(t), 
+    given non-delayed group g(t) and delayed group d(t),
     g(T:N-delay) will be returned with d(T+delay:N) where `delay` is the specified amount
     of delay, and N is the last frame in the dataset.
     """
@@ -275,15 +276,25 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
             1% of the mean std (to avoid division by 0)
     """
 
-    def __init__(self, data, stats_source="all", exclude=None, inputs_mean=None, inputs_std=None):
+    def __init__(
+        self, data, stats_source="all", exclude=None, inputs_mean=None, inputs_std=None
+    ):
 
         self.exclude = exclude or []
 
         in_name = "images" if "images" in data.statistics.keys() else "inputs"
         out_name = "responses" if "responses" in data.statistics.keys() else "targets"
 
-        self._inputs_mean = data.statistics[in_name][stats_source]["mean"][()] if inputs_mean is None else inputs_mean
-        self._inputs_std = data.statistics[in_name][stats_source]["std"][()] if inputs_mean is None else inputs_std
+        self._inputs_mean = (
+            data.statistics[in_name][stats_source]["mean"][()]
+            if inputs_mean is None
+            else inputs_mean
+        )
+        self._inputs_std = (
+            data.statistics[in_name][stats_source]["std"][()]
+            if inputs_mean is None
+            else inputs_std
+        )
 
         s = np.array(data.statistics[out_name][stats_source]["std"])
 
@@ -304,7 +315,7 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
 
 
         # -- behavior
-        transforms['behavior'] = lambda x: x
+        transforms["behavior"] = lambda x: x
 
         # -- trial_idx
         trial_idx_mean = np.arange(data._len).mean()
@@ -313,8 +324,12 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
         itransforms["trial_idx"] = lambda x: x * trial_idx_std + trial_idx_mean
 
         if "pupil_center" in data.data_keys:
-            self._eye_mean = np.array(data.statistics["pupil_center"][stats_source]["mean"])
-            self._eye_std = np.array(data.statistics["pupil_center"][stats_source]["std"])
+            self._eye_mean = np.array(
+                data.statistics["pupil_center"][stats_source]["mean"]
+            )
+            self._eye_std = np.array(
+                data.statistics["pupil_center"][stats_source]["std"]
+            )
             transforms["pupil_center"] = lambda x: (x - self._eye_mean) / self._eye_std
             itransforms["pupil_center"] = lambda x: x * self._eye_std + self._eye_mean
 
@@ -397,7 +412,9 @@ class AddBehaviorAsChannels(MovieTransform, StaticTransform, Invertible):
             "behavior": self.transforms["behavior"](key_vals["behavior"]),
         }
         if "pupil_center" in key_vals:
-            dd["pupil_center"] = self.transforms["pupil_center"](key_vals["pupil_center"])
+            dd["pupil_center"] = self.transforms["pupil_center"](
+                key_vals["pupil_center"]
+            )
         if "trial_idx" in key_vals:
             dd["trial_idx"] = self.transforms["trial_idx"](key_vals["trial_idx"])
         return x.__class__(**dd)
@@ -447,7 +464,9 @@ class SelectInputChannel(StaticTransform):
     """
 
     def __init__(self, grab_channel):
-        self.grab_channel = grab_channel if isinstance(grab_channel, Iterable) else [grab_channel]
+        self.grab_channel = (
+            grab_channel if isinstance(grab_channel, Iterable) else [grab_channel]
+        )
 
     def __call__(self, x):
         key_vals = {k: v for k, v in zip(x._fields, x)}
@@ -465,15 +484,16 @@ class ScaleInputs(MovieTransform, StaticTransform, Invertible):
     Given a StaticImage object that includes "images", will rescale the image with a given factor.
     """
 
-    def __init__(self,
-                 scale,
-                 mode="reflect",
-                 multichannel=False,
-                 anti_aliasing=False,
-                 preserve_range=True,
-                 clip=True,
-                 in_name="images",
-                 ):
+    def __init__(
+        self,
+        scale,
+        mode="reflect",
+        multichannel=False,
+        anti_aliasing=False,
+        preserve_range=True,
+        clip=True,
+        in_name="images",
+    ):
 
         self.scale = scale
         self.mode = mode
@@ -486,11 +506,13 @@ class ScaleInputs(MovieTransform, StaticTransform, Invertible):
     def __call__(self, x):
         key_vals = {k: v for k, v in zip(x._fields, x)}
         img = key_vals[self.in_name]
-        key_vals[self.in_name] = rescale(img,
-                                     scale=self.scale,
-                                     mode=self.mode,
-                                     multichannel=self.multichannel,
-                                     anti_aliasing=self.anti_aliasing,
-                                     clip=self.clip,
-                                     preserve_range=self.preserve_range)
+        key_vals[self.in_name] = rescale(
+            img,
+            scale=self.scale,
+            mode=self.mode,
+            multichannel=self.multichannel,
+            anti_aliasing=self.anti_aliasing,
+            clip=self.clip,
+            preserve_range=self.preserve_range,
+        )
         return x.__class__(**key_vals)

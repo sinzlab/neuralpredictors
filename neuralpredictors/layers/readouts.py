@@ -20,17 +20,14 @@ class ConfigurationError(Exception):
 
 class Readout:
     def initialize(self, *args, **kwargs):
-        raise NotImplementedError(
-            "initialize is not implemented for ", self.__class__.__name__
-        )
+        raise NotImplementedError("initialize is not implemented for ", self.__class__.__name__)
 
     def __repr__(self):
         s = super().__repr__()
         s += " [{} regularizers: ".format(self.__class__.__name__)
         ret = []
         for attr in filter(
-            lambda x: not x.startswith("_")
-            and ("gamma" in x or "pool" in x or "positive" in x),
+            lambda x: not x.startswith("_") and ("gamma" in x or "pool" in x or "positive" in x),
             dir(self),
         ):
             ret.append("{} = {}".format(attr, getattr(self, attr)))
@@ -93,9 +90,7 @@ class SpatialXFeatureLinear(nn.Module):
         n = self.outdims
         c, w, h = self.in_shape
         ret = (
-            self.normalized_spatial.view(self.outdims, -1)
-            .abs()
-            .sum(dim=1, keepdim=True)
+            self.normalized_spatial.view(self.outdims, -1).abs().sum(dim=1, keepdim=True)
             * self.features.view(self.outdims, -1).abs().sum(dim=1)
         ).sum()
         if average:
@@ -202,9 +197,7 @@ class PointPooled2d(nn.Module):
         self.in_shape = in_shape
         c, w, h = in_shape
         self.outdims = outdims
-        self.grid = Parameter(
-            torch.Tensor(1, outdims, 1, 2)
-        )  # x-y coordinates for each neuron
+        self.grid = Parameter(torch.Tensor(1, outdims, 1, 2))  # x-y coordinates for each neuron
         self.features = Parameter(
             torch.Tensor(1, c * (self._pool_steps + 1), 1, outdims)
         )  # weight matrix mapping the core features to the output units
@@ -229,16 +222,12 @@ class PointPooled2d(nn.Module):
 
     @pool_steps.setter
     def pool_steps(self, value):
-        assert (
-            value >= 0 and int(value) - value == 0
-        ), "new pool steps must be a non-negative integer"
+        assert value >= 0 and int(value) - value == 0, "new pool steps must be a non-negative integer"
         if value != self._pool_steps:
             print("Resizing readout features")
             c, w, h = self.in_shape
             self._pool_steps = int(value)
-            self.features = Parameter(
-                torch.Tensor(1, c * (self._pool_steps + 1), 1, self.outdims)
-            )
+            self.features = Parameter(torch.Tensor(1, c * (self._pool_steps + 1), 1, self.outdims))
             self.features.data.fill_(1 / self.in_shape[0])
 
     def initialize(self):
@@ -278,13 +267,9 @@ class PointPooled2d(nn.Module):
         N, c, w, h = x.size()
         c_in, w_in, h_in = self.in_shape
         if [c_in, w_in, h_in] != [c, w, h]:
-            raise ValueError(
-                "the specified feature map dimension is not the readout's expected input dimension"
-            )
+            raise ValueError("the specified feature map dimension is not the readout's expected input dimension")
 
-        m = (
-            self.pool_steps + 1
-        )  # the input feature is considered the first pooling stage
+        m = self.pool_steps + 1  # the input feature is considered the first pooling stage
         feat = self.features.view(1, m * c, self.outdims)
         if out_idx is None:
             grid = self.grid
@@ -310,9 +295,7 @@ class PointPooled2d(nn.Module):
         for _ in range(self.pool_steps):
             _, _, w_pool, h_pool = x.size()
             if w_pool * h_pool == 1:
-                warnings.warn(
-                    "redundant pooling steps: pooled feature map size is already 1X1, consider reducing it"
-                )
+                warnings.warn("redundant pooling steps: pooled feature map size is already 1X1, consider reducing it")
             x = self.avg(x)
             pools.append(F.grid_sample(x, grid, align_corners=self.align_corners))
         y = torch.cat(pools, dim=1)
@@ -324,14 +307,7 @@ class PointPooled2d(nn.Module):
 
     def __repr__(self):
         c, w, h = self.in_shape
-        r = (
-            self.__class__.__name__
-            + " ("
-            + "{} x {} x {}".format(c, w, h)
-            + " -> "
-            + str(self.outdims)
-            + ")"
-        )
+        r = self.__class__.__name__ + " (" + "{} x {} x {}".format(c, w, h) + " -> " + str(self.outdims) + ")"
         if self.bias is not None:
             r += " with bias"
         r += " and pooling for {} steps\n".format(self.pool_steps)
@@ -365,9 +341,7 @@ class SpatialTransformerPooled3d(nn.Module):
             self.grid = Parameter(torch.Tensor(1, outdims, 1, 2))
         else:
             self.grid = grid
-        self.features = Parameter(
-            torch.Tensor(1, c * (self._pool_steps + 1), 1, outdims)
-        )
+        self.features = Parameter(torch.Tensor(1, c * (self._pool_steps + 1), 1, outdims))
         self.register_buffer("mask", torch.ones_like(self.features))
 
         if bias:
@@ -388,17 +362,13 @@ class SpatialTransformerPooled3d(nn.Module):
 
     @pool_steps.setter
     def pool_steps(self, value):
-        assert (
-            value >= 0 and int(value) - value == 0
-        ), "new pool steps must be a non-negative integer"
+        assert value >= 0 and int(value) - value == 0, "new pool steps must be a non-negative integer"
         if value != self._pool_steps:
             print("Resizing readout features")
             c, t, w, h = self.in_shape
             outdims = self.outdims
             self._pool_steps = int(value)
-            self.features = Parameter(
-                torch.Tensor(1, c * (self._pool_steps + 1), 1, outdims)
-            )
+            self.features = Parameter(torch.Tensor(1, c * (self._pool_steps + 1), 1, outdims))
             self.mask = torch.ones_like(self.features)
             self.features.data.fill_(1 / self.in_shape[0])
 
@@ -426,9 +396,7 @@ class SpatialTransformerPooled3d(nn.Module):
         self._prune_n += 1
         if self.features.grad is None:
             raise ValueError("You need to run backward first")
-        self._prune_scores += (
-            0.5 * self.features.grad.pow(2) * self.features.pow(2)
-        ).detach()
+        self._prune_scores += (0.5 * self.features.grad.pow(2) * self.features.pow(2)).detach()
 
     @property
     def fisher_prune_scores(self):
@@ -467,9 +435,7 @@ class SpatialTransformerPooled3d(nn.Module):
             grid = grid.expand(N * t, outdims, 1, 2)
         else:
             grid = grid.expand(N, outdims, 1, 2)
-            grid = torch.stack(
-                [grid + shift[:, i, :][:, None, None, :] for i in range(t)], 1
-            )
+            grid = torch.stack([grid + shift[:, i, :][:, None, None, :] for i in range(t)], 1)
             grid = grid.contiguous().view(-1, outdims, 1, 2)
         z = x.contiguous().transpose(2, 1).contiguous().view(-1, c, w, h)
         pools = [F.grid_sample(z, grid, align_corners=self.align_corners)]
@@ -489,14 +455,7 @@ class SpatialTransformerPooled3d(nn.Module):
 
     def __repr__(self):
         c, _, w, h = self.in_shape
-        r = (
-            self.__class__.__name__
-            + " ("
-            + "{} x {} x {}".format(c, w, h)
-            + " -> "
-            + str(self.outdims)
-            + ")"
-        )
+        r = self.__class__.__name__ + " (" + "{} x {} x {}".format(c, w, h) + " -> " + str(self.outdims) + ")"
         if self.bias is not None:
             r += " with bias"
         if self.stop_grad:
@@ -519,11 +478,8 @@ class Pyramid(nn.Module):
                 [0.003765, 0.015019, 0.023792, 0.015019, 0.003765],
             ]
         ),
-        "gauss3x3": np.float32(
-            [[1 / 16, 1 / 8, 1 / 16], [1 / 8, 1 / 4, 1 / 8], [1 / 16, 1 / 8, 1 / 16]]
-        ),
-        "laplace5x5": np.outer(np.float32([1, 4, 6, 4, 1]), np.float32([1, 4, 6, 4, 1]))
-        / 256,
+        "gauss3x3": np.float32([[1 / 16, 1 / 8, 1 / 16], [1 / 8, 1 / 4, 1 / 8], [1 / 16, 1 / 8, 1 / 16]]),
+        "laplace5x5": np.outer(np.float32([1, 4, 6, 4, 1]), np.float32([1, 4, 6, 4, 1])) / 256,
     }
 
     def __init__(self, scale_n=4, type="gauss5x5", downsample=True):
@@ -631,16 +587,7 @@ class PointPyramid2d(nn.Module):
         n = f // group_size
         ret = 0
         for chunk in range(0, f, group_size):
-            ret = (
-                ret
-                + (
-                    self.features[:, chunk : chunk + group_size, ...].pow(2).mean(1)
-                    + 1e-12
-                )
-                .sqrt()
-                .mean()
-                / n
-            )
+            ret = ret + (self.features[:, chunk : chunk + group_size, ...].pow(2).mean(1) + 1e-12).sqrt().mean() / n
         return ret
 
     def feature_l1(self, average=True):
@@ -662,10 +609,7 @@ class PointPyramid2d(nn.Module):
         else:
             grid = self.grid.expand(N, self.outdims, 1, 2) + shift[:, None, None, :]
 
-        pools = [
-            F.grid_sample(xx, grid, align_corners=self.align_corners)
-            for xx in self.gauss_pyramid(x)
-        ]
+        pools = [F.grid_sample(xx, grid, align_corners=self.align_corners) for xx in self.gauss_pyramid(x)]
         y = torch.cat(pools, dim=1).squeeze(-1)
         y = (y * feat).sum(1).view(N, self.outdims)
 
@@ -675,14 +619,7 @@ class PointPyramid2d(nn.Module):
 
     def __repr__(self):
         c, w, h = self.in_shape
-        r = (
-            self.__class__.__name__
-            + " ("
-            + "{} x {} x {}".format(c, w, h)
-            + " -> "
-            + str(self.outdims)
-            + ")"
-        )
+        r = self.__class__.__name__ + " (" + "{} x {} x {}".format(c, w, h) + " -> " + str(self.outdims) + ")"
         if self.bias is not None:
             r += " with bias"
 
@@ -765,9 +702,7 @@ class FullGaussian2d(nn.Module):
         self.gauss_type = gauss_type
 
         if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma <= 0.0:
-            raise ValueError(
-                "either init_mu_range doesn't belong to [0.0, 1.0] or init_sigma_range is non-positive"
-            )
+            raise ValueError("either init_mu_range doesn't belong to [0.0, 1.0] or init_sigma_range is non-positive")
 
         # store statistics about the images and neurons
         self.in_shape = in_shape
@@ -785,13 +720,9 @@ class FullGaussian2d(nn.Module):
         self._original_grid = not self._predicted_grid
 
         if grid_mean_predictor is None and shared_grid is None:
-            self._mu = Parameter(
-                torch.Tensor(*self.grid_shape)
-            )  # mean location of gaussian for each neuron
+            self._mu = Parameter(torch.Tensor(*self.grid_shape))  # mean location of gaussian for each neuron
         elif grid_mean_predictor is not None and shared_grid is not None:
-            raise ConfigurationError(
-                "Shared grid_mean_predictor and shared_grid_mean cannot both be set"
-            )
+            raise ConfigurationError("Shared grid_mean_predictor and shared_grid_mean cannot both be set")
         elif grid_mean_predictor is not None:
             self.init_grid_predictor(source_grid=source_grid, **grid_mean_predictor)
         elif shared_grid is not None:
@@ -807,9 +738,7 @@ class FullGaussian2d(nn.Module):
             raise ValueError(f'gauss_type "{gauss_type}" not known')
 
         self.init_sigma = init_sigma
-        self.sigma = Parameter(
-            torch.Tensor(*self.sigma_shape)
-        )  # standard deviation for gaussian for each neuron
+        self.sigma = Parameter(torch.Tensor(*self.sigma_shape))  # standard deviation for gaussian for each neuron
 
         self.initialize_features(**(shared_features or {}))
 
@@ -875,9 +804,7 @@ class FullGaussian2d(nn.Module):
             if self._original_grid:
                 return self._mu[:, self.grid_sharing_index, ...]
             else:
-                return self.mu_transform(self._mu.squeeze())[
-                    self.grid_sharing_index
-                ].view(*self.grid_shape)
+                return self.mu_transform(self._mu.squeeze())[self.grid_sharing_index].view(*self.grid_shape)
         else:
             return self._mu
 
@@ -893,13 +820,9 @@ class FullGaussian2d(nn.Module):
                            if sample is True/False, overrides the model_state (i.e training or eval) and does as instructed
         """
         with torch.no_grad():
-            self.mu.clamp_(
-                min=-1, max=1
-            )  # at eval time, only self.mu is used so it must belong to [-1,1]
+            self.mu.clamp_(min=-1, max=1)  # at eval time, only self.mu is used so it must belong to [-1,1]
             if self.gauss_type != "full":
-                self.sigma.clamp_(
-                    min=0
-                )  # sigma/variance i    s always a positive quantity
+                self.sigma.clamp_(min=0)  # sigma/variance i    s always a positive quantity
 
         grid_shape = (batch_size,) + self.grid_shape[1:]
 
@@ -907,9 +830,7 @@ class FullGaussian2d(nn.Module):
         if sample:
             norm = self.mu.new(*grid_shape).normal_()
         else:
-            norm = self.mu.new(
-                *grid_shape
-            ).zero_()  # for consistency and CUDA capability
+            norm = self.mu.new(*grid_shape).zero_()  # for consistency and CUDA capability
 
         if self.gauss_type != "full":
             return torch.clamp(
@@ -922,21 +843,15 @@ class FullGaussian2d(nn.Module):
                 max=1,
             )  # grid locations in feature space sampled randomly around the mean self.mu
 
-    def init_grid_predictor(
-        self, source_grid, hidden_features=20, hidden_layers=0, final_tanh=False
-    ):
+    def init_grid_predictor(self, source_grid, hidden_features=20, hidden_layers=0, final_tanh=False):
         self._original_grid = False
-        layers = [
-            nn.Linear(source_grid.shape[1], hidden_features if hidden_layers > 0 else 2)
-        ]
+        layers = [nn.Linear(source_grid.shape[1], hidden_features if hidden_layers > 0 else 2)]
 
         for i in range(hidden_layers):
             layers.extend(
                 [
                     nn.ELU(),
-                    nn.Linear(
-                        hidden_features, hidden_features if i < hidden_layers - 1 else 2
-                    ),
+                    nn.Linear(hidden_features, hidden_features if i < hidden_layers - 1 else 2),
                 ]
             )
 
@@ -946,9 +861,7 @@ class FullGaussian2d(nn.Module):
 
         source_grid = source_grid - source_grid.mean(axis=0, keepdims=True)
         source_grid = source_grid / np.abs(source_grid).max()
-        self.register_buffer(
-            "source_grid", torch.from_numpy(source_grid.astype(np.float32))
-        )
+        self.register_buffer("source_grid", torch.from_numpy(source_grid.astype(np.float32)))
         self._predicted_grid = True
 
     def initialize(self):
@@ -994,9 +907,7 @@ class FullGaussian2d(nn.Module):
                 self._features = Parameter(
                     torch.Tensor(1, c, 1, n_match_ids)
                 )  # feature weights for each channel of the core
-            self.scales = Parameter(
-                torch.Tensor(1, 1, 1, self.outdims)
-            )  # feature weights for each channel of the core
+            self.scales = Parameter(torch.Tensor(1, 1, 1, self.outdims))  # feature weights for each channel of the core
             _, sharing_idx = np.unique(match_ids, return_inverse=True)
             self.register_buffer("feature_sharing_index", torch.from_numpy(sharing_idx))
             self._shared_features = True
@@ -1011,9 +922,7 @@ class FullGaussian2d(nn.Module):
 
         if match_ids is None:
             raise ConfigurationError("match_ids must be set for sharing grid")
-        assert self.outdims == len(
-            match_ids
-        ), "There must be one match ID per output dimension"
+        assert self.outdims == len(match_ids), "There must be one match ID per output dimension"
 
         n_match_ids = len(np.unique(match_ids))
         if shared_grid is not None:
@@ -1029,9 +938,7 @@ class FullGaussian2d(nn.Module):
             self.mu_transform.bias.data.fill_(0.0)
             self.mu_transform.weight.data = torch.eye(2)
         else:
-            self._mu = Parameter(
-                torch.Tensor(1, n_match_ids, 1, 2)
-            )  # feature weights for each channel of the core
+            self._mu = Parameter(torch.Tensor(1, n_match_ids, 1, 2))  # feature weights for each channel of the core
         _, sharing_idx = np.unique(match_ids, return_inverse=True)
         self.register_buffer("grid_sharing_index", torch.from_numpy(sharing_idx))
         self._shared_grid = True
@@ -1055,23 +962,17 @@ class FullGaussian2d(nn.Module):
         N, c, w, h = x.size()
         c_in, w_in, h_in = self.in_shape
         if (c_in, w_in, h_in) != (c, w, h):
-            raise ValueError(
-                "the specified feature map dimension is not the readout's expected input dimension"
-            )
+            raise ValueError("the specified feature map dimension is not the readout's expected input dimension")
         feat = self.features.view(1, c, self.outdims)
         bias = self.bias
         outdims = self.outdims
 
         if self.batch_sample:
             # sample the grid_locations separately per image per batch
-            grid = self.sample_grid(
-                batch_size=N, sample=sample
-            )  # sample determines sampling from Gaussian
+            grid = self.sample_grid(batch_size=N, sample=sample)  # sample determines sampling from Gaussian
         else:
             # use one sampled grid_locations for all images in the batch
-            grid = self.sample_grid(batch_size=1, sample=sample).expand(
-                N, outdims, 1, 2
-            )
+            grid = self.sample_grid(batch_size=1, sample=sample).expand(N, outdims, 1, 2)
 
         if out_idx is not None:
             if isinstance(out_idx, np.ndarray):
@@ -1096,27 +997,16 @@ class FullGaussian2d(nn.Module):
     def __repr__(self):
         c, w, h = self.in_shape
         r = self.gauss_type + " "
-        r += (
-            self.__class__.__name__
-            + " ("
-            + "{} x {} x {}".format(c, w, h)
-            + " -> "
-            + str(self.outdims)
-            + ")"
-        )
+        r += self.__class__.__name__ + " (" + "{} x {} x {}".format(c, w, h) + " -> " + str(self.outdims) + ")"
         if self.bias is not None:
             r += " with bias"
         if self._shared_features:
-            r += ", with {} features".format(
-                "original" if self._original_features else "shared"
-            )
+            r += ", with {} features".format("original" if self._original_features else "shared")
 
         if self._predicted_grid:
             r += ", with predicted grid"
         if self._shared_grid:
-            r += ", with {} grid".format(
-                "original" if self._original_grid else "shared"
-            )
+            r += ", with {} grid".format("original" if self._original_grid else "shared")
 
         for ch in self.children():
             r += "  -> " + ch.__repr__() + "\n"
@@ -1139,17 +1029,13 @@ class RemappedGaussian2d(FullGaussian2d):
 
     """
 
-    def __init__(
-        self, *args, remap_layers=2, remap_kernel=3, max_remap_amplitude=0.2, **kwargs
-    ):
+    def __init__(self, *args, remap_layers=2, remap_kernel=3, max_remap_amplitude=0.2, **kwargs):
 
         super().__init__(*args, **kwargs)
         channels, width, height = self.in_shape
         remapper = nn.Sequential()
         for i in range(remap_layers - 1):
-            remapper.add_module(
-                f"conv{i}", nn.Conv2d(channels, channels, remap_kernel, padding=True)
-            )
+            remapper.add_module(f"conv{i}", nn.Conv2d(channels, channels, remap_kernel, padding=True))
             remapper.add_module(f"norm{i}", nn.BatchNorm2d(channels))
             remapper.add_module(f"nonlin{i}", nn.ELU())
         else:
@@ -1178,23 +1064,17 @@ class RemappedGaussian2d(FullGaussian2d):
         N, c, w, h = x.size()
         c_in, w_in, h_in = self.in_shape
         if (c_in, w_in, h_in) != (c, w, h):
-            raise ValueError(
-                "the specified feature map dimension is not the readout's expected input dimension"
-            )
+            raise ValueError("the specified feature map dimension is not the readout's expected input dimension")
         feat = self.features.view(1, c, self.outdims)
         bias = self.bias
         outdims = self.outdims
 
         if self.batch_sample:
             # sample the grid_locations separately per image per batch
-            grid = self.sample_grid(
-                batch_size=N, sample=sample
-            )  # sample determines sampling from Gaussian
+            grid = self.sample_grid(batch_size=N, sample=sample)  # sample determines sampling from Gaussian
         else:
             # use one sampled grid_locations for all images in the batch
-            grid = self.sample_grid(batch_size=1, sample=sample).expand(
-                N, outdims, 1, 2
-            )
+            grid = self.sample_grid(batch_size=1, sample=sample).expand(N, outdims, 1, 2)
 
         if out_idx is not None:
             if isinstance(out_idx, np.ndarray):
@@ -1252,9 +1132,7 @@ class DeterministicGaussian2d(nn.Module):
         super().__init__()
 
         if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma <= 0.0:
-            raise ValueError(
-                "either init_mu_range doesn't belong to [0.0, 1.0] or init_sigma_range is non-positive"
-            )
+            raise ValueError("either init_mu_range doesn't belong to [0.0, 1.0] or init_sigma_range is non-positive")
 
         self.in_shape = in_shape
         c, w, h = in_shape
@@ -1278,9 +1156,7 @@ class DeterministicGaussian2d(nn.Module):
         )
         self.grid = torch.nn.Parameter(data=self.make_mask_grid(), requires_grad=False)
 
-        self.features = Parameter(
-            torch.Tensor(c, outdims)
-        )  # saliency  weights for each channel from core
+        self.features = Parameter(torch.Tensor(c, outdims))  # saliency  weights for each channel from core
 
         if bias:
             bias = Parameter(torch.Tensor(outdims))
@@ -1395,14 +1271,7 @@ class DeterministicGaussian2d(nn.Module):
 
     def __repr__(self):
         c, w, h = self.in_shape
-        r = (
-            self.__class__.__name__
-            + " ("
-            + "{} x {} x {}".format(c, w, h)
-            + " -> "
-            + str(self.outdims)
-            + ")"
-        )
+        r = self.__class__.__name__ + " (" + "{} x {} x {}".format(c, w, h) + " -> " + str(self.outdims) + ")"
         if self.bias is not None:
             r += " with bias"
         for ch in self.children():
@@ -1454,22 +1323,14 @@ class Gaussian3d(nn.Module):
     ):
         super().__init__()
         if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma_range <= 0.0:
-            raise ValueError(
-                "init_mu_range or init_sigma_range is not within required limit!"
-            )
+            raise ValueError("init_mu_range or init_sigma_range is not within required limit!")
         self.in_shape = in_shape
         self.outdims = outdims
         self.batch_sample = batch_sample
         self.grid_shape = (1, 1, outdims, 1, 3)
-        self.mu = Parameter(
-            torch.Tensor(*self.grid_shape)
-        )  # mean location of gaussian for each neuron
-        self.sigma = Parameter(
-            torch.Tensor(*self.grid_shape)
-        )  # standard deviation for gaussian for each neuron
-        self.features = Parameter(
-            torch.Tensor(1, 1, 1, outdims)
-        )  # saliency weights for each channel from core
+        self.mu = Parameter(torch.Tensor(*self.grid_shape))  # mean location of gaussian for each neuron
+        self.sigma = Parameter(torch.Tensor(*self.grid_shape))  # standard deviation for gaussian for each neuron
+        self.features = Parameter(torch.Tensor(1, 1, 1, outdims))  # saliency weights for each channel from core
 
         if bias:
             bias = Parameter(torch.Tensor(outdims))
@@ -1496,9 +1357,7 @@ class Gaussian3d(nn.Module):
         """
 
         with torch.no_grad():
-            self.mu.clamp_(
-                min=-1, max=1
-            )  # at eval time, only self.mu is used so it must belong to [-1,1]
+            self.mu.clamp_(min=-1, max=1)  # at eval time, only self.mu is used so it must belong to [-1,1]
             self.sigma.clamp_(min=0)  # sigma/variance is always a positive quantity
 
         grid_shape = (batch_size,) + self.grid_shape[1:]
@@ -1508,9 +1367,7 @@ class Gaussian3d(nn.Module):
         if sample:
             norm = self.mu.new(*grid_shape).normal_()
         else:
-            norm = self.mu.new(
-                *grid_shape
-            ).zero_()  # for consistency and CUDA capability
+            norm = self.mu.new(*grid_shape).zero_()  # for consistency and CUDA capability
 
         return torch.clamp(
             norm * self.sigma + self.mu, min=-1, max=1
@@ -1554,9 +1411,7 @@ class Gaussian3d(nn.Module):
         N, c, w, h = x.size()
         c_in, w_in, h_in = self.in_shape
         if (c_in, w_in, h_in) != (c, w, h):
-            raise ValueError(
-                "the specified feature map dimension is not the readout's expected input dimension"
-            )
+            raise ValueError("the specified feature map dimension is not the readout's expected input dimension")
         x = x.view(N, 1, c, w, h)
         feat = self.features
         bias = self.bias
@@ -1564,14 +1419,10 @@ class Gaussian3d(nn.Module):
 
         if self.batch_sample:
             # sample the grid_locations separately per image per batch
-            grid = self.sample_grid(
-                batch_size=N, sample=sample
-            )  # sample determines sampling from Gaussian
+            grid = self.sample_grid(batch_size=N, sample=sample)  # sample determines sampling from Gaussian
         else:
             # use one sampled grid_locations for all images in the batch
-            grid = self.sample_grid(batch_size=1, sample=sample).expand(
-                N, outdims, 1, 3
-            )
+            grid = self.sample_grid(batch_size=1, sample=sample).expand(N, outdims, 1, 3)
 
         if out_idx is not None:
             # out_idx specifies the indices to subset of neurons for training/testing
@@ -1646,9 +1497,7 @@ class UltraSparse(nn.Module):
 
         super().__init__()
         if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma_range <= 0.0:
-            raise ValueError(
-                "either init_mu_range doesn't belong to [0.0, 1.0] or init_sigma_range is non-positive!"
-            )
+            raise ValueError("either init_mu_range doesn't belong to [0.0, 1.0] or init_sigma_range is non-positive!")
         self.in_shape = in_shape
         c, w, h = in_shape
         self.outdims = outdims
@@ -1674,12 +1523,8 @@ class UltraSparse(nn.Module):
 
         else:
 
-            self.mu = Parameter(
-                torch.Tensor(*self.grid_shape)
-            )  # mean location of gaussian for each neuron
-            self.sigma = Parameter(
-                torch.Tensor(*self.grid_shape)
-            )  # standard deviation for gaussian for each neuron
+            self.mu = Parameter(torch.Tensor(*self.grid_shape))  # mean location of gaussian for each neuron
+            self.sigma = Parameter(torch.Tensor(*self.grid_shape))  # standard deviation for gaussian for each neuron
 
         self.features = Parameter(
             torch.Tensor(1, 1, outdims, num_filters)
@@ -1713,18 +1558,10 @@ class UltraSparse(nn.Module):
             # sample an xy location and keep it same across all filter channels
             # explicit clamping of mu and sigma along the channel dimension was needed as the clamping post cat was not working
             with torch.no_grad():
-                self.mu_ch.clamp_(
-                    min=-1, max=1
-                )  # at eval time, only self.mu is used so it must belong to [-1,1]
-                self.sigma_ch.clamp_(
-                    min=0
-                )  # sigma/variance is always a positive quantity
-            self.mu = torch.cat(
-                (self.mu_xy.repeat(1, 1, self.num_filters, 1, 1), self.mu_ch), 4
-            )
-            self.sigma = torch.cat(
-                (self.sigma_xy.repeat(1, 1, self.num_filters, 1, 1), self.sigma_ch), 4
-            )
+                self.mu_ch.clamp_(min=-1, max=1)  # at eval time, only self.mu is used so it must belong to [-1,1]
+                self.sigma_ch.clamp_(min=0)  # sigma/variance is always a positive quantity
+            self.mu = torch.cat((self.mu_xy.repeat(1, 1, self.num_filters, 1, 1), self.mu_ch), 4)
+            self.sigma = torch.cat((self.sigma_xy.repeat(1, 1, self.num_filters, 1, 1), self.sigma_ch), 4)
 
         with torch.no_grad():
             self.mu.clamp_(min=-1, max=1)
@@ -1737,9 +1574,7 @@ class UltraSparse(nn.Module):
         if sample:
             norm = self.mu.new(*grid_shape).normal_()
         else:
-            norm = self.mu.new(
-                *grid_shape
-            ).zero_()  # for consistency and CUDA capability
+            norm = self.mu.new(*grid_shape).zero_()  # for consistency and CUDA capability
 
         return torch.clamp(
             norm * self.sigma + self.mu, min=-1, max=1
@@ -1768,12 +1603,8 @@ class UltraSparse(nn.Module):
             self.mu_xy.data.uniform_(-self.init_mu_range, self.init_mu_range)
 
             if self.fixed_sigma:
-                self.sigma_ch.data.uniform_(
-                    self.init_sigma_range, self.init_sigma_range
-                )
-                self.sigma_xy.data.uniform_(
-                    self.init_sigma_range, self.init_sigma_range
-                )
+                self.sigma_ch.data.uniform_(self.init_sigma_range, self.init_sigma_range)
+                self.sigma_xy.data.uniform_(self.init_sigma_range, self.init_sigma_range)
             else:
                 self.sigma_ch.data.uniform_(0, self.init_sigma_range)
                 self.sigma_xy.data.uniform_(0, self.init_sigma_range)
@@ -1812,9 +1643,7 @@ class UltraSparse(nn.Module):
         N, c, w, h = x.size()
         c_in, w_in, h_in = self.in_shape
         if (c_in, w_in, h_in) != (c, w, h):
-            raise ValueError(
-                "the specified feature map dimension is not the readout's expected input dimension"
-            )
+            raise ValueError("the specified feature map dimension is not the readout's expected input dimension")
         x = x.view(N, 1, c, w, h)
         feat = self.features
         bias = self.bias
@@ -1822,14 +1651,10 @@ class UltraSparse(nn.Module):
 
         if self.batch_sample:
             # sample the grid_locations separately per image per batch
-            grid = self.sample_grid(
-                batch_size=N, sample=sample
-            )  # sample determines sampling from Gaussian
+            grid = self.sample_grid(batch_size=N, sample=sample)  # sample determines sampling from Gaussian
         else:
             # use one sampled grid_locations for all images in the batch
-            grid = self.sample_grid(batch_size=1, sample=sample).expand(
-                N, 1, outdims * self.num_filters, 1, 3
-            )
+            grid = self.sample_grid(batch_size=1, sample=sample).expand(N, 1, outdims * self.num_filters, 1, 3)
 
         if out_idx is not None:
             # predict output only for neurons given by out_idx
@@ -1842,15 +1667,11 @@ class UltraSparse(nn.Module):
                 bias = bias[out_idx]
             outdims = len(out_idx)
 
-        if (
-            shift is not None
-        ):  # it might not be valid now but have kept it for future devop.
+        if shift is not None:  # it might not be valid now but have kept it for future devop.
             grid = grid + shift[:, None, None, :]
 
         y = F.grid_sample(x, grid, align_corners=self.align_corners).squeeze(-1)
-        z = y.view((N, 1, self.num_filters, outdims)).permute(
-            0, 1, 3, 2
-        )  # reorder the dims
+        z = y.view((N, 1, self.num_filters, outdims)).permute(0, 1, 3, 2)  # reorder the dims
         z = torch.einsum(
             "nkpf,mkpf->np", z, feat
         )  # dim: batch_size, 1, num_neurons, num_filters -> batch_size, num_neurons
@@ -1861,14 +1682,7 @@ class UltraSparse(nn.Module):
 
     def __repr__(self):
         c, w, h = self.in_shape
-        r = (
-            self.__class__.__name__
-            + " ("
-            + "{} x {} x {}".format(c, w, h)
-            + " -> "
-            + str(self.outdims)
-            + ")"
-        )
+        r = self.__class__.__name__ + " (" + "{} x {} x {}".format(c, w, h) + " -> " + str(self.outdims) + ")"
         if self.bias is not None:
             r += " with bias"
         for ch in self.children():
@@ -1949,14 +1763,7 @@ class AttentionReadout(nn.Module):
         return y
 
     def __repr__(self):
-        return (
-            self.__class__.__name__
-            + " ("
-            + "{} x {} x {}".format(*self.in_shape)
-            + " -> "
-            + str(self.outdims)
-            + ")"
-        )
+        return self.__class__.__name__ + " (" + "{} x {} x {}".format(*self.in_shape) + " -> " + str(self.outdims) + ")"
 
 
 # ------------ Multi Readouts ------------------------
@@ -1972,9 +1779,7 @@ class MultiReadout(Readout, ModuleDict):
         super().__init__()
 
         self.in_shape = in_shape
-        self.neurons = OrderedDict(
-            [(k, loader.dataset.n_neurons) for k, loader in loaders.items()]
-        )
+        self.neurons = OrderedDict([(k, loader.dataset.n_neurons) for k, loader in loaders.items()])
         if "positive" in kwargs:
             self._positive = kwargs["positive"]
 

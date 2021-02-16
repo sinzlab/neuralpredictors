@@ -65,9 +65,7 @@ def hermite_2d(N, npts, xvalmax=None):
     for i, (mui, nui, desci) in enumerate(zip(mu, nu, desc)):
         radvals = polyval(radsq, hermite_coefficients(mui, nui))
         basis = gaussian * (radsq ** (mui / 2)) * radvals * np.exp(1j * mui * theta)
-        basis /= np.sqrt(
-            2 ** (mui + 2 * nui) * pi * math.factorial(mui + nui) * math.factorial(nui)
-        )
+        basis /= np.sqrt(2 ** (mui + 2 * nui) * pi * math.factorial(mui + nui) * math.factorial(nui))
         if desci == "z":
             H[i] = basis.real / np.sqrt(2)
         elif desci == "r":
@@ -108,17 +106,12 @@ class RotateHermite(nn.Module):
 
         super().__init__()
 
-        H, desc, mu = hermite_2d(
-            filter_size, filter_size * upsampling, 2 * np.sqrt(filter_size)
-        )
+        H, desc, mu = hermite_2d(filter_size, filter_size * upsampling, 2 * np.sqrt(filter_size))
 
         self.H = nn.Parameter(torch.tensor(H, dtype=torch.float32), requires_grad=False)
 
         angles = [i * 2 * pi / num_rotations for i in range(num_rotations)]
-        Rs = [
-            torch.tensor(rotation_matrix(desc, mu, angle), dtype=torch.float32)
-            for angle in angles
-        ]
+        Rs = [torch.tensor(rotation_matrix(desc, mu, angle), dtype=torch.float32) for angle in angles]
 
         self.Rs = nn.ParameterList([nn.Parameter(R, requires_grad=False) for R in Rs])
 
@@ -162,9 +155,7 @@ class HermiteConv2D(nn.Module):
         self.upsampling = upsampling
         self.n_coeffs = filter_size * (filter_size + 1) // 2
 
-        coeffs = nn.Parameter(
-            torch.Tensor(self.n_coeffs, self.input_features, self.output_features)
-        )
+        coeffs = nn.Parameter(torch.Tensor(self.n_coeffs, self.input_features, self.output_features))
         self.coeffs = coeffs
 
         self.rotate_hermite = RotateHermite(
@@ -178,9 +169,7 @@ class HermiteConv2D(nn.Module):
 
     def forward(self, input):
         weights_all_rotations = self.rotate_hermite(self.coeffs)
-        weights_all_rotations = downsample_weights(
-            weights_all_rotations, self.upsampling
-        )
+        weights_all_rotations = downsample_weights(weights_all_rotations, self.upsampling)
         weights_all_rotations = weights_all_rotations.permute(3, 2, 0, 1)
         self.weights_all_rotations = weights_all_rotations
 
@@ -245,9 +234,7 @@ class RotationEquivariantBias2DLayer(nn.Module):
 
         self.num_features = channels
         self.num_rotations = num_rotations
-        self.bias = torch.nn.Parameter(
-            torch.empty((1, 1, channels, 1, 1)).fill_(initial)
-        )
+        self.bias = torch.nn.Parameter(torch.empty((1, 1, channels, 1, 1)).fill_(initial))
 
     def forward(self, x):
         s = x.shape
@@ -262,9 +249,7 @@ class RotationEquivariantScale2DLayer(nn.Module):
 
         self.num_features = channels
         self.num_rotations = num_rotations
-        self.scale = torch.nn.Parameter(
-            torch.empty((1, 1, channels, 1, 1)).fill_(initial)
-        )
+        self.scale = torch.nn.Parameter(torch.empty((1, 1, channels, 1, 1)).fill_(initial))
 
     def forward(self, x):
         s = x.shape

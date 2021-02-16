@@ -101,9 +101,7 @@ def recursively_load_dict_contents_from_group(h5file, path="/"):
             if item.attrs.get("_iterable", False):
                 ans[key] = [item[str(i)][()] for i in range(len(item))]
             else:
-                ans[key] = recursively_load_dict_contents_from_group(
-                    h5file, path + key + "/"
-                )
+                ans[key] = recursively_load_dict_contents_from_group(h5file, path + key + "/")
     return ans
 
 

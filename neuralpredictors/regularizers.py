@@ -14,9 +14,7 @@ def laplace():
     Returns a 3x3 laplace filter.
 
     """
-    return np.array([[0, -1, 0], [-1, 4, -1], [0, -1, 0]]).astype(np.float32)[
-        None, None, ...
-    ]
+    return np.array([[0, -1, 0], [-1, 4, -1], [0, -1, 0]]).astype(np.float32)[None, None, ...]
 
 
 def laplace5x5():
@@ -24,15 +22,9 @@ def laplace5x5():
     Returns a 5x5 laplace filter.
 
     """
-    return np.array(
-        [
-            [0, 0, 1, 0, 0],
-            [0, 1, 2, 1, 0],
-            [1, 2, -16, 2, 1],
-            [0, 1, 2, 1, 0],
-            [0, 0, 1, 0, 0],
-        ]
-    ).astype(np.float32)[None, None, ...]
+    return np.array([[0, 0, 1, 0, 0], [0, 1, 2, 1, 0], [1, 2, -16, 2, 1], [0, 1, 2, 1, 0], [0, 0, 1, 0, 0],]).astype(
+        np.float32
+    )[None, None, ...]
 
 
 def laplace7x7():
@@ -99,9 +91,7 @@ def gaussian2d(size, sigma=5, gamma=1, theta=0, center=(0, 0), normalize=True):
     x_theta = x * np.cos(theta) + y * np.sin(theta)
     y_theta = -x * np.sin(theta) + y * np.cos(theta)
 
-    gaussian = np.exp(
-        -0.5 * (x_theta ** 2 / sigma_x ** 2 + y_theta ** 2 / sigma_y ** 2)
-    )
+    gaussian = np.exp(-0.5 * (x_theta ** 2 / sigma_x ** 2 + y_theta ** 2 / sigma_y ** 2))
 
     if normalize:
         gaussian -= gaussian.min()
@@ -183,9 +173,7 @@ class LaplaceL2norm(nn.Module):
         agg_fn = torch.mean if avg else torch.sum
 
         oc, ic, k1, k2 = x.size()
-        return agg_fn(self.laplace(x.view(oc * ic, 1, k1, k2)).pow(2)) / agg_fn(
-            x.view(oc * ic, 1, k1, k2).pow(2)
-        )
+        return agg_fn(self.laplace(x.view(oc * ic, 1, k1, k2)).pow(2)) / agg_fn(x.view(oc * ic, 1, k1, k2).pow(2))
 
 
 class Laplace3d(nn.Module):
@@ -271,12 +259,7 @@ class GaussianLaplaceL2Adaptive(nn.Module):
         sigma = self.sigma if self.sigma else min(k1, k2) / 4
 
         out = self.laplace(x.view(ic * oc, 1, k1, k2))
-        out = out * (
-            1
-            - torch.from_numpy(gaussian2d(size=(k1, k2), sigma=sigma))
-            .expand(1, 1, k1, k2)
-            .to(x.device)
-        )
+        out = out * (1 - torch.from_numpy(gaussian2d(size=(k1, k2), sigma=sigma)).expand(1, 1, k1, k2).to(x.device))
 
         return agg_fn(out.pow(2)) / agg_fn(x.view(oc * ic, 1, k1, k2).pow(2))
 
@@ -298,9 +281,7 @@ class GaussianLaplaceL2(nn.Module):
         self.laplace = Laplace(padding=padding)
         self.kernel = (kernel, kernel) if isinstance(kernel, int) else kernel
         sigma = min(*self.kernel) / 4
-        self.gaussian2d = torch.from_numpy(
-            gaussian2d(size=(*self.kernel,), sigma=sigma)
-        )
+        self.gaussian2d = torch.from_numpy(gaussian2d(size=(*self.kernel,), sigma=sigma))
 
     def forward(self, x, avg=False):
         agg_fn = torch.mean if avg else torch.sum

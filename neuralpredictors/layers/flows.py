@@ -27,19 +27,13 @@ class ConditionalFlow(nn.ModuleList):
     def cross_entropy(self, y, x, target_density, average=True):
         z, _, ld = self(y, x, logdet=0)
         if average:
-            return (
-                -(target_density.log_prob(z).mean() + ld.mean())
-                / self.output_dim
-                / self.LOG2
-            )
+            return -(target_density.log_prob(z).mean() + ld.mean()) / self.output_dim / self.LOG2
         else:
             return -(target_density.log_prob(z) + ld) / self.output_dim / self.LOG2
 
 
 class ResNet(nn.Module):
-    def __init__(
-        self, n_in, n_out, layers=3, final_linear=False, init_noise=1e-6, n_hidden=None
-    ):
+    def __init__(self, n_in, n_out, layers=3, final_linear=False, init_noise=1e-6, n_hidden=None):
         """
         Fully connectected ResNet layer. Each block consists of ELU(BatchNorm(Linear(x)))
 
@@ -52,25 +46,11 @@ class ResNet(nn.Module):
         super().__init__()
         self.final_linear = final_linear
         if not final_linear:
-            layers = [
-                nn.Sequential(nn.Linear(n_in if i == 0 else n_out, n_out), nn.ELU())
-                for i in range(layers)
-            ]
+            layers = [nn.Sequential(nn.Linear(n_in if i == 0 else n_out, n_out), nn.ELU()) for i in range(layers)]
         else:
-            assert (
-                n_hidden is not None
-            ), "n_hidden must not bet none when final_linear=True"
-            layers = [
-                nn.Sequential(
-                    nn.Linear(n_in if i == 0 else n_hidden, n_hidden), nn.ELU()
-                )
-                for i in range(layers)
-            ]
-            layers.append(
-                nn.Sequential(
-                    nn.Linear(n_hidden if len(layers) > 0 else n_hidden, n_out)
-                )
-            )
+            assert n_hidden is not None, "n_hidden must not bet none when final_linear=True"
+            layers = [nn.Sequential(nn.Linear(n_in if i == 0 else n_hidden, n_hidden), nn.ELU()) for i in range(layers)]
+            layers.append(nn.Sequential(nn.Linear(n_hidden if len(layers) > 0 else n_hidden, n_out)))
 
         self.layers = nn.ModuleList(layers)
 
@@ -156,9 +136,7 @@ class InvertibleLinear(nn.Module):
 
         elif self._type == "LU":
             l = self.l * self.l_mask + self.I
-            u = self.u * self.l_mask.transpose(0, 1).contiguous() + torch.diag(
-                self.sign_s * torch.exp(self.log_s)
-            )
+            u = self.u * self.l_mask.transpose(0, 1).contiguous() + torch.diag(self.sign_s * torch.exp(self.log_s))
             if compute_logdet:
                 dlogdet = self.log_s.sum()
             if not reverse:
@@ -208,11 +186,7 @@ class InvertibleLinear(nn.Module):
             tstring = "PL(U+ diag(s))"
         elif self._type == "lowrank":
             tstring = "UV + D [components={}]".format(self._components)
-        bias = (
-            "b"
-            if self.nonlinear_bias is None
-            else "{}(x)".format(self.bias.__class__.__name__)
-        )
+        bias = "b" if self.nonlinear_bias is None else "{}(x)".format(self.bias.__class__.__name__)
         return "Linear(W={}, bias={})".format(tstring, bias)
 
 
@@ -269,9 +243,7 @@ class Difference(nn.Module):
 class MixtureOfSigmoids(nn.Module):
     def __init__(self, pdims, components, a_init=0.01, b_init=1.0, scale=1, offset=0):
         super().__init__()
-        self.a = nn.Parameter(
-            torch.Tensor(1, pdims, components).uniform_(a_init, 2 * a_init)
-        )
+        self.a = nn.Parameter(torch.Tensor(1, pdims, components).uniform_(a_init, 2 * a_init))
         self.b = nn.Parameter(torch.Tensor(1, pdims, components).normal_(0, b_init))
         self.logits = nn.Parameter(torch.Tensor(1, pdims, components).normal_())
         self.pdims = pdims
@@ -296,9 +268,7 @@ class MixtureOfSigmoids(nn.Module):
         return z, x, logdet
 
     def __repr__(self):
-        return "Mixture of Sigmoids(components={}, dimensions={})".format(
-            self.components, self.pdims
-        )
+        return "Mixture of Sigmoids(components={}, dimensions={})".format(self.components, self.pdims)
 
 
 class AffineLog(nn.Module):
@@ -331,9 +301,7 @@ class AffineLog(nn.Module):
         return z, x, logdet
 
     def __repr__(self):
-        return "AffineLog(lower_bound={}, dimensions={})".format(
-            self.lower_bound, self.pdims
-        )
+        return "AffineLog(lower_bound={}, dimensions={})".format(self.lower_bound, self.pdims)
 
 
 class Logit(nn.Module):
@@ -448,12 +416,7 @@ class Sigmoid1D(nn.Module):
             z = torch.sigmoid(s[:, None] * y + t[:, None])
 
             if logdet is not None:
-                dlogdet = (
-                    math.log(self.scale)
-                    + z.squeeze().log()
-                    + (1 - z).squeeze().log()
-                    + logs
-                )
+                dlogdet = math.log(self.scale) + z.squeeze().log() + (1 - z).squeeze().log() + logs
                 logdet = logdet + dlogdet
 
             return self.scale * z + self.offset, x, logdet
@@ -462,9 +425,7 @@ class Sigmoid1D(nn.Module):
 
     def __repr__(self):
         bias = "{}(x)".format(self.f.__class__.__name__)
-        return "{} * Sigmoid(coefficients from {}) + {}".format(
-            self.scale, bias, self.offset
-        )
+        return "{} * Sigmoid(coefficients from {}) + {}".format(self.scale, bias, self.offset)
 
 
 class ELU1D(nn.Module):
@@ -509,9 +470,7 @@ class Interpolate1D(nn.Module):
         self.offset = offset
         self.resolution = resolution
         self.y_min, self.y_max = (y_min, y_max)
-        self.register_buffer(
-            "base_points", torch.linspace(self.y_min, self.y_max, resolution)
-        )
+        self.register_buffer("base_points", torch.linspace(self.y_min, self.y_max, resolution))
 
     def forward(self, y, x, logdet=None, reverse=False):
 
@@ -561,9 +520,7 @@ class Interpolate1D(nn.Module):
 
     def __repr__(self):
         bias = "{}(x)".format(self.f.__class__.__name__)
-        return "{} * Interpolate(base features from {}) + {}".format(
-            self.scale, bias, self.offset
-        )
+        return "{} * Interpolate(base features from {}) + {}".format(self.scale, bias, self.offset)
 
 
 # class AffineLayer(nn.Module):

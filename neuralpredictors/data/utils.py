@@ -18,9 +18,7 @@ def zip_dir(zip_name: str, source_dir):
 
 
 def _savenpy(path, val, overwrite):
-    if (
-        not np.isscalar(val) and len(val.shape) > 0 and val[0].dtype.char == "S"
-    ):  # convert bytes to univcode
+    if not np.isscalar(val) and len(val.shape) > 0 and val[0].dtype.char == "S":  # convert bytes to univcode
         val = val.astype(str)
     if not path.exists() or overwrite:
         print("Saving", path)
@@ -29,9 +27,7 @@ def _savenpy(path, val, overwrite):
         print("Not overwriting", path)
 
 
-def convert_static_h5_dataset_to_folder(
-    filename, outpath=None, overwrite=False, ignore_all_behaviors=False
-):
+def convert_static_h5_dataset_to_folder(filename, outpath=None, overwrite=False, ignore_all_behaviors=False):
     """
     Converts a h5 dataset used for mouse data into a directory structure that can be used by the FileTreeDataset.
 
@@ -46,9 +42,7 @@ def convert_static_h5_dataset_to_folder(
 
     with h5.File(filename) as fid:
         attributes = (
-            ["images", "responses", "behavior", "pupil_center"]
-            if not ignore_all_behaviors
-            else ["images", "responses"]
+            ["images", "responses", "behavior", "pupil_center"] if not ignore_all_behaviors else ["images", "responses"]
         )
         for data_key in attributes:
             subpath = outpath / "data/{}".format(data_key)

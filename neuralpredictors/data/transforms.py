@@ -112,11 +112,7 @@ class Delay(MovieTransform):
     def __call__(self, x):
         first_group = x._fields[0]
         t = getattr(x, first_group).shape[int(first_group in self.channel_first)]
-        assert (
-            t > self.delay
-        ), "The sequence length {} has to be longer than the delay {}".format(
-            t, self.delay
-        )
+        assert t > self.delay, "The sequence length {} has to be longer than the delay {}".format(t, self.delay)
         key_entry = {}
         for k in x._fields:
             if k in self.delay_groups:
@@ -125,11 +121,7 @@ class Delay(MovieTransform):
                 start = 0
                 stop = t - self.delay
 
-            key_entry[k] = (
-                getattr(x, k)[:, start:stop]
-                if k in self.channel_first
-                else getattr(x, k)[start:stop]
-            )
+            key_entry[k] = getattr(x, k)[:, start:stop] if k in self.channel_first else getattr(x, k)[start:stop]
 
         return x.__class__(**key_entry)
 
@@ -141,11 +133,7 @@ class Delay(MovieTransform):
         first_group = list(id_map.keys())[0]
         v_fg = id_map[first_group]
         t = v_fg.shape[int(first_group in self.channel_first)]
-        assert (
-            t > self.delay
-        ), "The sequence length {} has to be longer than the delay {}".format(
-            t, self.delay
-        )
+        assert t > self.delay, "The sequence length {} has to be longer than the delay {}".format(t, self.delay)
 
         for k, v in id_map.items():
             if k in self.delay_groups:
@@ -158,9 +146,7 @@ class Delay(MovieTransform):
         return new_map
 
     def __repr__(self):
-        return self.__class__.__name__ + "({} on {})".format(
-            self.delay, self.delay_groups
-        )
+        return self.__class__.__name__ + "({} on {})".format(self.delay, self.delay_groups)
 
 
 class Subsample(MovieTransform, StaticTransform):
@@ -194,9 +180,7 @@ class Subsample(MovieTransform, StaticTransform):
     def __call__(self, x):
         return x.__class__(
             **{
-                k: np.take(getattr(x, k), self.idx, self.target_index[k])
-                if k in self.target_groups
-                else getattr(x, k)
+                k: np.take(getattr(x, k), self.idx, self.target_index[k]) if k in self.target_groups else getattr(x, k)
                 for k in x._fields
             }
         )
@@ -205,9 +189,7 @@ class Subsample(MovieTransform, StaticTransform):
         return self.__class__.__name__ + "(n={})".format(len(self.idx))
 
     def id_transform(self, id_map):
-        return {
-            k: v[self.idx] if k in self.target_groups else v for k, v in id_map.items()
-        }
+        return {k: v[self.idx] if k in self.target_groups else v for k, v in id_map.items()}
 
 
 class ToTensor(MovieTransform, StaticTransform, Invertible):
@@ -276,25 +258,15 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
             1% of the mean std (to avoid division by 0)
     """
 
-    def __init__(
-        self, data, stats_source="all", exclude=None, inputs_mean=None, inputs_std=None
-    ):
+    def __init__(self, data, stats_source="all", exclude=None, inputs_mean=None, inputs_std=None):
 
         self.exclude = exclude or []
 
         in_name = "images" if "images" in data.statistics.keys() else "inputs"
         out_name = "responses" if "responses" in data.statistics.keys() else "targets"
 
-        self._inputs_mean = (
-            data.statistics[in_name][stats_source]["mean"][()]
-            if inputs_mean is None
-            else inputs_mean
-        )
-        self._inputs_std = (
-            data.statistics[in_name][stats_source]["std"][()]
-            if inputs_mean is None
-            else inputs_std
-        )
+        self._inputs_mean = data.statistics[in_name][stats_source]["mean"][()] if inputs_mean is None else inputs_mean
+        self._inputs_std = data.statistics[in_name][stats_source]["std"][()] if inputs_mean is None else inputs_std
 
         s = np.array(data.statistics[out_name][stats_source]["std"])
 
@@ -313,7 +285,6 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
         transforms[out_name] = lambda x: x * self._response_precision
         itransforms[out_name] = lambda x: x / self._response_precision
 
-
         # -- behavior
         transforms["behavior"] = lambda x: x
 
@@ -324,12 +295,8 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
         itransforms["trial_idx"] = lambda x: x * trial_idx_std + trial_idx_mean
 
         if "pupil_center" in data.data_keys:
-            self._eye_mean = np.array(
-                data.statistics["pupil_center"][stats_source]["mean"]
-            )
-            self._eye_std = np.array(
-                data.statistics["pupil_center"][stats_source]["std"]
-            )
+            self._eye_mean = np.array(data.statistics["pupil_center"][stats_source]["mean"])
+            self._eye_std = np.array(data.statistics["pupil_center"][stats_source]["std"])
             transforms["pupil_center"] = lambda x: (x - self._eye_mean) / self._eye_std
             itransforms["pupil_center"] = lambda x: x * self._eye_std + self._eye_mean
 
@@ -354,26 +321,16 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
         Apply transformation
         """
         return x.__class__(
-            **{
-                k: (self._transforms[k](v) if k not in self.exclude else v)
-                for k, v in zip(x._fields, x)
-            }
+            **{k: (self._transforms[k](v) if k not in self.exclude else v) for k, v in zip(x._fields, x)}
         )
 
     def inv(self, x):
         return x.__class__(
-            **{
-                k: (self._itransforms[k](v) if k not in self.exclude else v)
-                for k, v in zip(x._fields, x)
-            }
+            **{k: (self._itransforms[k](v) if k not in self.exclude else v) for k, v in zip(x._fields, x)}
         )
 
     def __repr__(self):
-        return super().__repr__() + (
-            "(not {})".format(", ".join(self.exclude))
-            if self.exclude is not None
-            else ""
-        )
+        return super().__repr__() + ("(not {})".format(", ".join(self.exclude)) if self.exclude is not None else "")
 
 
 class AddBehaviorAsChannels(MovieTransform, StaticTransform, Invertible):
@@ -390,9 +347,7 @@ class AddBehaviorAsChannels(MovieTransform, StaticTransform, Invertible):
             (
                 img,
                 np.ones((1, *img.shape[-(len(img.shape) - 1) :]))
-                * np.expand_dims(
-                    behavior, axis=((len(img.shape) - 2), (len(img.shape) - 1))
-                ),
+                * np.expand_dims(behavior, axis=((len(img.shape) - 2), (len(img.shape) - 1))),
             ),
             axis=len(img.shape) - 3,
         )
@@ -405,16 +360,12 @@ class AddBehaviorAsChannels(MovieTransform, StaticTransform, Invertible):
 
         key_vals = {k: v for k, v in zip(x._fields, x)}
         dd = {
-            "images": self.transforms["images"](
-                key_vals["images"], key_vals["behavior"]
-            ),
+            "images": self.transforms["images"](key_vals["images"], key_vals["behavior"]),
             "responses": self.transforms["responses"](key_vals["responses"]),
             "behavior": self.transforms["behavior"](key_vals["behavior"]),
         }
         if "pupil_center" in key_vals:
-            dd["pupil_center"] = self.transforms["pupil_center"](
-                key_vals["pupil_center"]
-            )
+            dd["pupil_center"] = self.transforms["pupil_center"](key_vals["pupil_center"])
         if "trial_idx" in key_vals:
             dd["trial_idx"] = self.transforms["trial_idx"](key_vals["trial_idx"])
         return x.__class__(**dd)
@@ -428,6 +379,7 @@ class AddPupilCenterAsChannels(MovieTransform, StaticTransform, Invertible):
         - behavior
         - pupil center
     """
+
     def __init__(self):
         self.transforms, self.itransforms = {}, {}
         self.transforms["images"] = lambda img, pupil_center: np.concatenate(
@@ -464,18 +416,12 @@ class SelectInputChannel(StaticTransform):
     """
 
     def __init__(self, grab_channel):
-        self.grab_channel = (
-            grab_channel if isinstance(grab_channel, Iterable) else [grab_channel]
-        )
+        self.grab_channel = grab_channel if isinstance(grab_channel, Iterable) else [grab_channel]
 
     def __call__(self, x):
         key_vals = {k: v for k, v in zip(x._fields, x)}
         img = key_vals["images"]
-        key_vals["images"] = (
-            img[:, (self.grab_channel,)]
-            if len(img.shape) == 4
-            else img[self.grab_channel, ...]
-        )
+        key_vals["images"] = img[:, (self.grab_channel,)] if len(img.shape) == 4 else img[self.grab_channel, ...]
         return x.__class__(**key_vals)
 
 

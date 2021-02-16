@@ -55,23 +55,15 @@ class Gaussian2d(nn.Module):
         )
         super().__init__()
         if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma_range <= 0.0:
-            raise ValueError(
-                "either init_mu_range doesn't belong to [0.0, 1.0] or init_sigma_range is non-positive"
-            )
+            raise ValueError("either init_mu_range doesn't belong to [0.0, 1.0] or init_sigma_range is non-positive")
         self.in_shape = in_shape
         c, w, h = in_shape
         self.outdims = outdims
         self.batch_sample = batch_sample
         self.grid_shape = (1, outdims, 1, 2)
-        self.mu = Parameter(
-            torch.Tensor(*self.grid_shape)
-        )  # mean location of gaussian for each neuron
-        self.sigma = Parameter(
-            torch.Tensor(*self.grid_shape)
-        )  # standard deviation for gaussian for each neuron
-        self.features = Parameter(
-            torch.Tensor(1, c, 1, outdims)
-        )  # feature weights for each channel of the core
+        self.mu = Parameter(torch.Tensor(*self.grid_shape))  # mean location of gaussian for each neuron
+        self.sigma = Parameter(torch.Tensor(*self.grid_shape))  # standard deviation for gaussian for each neuron
+        self.features = Parameter(torch.Tensor(1, c, 1, outdims))  # feature weights for each channel of the core
 
         if bias:
             bias = Parameter(torch.Tensor(outdims))
@@ -115,9 +107,7 @@ class Gaussian2d(nn.Module):
                            if sample is True/False, overrides the model_state (i.e training or eval) and does as instructed
         """
         with torch.no_grad():
-            self.mu.clamp_(
-                min=-1, max=1
-            )  # at eval time, only self.mu is used so it must belong to [-1,1]
+            self.mu.clamp_(min=-1, max=1)  # at eval time, only self.mu is used so it must belong to [-1,1]
             self.sigma.clamp_(min=0)  # sigma/variance is always a positive quantity
 
         grid_shape = (batch_size,) + self.grid_shape[1:]
@@ -127,9 +117,7 @@ class Gaussian2d(nn.Module):
         if sample:
             norm = self.mu.new(*grid_shape).normal_()
         else:
-            norm = self.mu.new(
-                *grid_shape
-            ).zero_()  # for consistency and CUDA capability
+            norm = self.mu.new(*grid_shape).zero_()  # for consistency and CUDA capability
 
         return torch.clamp(
             norm * self.sigma + self.mu, min=-1, max=1
@@ -170,23 +158,17 @@ class Gaussian2d(nn.Module):
         N, c, w, h = x.size()
         c_in, w_in, h_in = self.in_shape
         if (c_in, w_in, h_in) != (c, w, h):
-            raise ValueError(
-                "the specified feature map dimension is not the readout's expected input dimension"
-            )
+            raise ValueError("the specified feature map dimension is not the readout's expected input dimension")
         feat = self.features.view(1, c, self.outdims)
         bias = self.bias
         outdims = self.outdims
 
         if self.batch_sample:
             # sample the grid_locations separately per image per batch
-            grid = self.sample_grid(
-                batch_size=N, sample=sample
-            )  # sample determines sampling from Gaussian
+            grid = self.sample_grid(batch_size=N, sample=sample)  # sample determines sampling from Gaussian
         else:
             # use one sampled grid_locations for all images in the batch
-            grid = self.sample_grid(batch_size=1, sample=sample).expand(
-                N, outdims, 1, 2
-            )
+            grid = self.sample_grid(batch_size=1, sample=sample).expand(N, outdims, 1, 2)
 
         if out_idx is not None:
             if isinstance(out_idx, np.ndarray):
@@ -210,14 +192,7 @@ class Gaussian2d(nn.Module):
 
     def __repr__(self):
         c, w, h = self.in_shape
-        r = (
-            self.__class__.__name__
-            + " ("
-            + "{} x {} x {}".format(c, w, h)
-            + " -> "
-            + str(self.outdims)
-            + ")"
-        )
+        r = self.__class__.__name__ + " (" + "{} x {} x {}".format(c, w, h) + " -> " + str(self.outdims) + ")"
         if self.bias is not None:
             r += " with bias"
         for ch in self.children():

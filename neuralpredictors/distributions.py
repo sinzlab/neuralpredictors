@@ -14,9 +14,7 @@ class ExponentialMixture(Distribution):
         return rate * torch.exp(-rate * x)
 
     def log_prob(self, value):
-        q = self.fraction_on * self.p_exp(value, 1) + (
-            1 - self.fraction_on
-        ) * self.p_exp(value, self.rate)
+        q = self.fraction_on * self.p_exp(value, 1) + (1 - self.fraction_on) * self.p_exp(value, self.rate)
         return torch.log(q).sum(dim=-1)
 
 

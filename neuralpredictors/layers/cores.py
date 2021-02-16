@@ -132,9 +132,7 @@ class Stacked2dCore(Core2d, nn.Module):
             if input_regularizer == "GaussianLaplaceL2"
             else dict(padding=laplace_padding)
         )
-        self._input_weights_regularizer = regularizers.__dict__[input_regularizer](
-            **regularizer_config
-        )
+        self._input_weights_regularizer = regularizers.__dict__[input_regularizer](**regularizer_config)
 
         self.layers = layers
         self.gamma_input = gamma_input
@@ -145,17 +143,13 @@ class Stacked2dCore(Core2d, nn.Module):
         self.use_avg_reg = use_avg_reg
 
         if use_avg_reg:
-            warnings.warn(
-                "The averaged value of regularizer will be used.", UserWarning
-            )
+            warnings.warn("The averaged value of regularizer will be used.", UserWarning)
 
         self.features = nn.Sequential()
         if stack is None:
             self.stack = range(self.layers)
         else:
-            self.stack = (
-                [*range(self.layers)[stack:]] if isinstance(stack, int) else stack
-            )
+            self.stack = [*range(self.layers)[stack:]] if isinstance(stack, int) else stack
 
         # --- first layer
         layer = OrderedDict()
@@ -170,9 +164,7 @@ class Stacked2dCore(Core2d, nn.Module):
             if independent_bn_bias:
                 layer["norm"] = nn.BatchNorm2d(hidden_channels, momentum=momentum)
             else:
-                layer["norm"] = nn.BatchNorm2d(
-                    hidden_channels, momentum=momentum, affine=bias and batch_norm_scale
-                )
+                layer["norm"] = nn.BatchNorm2d(hidden_channels, momentum=momentum, affine=bias and batch_norm_scale)
                 if bias:
                     if not batch_norm_scale:
                         layer["bias"] = Bias2DLayer(hidden_channels)
@@ -224,37 +216,22 @@ class Stacked2dCore(Core2d, nn.Module):
         ret = []
         for l, feat in enumerate(self.features):
             do_skip = l >= 1 and self.skip > 1
-            input_ = feat(
-                input_ if not do_skip else torch.cat(ret[-min(self.skip, l) :], dim=1)
-            )
+            input_ = feat(input_ if not do_skip else torch.cat(ret[-min(self.skip, l) :], dim=1))
             ret.append(input_)
 
         return torch.cat([ret[ind] for ind in self.stack], dim=1)
 
     def laplace(self):
-        return self._input_weights_regularizer(
-            self.features[0].conv.weight, avg=self.use_avg_reg
-        )
+        return self._input_weights_regularizer(self.features[0].conv.weight, avg=self.use_avg_reg)
 
     def group_sparsity(self):
         ret = 0
         for l in range(1, self.layers):
-            ret = (
-                ret
-                + self.features[l]
-                .conv.weight.pow(2)
-                .sum(3, keepdim=True)
-                .sum(2, keepdim=True)
-                .sqrt()
-                .mean()
-            )
+            ret = ret + self.features[l].conv.weight.pow(2).sum(3, keepdim=True).sum(2, keepdim=True).sqrt().mean()
         return ret / ((self.layers - 1) if self.layers > 1 else 1)
 
     def regularizer(self):
-        return (
-            self.group_sparsity() * self.gamma_hidden
-            + self.gamma_input * self.laplace()
-        )
+        return self.group_sparsity() * self.gamma_hidden + self.gamma_input * self.laplace()
 
     @property
     def outchannels(self):
@@ -342,9 +319,7 @@ class RotationEquivariant2dCore(Core2d, nn.Module):
             if input_regularizer == "GaussianLaplaceL2"
             else dict(padding=laplace_padding)
         )
-        self._input_weights_regularizer = regularizers.__dict__[input_regularizer](
-            **regularizer_config
-        )
+        self._input_weights_regularizer = regularizers.__dict__[input_regularizer](**regularizer_config)
 
         self.layers = layers
         self.gamma_input = gamma_input
@@ -358,19 +333,13 @@ class RotationEquivariant2dCore(Core2d, nn.Module):
         if rot_eq_batch_norm:
 
             def BatchNormLayer(**kwargs):
-                return RotationEquivariantBatchNorm2D(
-                    num_rotations=num_rotations, **kwargs
-                )
+                return RotationEquivariantBatchNorm2D(num_rotations=num_rotations, **kwargs)
 
             def BiasLayer(**kwargs):
-                return RotationEquivariantBias2DLayer(
-                    num_rotations=num_rotations, **kwargs
-                )
+                return RotationEquivariantBias2DLayer(num_rotations=num_rotations, **kwargs)
 
             def ScaleLayer(**kwargs):
-                return RotationEquivariantScale2DLayer(
-                    num_rotations=num_rotations, **kwargs
-                )
+                return RotationEquivariantScale2DLayer(num_rotations=num_rotations, **kwargs)
 
         else:
             BatchNormLayer = nn.BatchNorm2d
@@ -378,17 +347,13 @@ class RotationEquivariant2dCore(Core2d, nn.Module):
             ScaleLayer = Scale2DLayer
 
         if use_avg_reg:
-            warnings.warn(
-                "The averaged value of regularizer will be used.", UserWarning
-            )
+            warnings.warn("The averaged value of regularizer will be used.", UserWarning)
 
         self.features = nn.Sequential()
         if stack is None:
             self.stack = range(self.layers)
         else:
-            self.stack = (
-                [*range(self.layers)[stack:]] if isinstance(stack, int) else stack
-            )
+            self.stack = [*range(self.layers)[stack:]] if isinstance(stack, int) else stack
 
         # --- first layer
         layer = OrderedDict()
@@ -404,9 +369,7 @@ class RotationEquivariant2dCore(Core2d, nn.Module):
         )
         if batch_norm:
             if independent_bn_bias:
-                layer["norm"] = BatchNormLayer(
-                    num_features=hidden_channels, momentum=momentum
-                )
+                layer["norm"] = BatchNormLayer(num_features=hidden_channels, momentum=momentum)
             else:
                 layer["norm"] = BatchNormLayer(
                     num_features=hidden_channels,
@@ -445,9 +408,7 @@ class RotationEquivariant2dCore(Core2d, nn.Module):
             )
             if batch_norm:
                 if independent_bn_bias:
-                    layer["norm"] = BatchNormLayer(
-                        num_features=hidden_channels, momentum=momentum
-                    )
+                    layer["norm"] = BatchNormLayer(num_features=hidden_channels, momentum=momentum)
                 else:
                     layer["norm"] = BatchNormLayer(
                         num_features=hidden_channels,
@@ -475,9 +436,7 @@ class RotationEquivariant2dCore(Core2d, nn.Module):
         return torch.cat([ret[ind] for ind in self.stack], dim=1)
 
     def laplace(self):
-        return self._input_weights_regularizer(
-            self.features[0].conv.weights_all_rotations, avg=self.use_avg_reg
-        )
+        return self._input_weights_regularizer(self.features[0].conv.weights_all_rotations, avg=self.use_avg_reg)
 
     def group_sparsity(self):
         ret = 0
@@ -494,10 +453,7 @@ class RotationEquivariant2dCore(Core2d, nn.Module):
         return ret / ((self.layers - 1) if self.layers > 1 else 1)
 
     def regularizer(self):
-        return (
-            self.group_sparsity() * self.gamma_hidden
-            + self.gamma_input * self.laplace()
-        )
+        return self.group_sparsity() * self.gamma_hidden + self.gamma_input * self.laplace()
 
     @property
     def outchannels(self):
@@ -534,9 +490,7 @@ class TransferLearningCore(Core2d, nn.Module):
         """
         if kwargs:
             warnings.warn(
-                "Ignoring input {} when creating {}".format(
-                    repr(kwargs), self.__class__.__name__
-                ),
+                "Ignoring input {} when creating {}".format(repr(kwargs), self.__class__.__name__),
                 UserWarning,
             )
         super().__init__()
@@ -549,9 +503,7 @@ class TransferLearningCore(Core2d, nn.Module):
         TL_model_clipped = nn.Sequential(*list(TL_model.features.children())[:layers])
         if not isinstance(TL_model_clipped[-1], nn.Conv2d):
             warnings.warn(
-                "Final layer is of type {}, not nn.Conv2d".format(
-                    type(TL_model_clipped[-1])
-                ),
+                "Final layer is of type {}, not nn.Conv2d".format(type(TL_model_clipped[-1])),
                 UserWarning,
             )
 
@@ -564,18 +516,13 @@ class TransferLearningCore(Core2d, nn.Module):
         self.features = nn.Sequential()
         self.features.add_module("TransferLearning", TL_model_clipped)
         if final_batchnorm:
-            self.features.add_module(
-                "OutBatchNorm", nn.BatchNorm2d(self.outchannels, momentum=self.momentum)
-            )
+            self.features.add_module("OutBatchNorm", nn.BatchNorm2d(self.outchannels, momentum=self.momentum))
         if final_nonlinearity:
             self.features.add_module("OutNonlin", nn.ReLU(inplace=True))
 
     def forward(self, input_):
         # If model is designed for RBG input but input is greyscale, repeat the same input 3 times
-        if (
-            self.input_channels == 1
-            and self.features.TransferLearning[0].in_channels == 3
-        ):
+        if self.input_channels == 1 and self.features.TransferLearning[0].in_channels == 3:
             input_ = input_.repeat(1, 3, 1, 1)
         input_ = self.features(input_)
         return input_
@@ -617,9 +564,7 @@ class DepthSeparableConv2d(nn.Sequential):
         bias=True,
     ):
         super().__init__()
-        self.add_module(
-            "in_depth_conv", nn.Conv2d(in_channels, out_channels, 1, bias=bias)
-        )
+        self.add_module("in_depth_conv", nn.Conv2d(in_channels, out_channels, 1, bias=bias))
         self.add_module(
             "spatial_conv",
             nn.Conv2d(
@@ -633,6 +578,4 @@ class DepthSeparableConv2d(nn.Sequential):
                 groups=out_channels,
             ),
         )
-        self.add_module(
-            "out_depth_conv", nn.Conv2d(out_channels, out_channels, 1, bias=bias)
-        )
+        self.add_module("out_depth_conv", nn.Conv2d(out_channels, out_channels, 1, bias=bias))

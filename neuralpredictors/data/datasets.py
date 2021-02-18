@@ -691,9 +691,7 @@ class FileTreeDataset(StaticSet):
         if not len(animal_id) == len(session) == len(scan_idx) == len(unit_id) == len(values):
             raise InconsistentDataException("number of trials and identifiers not consistent")
 
-        target = np.c_[
-            (self.neurons.animal_ids, self.neurons.sessions, self.neurons.scan_idx, self.neurons.unit_ids)
-        ]
+        target = np.c_[(self.neurons.animal_ids, self.neurons.sessions, self.neurons.scan_idx, self.neurons.unit_ids)]
         permuted = np.c_[(animal_id, session, scan_idx, unit_id)]
         vals = np.ones((len(target),) + values.shape[1:], dtype=values.dtype) * (
             np.nan if fill_missing is None else fill_missing

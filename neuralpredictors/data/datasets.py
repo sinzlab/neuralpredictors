@@ -688,23 +688,23 @@ class FileTreeDataset(StaticSet):
                     f"Number of values ({len(values)}) and neurons in the datasets ({self.n_neurons}) is not consistent."
                 )
 
-            if not len(animal_id) == len(session) == len(scan_idx) == len(unit_id) == len(values):
-                raise InconsistentDataException("number of trials and identifiers not consistent")
+        if not len(animal_id) == len(session) == len(scan_idx) == len(unit_id) == len(values):
+            raise InconsistentDataException("number of trials and identifiers not consistent")
 
-            target = np.c_[
-                (self.neurons.animal_ids, self.neurons.sessions, self.neurons.scan_idx, self.neurons.unit_ids)
-            ]
-            permuted = np.c_[(animal_id, session, scan_idx, unit_id)]
-            vals = np.ones((len(target),) + values.shape[1:], dtype=values.dtype) * (
-                np.nan if fill_missing is None else fill_missing
-            )
-            tidx, idx = self.match_order(target, permuted, not_exist_ok=fill_missing is not None)
+        target = np.c_[
+            (self.neurons.animal_ids, self.neurons.sessions, self.neurons.scan_idx, self.neurons.unit_ids)
+        ]
+        permuted = np.c_[(animal_id, session, scan_idx, unit_id)]
+        vals = np.ones((len(target),) + values.shape[1:], dtype=values.dtype) * (
+            np.nan if fill_missing is None else fill_missing
+        )
+        tidx, idx = self.match_order(target, permuted, not_exist_ok=fill_missing is not None)
 
-            assert np.sum(target[tidx] - permuted[idx, ...]) == 0, "Something went wrong in sorting"
+        assert np.sum(target[tidx] - permuted[idx, ...]) == 0, "Something went wrong in sorting"
 
-            vals[tidx, ...] = values[idx, ...]
-            np.save(self.basepath / "meta/neurons/{}.npy".format(name), vals)
-            self.add_log_entry("Added new neuron meta attribute {} to meta/neurons".format(name))
+        vals[tidx, ...] = values[idx, ...]
+        np.save(self.basepath / "meta/neurons/{}.npy".format(name), vals)
+        self.add_log_entry("Added new neuron meta attribute {} to meta/neurons".format(name))
 
     @staticmethod
     def initialize_from(filename, outpath=None, overwrite=False):

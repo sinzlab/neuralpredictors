@@ -1,4 +1,6 @@
+import os, sys
 import warnings
+from contextlib import contextmanager
 import numpy as np
 import h5py
 import torch
@@ -144,3 +146,23 @@ class BiasNet(nn.Module):
 
     def forward(self, x):
         return self.base_net(x) + self.bias
+
+
+class HiddenPrints:
+    def __enter__(self):
+        self._original_stdout = sys.stdout
+        sys.stdout = open(os.devnull, "w")
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        sys.stdout.close()
+        sys.stdout = self._original_stdout
+
+
+@contextmanager
+def no_transforms(dat):
+    transforms = dat.transforms
+    try:
+        dat.transforms = []
+        yield dat
+    finally:
+        dat.transforms = transforms

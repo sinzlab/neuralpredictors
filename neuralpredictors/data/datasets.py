@@ -10,23 +10,15 @@ from scipy.signal import convolve2d
 from torch.utils.data import Dataset
 
 from .exceptions import InconsistentDataException, DoesNotExistException
-from .transforms import (
-    DataTransform,
-    MovieTransform,
-    StaticTransform,
-    Invertible,
-    Subsequence,
-    Delay,
-)
+from .transforms import DataTransform, MovieTransform, StaticTransform, Invertible, Subsequence, Delay
 from .utils import convert_static_h5_dataset_to_folder, zip_dir
-from ..utils import recursively_load_dict_contents_from_group
+from ..utils import recursively_load_dict_contents_from_group, no_transforms
 
 
 class AttributeHandler:
     def __init__(self, name, h5_handle):
         """
         Can be used to turn a dataset within a hdf5 dataset into an attribute.
-
         Args:
             name:       name of the dataset in the hdf5 file
             h5_handle:  file handle for the hdf5 file
@@ -60,7 +52,6 @@ class AttributeTransformer(AttributeHandler):
         """
         Allows for id_transform of transforms to be applied to the
         specified attribute. Otherwise behaves like an AttributeHandler
-
         Args:
             name:       see AttributeHandler
             h5_handle:  see AttributeHandler
@@ -88,7 +79,6 @@ class TransformDataset(Dataset):
         """
         Abstract Class for Datasets with transformations, providing `transform` and `invert` functions
         to apply data transformation on the elements.
-
         Args:
             transforms: list of transforms to be applied to each data point
         """
@@ -105,11 +95,9 @@ class TransformDataset(Dataset):
     def transform(self, x, exclude=None):
         """
         Apply transform on a data element from the dataset
-
         Args:
             x (tuple): a data element from the dataset
             exclude (Transform, optional): Type of data transformer to be excluded from transform list. Defaults to None.
-
         Returns:
             tuple: transformed data element
         """
@@ -120,9 +108,7 @@ class TransformDataset(Dataset):
         return x
 
     def invert(self, x, exclude=None):
-        for tr in reversed(
-            filter(lambda tr: not isinstance(tr, exclude), self.transforms)
-        ):
+        for tr in reversed(filter(lambda tr: not isinstance(tr, exclude), self.transforms)):
             if not isinstance(tr, Invertible):
                 raise TypeError("Cannot invert", tr.__class__.__name__)
             else:
@@ -134,9 +120,7 @@ class TransformDataset(Dataset):
 
     def __repr__(self):
         return (
-            "{} m={}:\n\t({})".format(
-                self.__class__.__name__, len(self), ", ".join(self.data_keys)
-            )
+            "{} m={}:\n\t({})".format(self.__class__.__name__, len(self), ", ".join(self.data_keys))
             + "\n\t[Transforms: "
             + "->".join([repr(tr) for tr in self.transforms])
             + "]"
@@ -144,14 +128,7 @@ class TransformDataset(Dataset):
 
 
 class H5SequenceSet(TransformDataset):
-    def __init__(
-        self,
-        filename,
-        *data_keys,
-        output_rename=None,
-        transforms=None,
-        output_dict=False
-    ):
+    def __init__(self, filename, *data_keys, output_rename=None, transforms=None, output_dict=False):
         super().__init__(transforms=transforms)
 
         self.output_dict = output_dict
@@ -185,9 +162,7 @@ class H5SequenceSet(TransformDataset):
         self.transforms = transforms or []
 
         self.data_point = namedtuple("DataPoint", data_keys)
-        self.output_point = namedtuple(
-            "OutputPoint", [output_rename.get(k, k) for k in data_keys]
-        )
+        self.output_point = namedtuple("OutputPoint", [output_rename.get(k, k) for k in data_keys])
 
     def __dir__(self):
         attrs = set(super().__dir__())
@@ -205,12 +180,7 @@ class H5SequenceSet(TransformDataset):
         return self._len
 
     def __getitem__(self, item):
-        x = self.data_point(
-            *(
-                np.array(self.data[g][item if self.data_loaded else str(item)])
-                for g in self.data_keys
-            )
-        )
+        x = self.data_point(*(np.array(self.data[g][item if self.data_loaded else str(item)]) for g in self.data_keys))
         for tr in self.transforms:
             assert isinstance(tr, self._transform_set)
             x = tr(x)
@@ -238,21 +208,10 @@ class H5SequenceSet(TransformDataset):
             return super().__getattr__(item)
 
     def __repr__(self):
-        names = [
-            "{} -> {}".format(k, self.output_rename[k])
-            if k in self.output_rename
-            else k
-            for k in self.data_keys
-        ]
-        s = "{} m={}:\n\t({})".format(
-            self.__class__.__name__, len(self), ", ".join(names)
-        )
+        names = ["{} -> {}".format(k, self.output_rename[k]) if k in self.output_rename else k for k in self.data_keys]
+        s = "{} m={}:\n\t({})".format(self.__class__.__name__, len(self), ", ".join(names))
         if self.transforms is not None:
-            s += (
-                "\n\t[Transforms: "
-                + "->".join([repr(tr) for tr in self.transforms])
-                + "]"
-            )
+            s += "\n\t[Transforms: " + "->".join([repr(tr) for tr in self.transforms]) + "]"
         return s
 
 
@@ -262,17 +221,8 @@ class MovieSet(H5SequenceSet):
     it assumes that properties such as `neurons` and `stats` are present in the dataset.
     """
 
-    def __init__(
-        self,
-        filename,
-        *data_groups,
-        output_rename=None,
-        transforms=None,
-        stats_source="all"
-    ):
-        super().__init__(
-            filename, *data_groups, output_rename=output_rename, transforms=transforms
-        )
+    def __init__(self, filename, *data_groups, output_rename=None, transforms=None, stats_source="all"):
+        super().__init__(filename, *data_groups, output_rename=output_rename, transforms=transforms)
         self.stats_source = stats_source
 
         # set to accept only MovieTransform
@@ -280,9 +230,7 @@ class MovieSet(H5SequenceSet):
 
     @property
     def neurons(self):
-        return AttributeTransformer(
-            "neurons", self.data, self.transforms, data_group="responses"
-        )
+        return AttributeTransformer("neurons", self.data, self.transforms, data_group="responses")
 
     @property
     def n_neurons(self):
@@ -290,21 +238,14 @@ class MovieSet(H5SequenceSet):
 
     @property
     def input_shape(self):
-        name = (
-            self.output_rename.get("inputs", "inputs")
-            if self.rename_output
-            else "inputs"
-        )
+        name = self.output_rename.get("inputs", "inputs") if self.rename_output else "inputs"
         return (1,) + getattr(self[0], name).shape
 
     def transformed_mean(self, stats_source=None):
         if stats_source is None:
             stats_source = self.stats_source
 
-        tmp = [
-            np.atleast_1d(self.statistics[g][stats_source]["mean"][()])
-            for g in self.data_keys
-        ]
+        tmp = [np.atleast_1d(self.statistics[g][stats_source]["mean"][()]) for g in self.data_keys]
         x = self.transform(self.data_point(*tmp), exclude=(Subsequence, Delay))
         if self.rename_output:
             x = self.output_point(*x)
@@ -320,37 +261,27 @@ class MovieSet(H5SequenceSet):
             behavior=np.ones((1, t, 1)) * mean("behavior")[None, None, :],
             responses=np.ones((1, t, 1)) * mean("responses")[None, None, :],
         )
-        return self.transform(
-            self.data_point(*[d[dk] for dk in self.data_keys]), exclude=Subsequence
-        )
+        return self.transform(self.data_point(*[d[dk] for dk in self.data_keys]), exclude=Subsequence)
 
     def rf_noise_stim(self, m, t, stats_source="all"):
         """
         Generates a Gaussian white noise stimulus filtered with a 3x3 Gaussian filter
         for the computation of receptive fields. The mean and variance of the Gaussian
         noise are set to the mean and variance of the stimulus ensemble.
-
         The behvavior, eye movement statistics, and responses are set to their respective means.
         Args:
             m: number of noise samples
             t: length in time
-
         Returns: tuple of input, behavior, eye, and response
-
         """
         N, c, _, w, h = self.img_shape
         stat = lambda dk, what: self.statistics[dk][stats_source][what][()]
         mu, s = stat("inputs", "mean"), stat("inputs", "std")
-        h_filt = np.float64(
-            [[1 / 16, 1 / 8, 1 / 16], [1 / 8, 1 / 4, 1 / 8], [1 / 16, 1 / 8, 1 / 16]]
-        )
+        h_filt = np.float64([[1 / 16, 1 / 8, 1 / 16], [1 / 8, 1 / 4, 1 / 8], [1 / 16, 1 / 8, 1 / 16]])
         noise_input = (
-            np.stack(
-                [
-                    convolve2d(np.random.randn(w, h), h_filt, mode="same")
-                    for _ in range(m * t * c)
-                ]
-            ).reshape((m, c, t, w, h))
+            np.stack([convolve2d(np.random.randn(w, h), h_filt, mode="same") for _ in range(m * t * c)]).reshape(
+                (m, c, t, w, h)
+            )
             * s
             + mu
         )
@@ -367,8 +298,7 @@ class MovieSet(H5SequenceSet):
         )
 
         return self.transform(
-            self.data_point(*[d[dk] for dk in self.data_groups.values()]),
-            exclude=(Subsequence, Delay),
+            self.data_point(*[d[dk] for dk in self.data_groups.values()]), exclude=(Subsequence, Delay)
         )
 
 
@@ -392,7 +322,6 @@ class H5ArraySet(StaticSet):
     def __init__(self, filename, *data_keys, transforms=None):
         """
         Dataset for static data stored in hdf5 files.
-
         Args:
             filename:      filename of the hdf5 file
             *data_keys:    data keys to be read from the file
@@ -435,10 +364,7 @@ class H5ArraySet(StaticSet):
 
     def __repr__(self):
         return "\n".join(
-            [
-                "Tensor {}: {} ".format(key, self.data[key].shape)
-                for key in self.data_keys
-            ]
+            ["Tensor {}: {} ".format(key, self.data[key].shape) for key in self.data_keys]
             + ["Transforms: " + repr(self.transforms)]
         )
 
@@ -453,18 +379,13 @@ class H5ArraySet(StaticSet):
                 return item
             return item
         else:
-            raise AttributeError(
-                "Item {} not found in {}".format(item, self.__class__.__name__)
-            )
+            raise AttributeError("Item {} not found in {}".format(item, self.__class__.__name__))
 
 
 class StaticImageSet(H5ArraySet):
-    def __init__(
-        self, filename, *data_keys, transforms=None, cache_raw=False, stats_source=None
-    ):
+    def __init__(self, filename, *data_keys, transforms=None, cache_raw=False, stats_source=None):
         """
         Dataset for h5 files.
-
         Args:
             filename:       filename of the hdf5 file
             *data_keys:     datasets to be extracted
@@ -483,9 +404,7 @@ class StaticImageSet(H5ArraySet):
 
     @property
     def neurons(self):
-        return AttributeTransformer(
-            "neurons", self.data, self.transforms, data_group="responses"
-        )
+        return AttributeTransformer("neurons", self.data, self.transforms, data_group="responses")
 
     @property
     def info(self):
@@ -499,17 +418,12 @@ class StaticImageSet(H5ArraySet):
         if stats_source is None:
             stats_source = self.stats_source
 
-        tmp = [
-            np.atleast_1d(self.statistics[dk][stats_source]["mean"][()])
-            for dk in self.data_keys
-        ]
+        tmp = [np.atleast_1d(self.statistics[dk][stats_source]["mean"][()]) for dk in self.data_keys]
         return self.transform(self.data_point(*tmp))
 
     def __repr__(self):
         return super().__repr__() + (
-            "\n\t[Stats source: {}]".format(self.stats_source)
-            if self.stats_source is not None
-            else ""
+            "\n\t[Stats source: {}]".format(self.stats_source) if self.stats_source is not None else ""
         )
 
     def __dir__(self):
@@ -521,7 +435,6 @@ class DirectoryAttributeHandler:
     def __init__(self, path, links=None):
         """
         Class that can be used to represent a subdirectory of a FileTree as a property in a FileTree dataset.
-
         Args:
             path (pathlib.Path object): path to the subdiretory
             links (dict, optional): rename mapping for entries within the `path`. Defaults to None, in which case
@@ -576,7 +489,6 @@ class DirectoryAttributeTransformer(DirectoryAttributeHandler):
         Class that can be used to represent a subdirectory of a FileTree as a property in a FileTree dataset.
         Like DirectoryAttributeHandler but allows for id_transform of transforms to be applied to the
         specified attribute.
-
         Args:
             path (pathlib.Path object): path to the subdiretory
             transforms (list): A list of DataTransform objects, whose `id_transform` will be applied to the loaded property sequentially
@@ -601,15 +513,7 @@ class FileTreeDatasetBase(TransformDataset):
     # specify list of transform types that are acceptable
     _transform_types = (DataTransform,)
 
-    def __init__(
-        self,
-        dirname,
-        *data_keys,
-        transforms=None,
-        use_cache=True,
-        output_rename=None,
-        output_dict=False
-    ):
+    def __init__(self, dirname, *data_keys, transforms=None, use_cache=True, output_rename=None, output_dict=False):
         """
         Dataset stored as a file tree. The tree needs to have the subdirs data, meta, meta/neurons, meta/statistics,
         and meta/trials. Please refer to convert_static_h5_dataset_to_folder in neuralpredictors.data.utils for an
@@ -620,7 +524,6 @@ class FileTreeDatasetBase(TransformDataset):
         named 0.npy, 1.npy, ...
         The meta/trials subdirectory must have single .npy files with arrays that provide additional trial based
         meta data.
-
         static22564-2-13-preproc0
         ├── data
         │   ├── behavior [directory with 5955 entries]
@@ -629,12 +532,12 @@ class FileTreeDatasetBase(TransformDataset):
         │   └── responses [5955 entries]
         └── meta
             ├── neurons
-            │   ├── animal_ids.npy
-            │   ├── area.npy
-            │   ├── layer.npy
-            │   ├── scan_idx.npy
-            │   ├── sessions.npy
-            │   └── unit_ids.npy
+            │   ├── animal_ids.npy
+            │   ├── area.npy
+            │   ├── layer.npy
+            │   ├── scan_idx.npy
+            │   ├── sessions.npy
+            │   └── unit_ids.npy
             ├── statistics
             │   ├── behavior
             │   │   ├── all
@@ -719,11 +622,10 @@ class FileTreeDatasetBase(TransformDataset):
             if not Path(dirname[:-4]).exists():
                 self.unzip(dirname, Path(dirname).absolute().parent)
             else:
-                print(
-                    "{} exists already. Not unpacking {}".format(dirname[:-4], dirname)
-                )
+                print("{} exists already. Not unpacking {}".format(dirname[:-4], dirname))
             dirname = dirname[:-4]
 
+        self.dirname = dirname
         self.basepath = Path(dirname).absolute()
         self._config_file = self.basepath / "config.json"
 
@@ -733,8 +635,11 @@ class FileTreeDatasetBase(TransformDataset):
 
         # verify that valid data path exists for each data_key and count number of files
         for data_key in data_keys:
-            datapath = self.resolve_data_path(data_key)
-            number_of_files.append(len(list(datapath.glob("*.npy"))))
+            if data_key not in self.trial_info.keys():
+                datapath = self.resolve_data_path(data_key)
+                number_of_files.append(len(list(datapath.glob("*"))))
+            else:
+                number_of_files.append(len(self.trial_info[data_key]))
 
         # verify that all data_keys directories contain identical number of files (= number of data points)
         if not np.all(np.diff(number_of_files) == 0):
@@ -765,9 +670,7 @@ class FileTreeDatasetBase(TransformDataset):
         datapath = self.basepath / "data" / data_key
 
         if not datapath.exists() or not datapath.is_dir():
-            raise DoesNotExistException(
-                "Data path {} is not a valid directory".format(datapath)
-            )
+            raise DoesNotExistException("Data path {} is not a valid directory".format(datapath))
         return datapath
 
     @staticmethod
@@ -814,8 +717,11 @@ class FileTreeDatasetBase(TransformDataset):
             if self.use_cache and item in self._cache[data_key]:
                 ret.append(self._cache[data_key][item])
             else:
-                datapath = self.resolve_data_path(data_key)
-                val = np.load(datapath / "{}.npy".format(item))
+                if data_key in self.trial_info.keys():
+                    val = self.trial_info[data_key][item : item + 1]
+                else:
+                    datapath = self.resolve_data_path(data_key)
+                    val = np.load(datapath / "{}.npy".format(item))
                 if self.use_cache:
                     self._cache[data_key][item] = val
                 ret.append(val)
@@ -905,18 +811,14 @@ class FileTreeDatasetBase(TransformDataset):
 
     @property
     def statistics(self):
-        return DirectoryAttributeHandler(
-            self.basepath / "meta/statistics", self.config["links"]
-        )
+        return DirectoryAttributeHandler(self.basepath / "meta/statistics", self.config["links"])
 
     @staticmethod
     def match_order(target, permuted, not_exist_ok=False):
         """
         Matches the order or rows in permuted to by returning an index array such that.
-
         Args:
             not_exist_ok: if the element does not exist, don't return an index
-
         Returns: index array `idx` such that `target == permuted[idx, :]`
         """
 
@@ -935,12 +837,9 @@ class FileTreeDatasetBase(TransformDataset):
             print("Encountered {} unmatched elements".format(unmatched_counter))
         return np.array(target_idx, dtype=int), np.array(order, dtype=int)
 
-    def add_neuron_meta(
-        self, name, animal_id, session, scan_idx, unit_id, values, fill_missing=None
-    ):
+    def add_neuron_meta(self, name, animal_id, session, scan_idx, unit_id, values, fill_missing=None):
         """
         Add new meta information about neurons.
-
         Args:
             name:       name of the new meta information
             animal_id:  array with animal_ids matching the size of the first dimension of values
@@ -951,43 +850,30 @@ class FileTreeDatasetBase(TransformDataset):
             fill_missing: fill the values of the new attribute with the specified value. Defaults to None,
                 in which case missing values are filled with NaN
         """
-        if (
-            not len(animal_id)
-            == len(session)
-            == len(scan_idx)
-            == len(unit_id)
-            == len(values)
-        ):
-            raise InconsistentDataException(
-                "number of trials and identifiers not consistent"
-            )
 
-        target = np.c_[
-            (
-                self.neurons.animal_ids,
-                self.neurons.sessions,
-                self.neurons.scan_idx,
-                self.neurons.unit_ids,
-            )
-        ]
+        with no_transforms(self):
+
+            if not self.n_neurons == len(values):
+                raise InconsistentDataException(
+                    f"Number of values ({len(values)}) and neurons in the datasets ({self.n_neurons}) is not consistent."
+                )
+
+        if not len(animal_id) == len(session) == len(scan_idx) == len(unit_id) == len(values):
+            raise InconsistentDataException("number of trials and identifiers not consistent")
+
+        target = np.c_[(self.neurons.animal_ids, self.neurons.sessions, self.neurons.scan_idx, self.neurons.unit_ids)]
         permuted = np.c_[(animal_id, session, scan_idx, unit_id)]
 
         vals = np.ones((len(target),) + values.shape[1:], dtype=values.dtype) * (
             np.nan if fill_missing is None else fill_missing
         )
-        tidx, idx = self.match_order(
-            target, permuted, not_exist_ok=fill_missing is not None
-        )
+        tidx, idx = self.match_order(target, permuted, not_exist_ok=fill_missing is not None)
 
-        assert (
-            np.sum(target[tidx] - permuted[idx, ...]) == 0
-        ), "Something went wrong in sorting"
+        assert np.sum(target[tidx] - permuted[idx, ...]) == 0, "Something went wrong in sorting"
 
         vals[tidx, ...] = values[idx, ...]
         np.save(self.basepath / "meta/neurons/{}.npy".format(name), vals)
-        self.add_log_entry(
-            "Added new neuron meta attribute {} to meta/neurons".format(name)
-        )
+        self.add_log_entry("Added new neuron meta attribute {} to meta/neurons".format(name))
 
     def __repr__(self):
         return "{} {} (n={} items)\n\t{}".format(
@@ -1003,9 +889,7 @@ class FileTreeDataset(FileTreeDatasetBase):
         """
         Convenience function. See `convert_static_h5_dataset_to_folder` in `.utils`
         """
-        convert_static_h5_dataset_to_folder(
-            filename, outpath=outpath, overwrite=overwrite
-        )
+        convert_static_h5_dataset_to_folder(filename, outpath=outpath, overwrite=overwrite)
 
     @property
     def img_shape(self):
@@ -1020,6 +904,38 @@ class FileTreeDataset(FileTreeDatasetBase):
         else:
             val = val[target_group]
         return len(val)
+
+    def change_log(self):
+        if (self.basepath / "change.log").exists():
+            with open(self.basepath / "change.log", "r") as fid:
+                print("".join(fid.readlines()))
+
+    def zip(self, filename=None):
+        """
+        Zips current dataset.
+        Args:
+            filename:  Filename for the zip. Directory name + zip by default.
+        """
+
+        if filename is None:
+            filename = str(self.basepath) + ".zip"
+        zip_dir(filename, self.basepath)
+
+    def unzip(self, filename, path):
+        print("Unzipping {} into {}".format(filename, path))
+        with ZipFile(filename, "r") as zip_obj:
+            zip_obj.extractall(path)
+
+    def add_link(self, attr, new_name):
+        """
+        Add a new dataset that links to an existing dataset.
+        For instance `targets` that links to `responses`
+        Args:
+            attr:       existing attribute such as `responses`
+            new_name:   name of the new attribute reference.
+        """
+        if not (self.basepath / "data/{}".format(attr)).exists():
+            raise DoesNotExistException("Link target does not exist")
 
 
 class MovieFileTreeDataset(FileTreeDatasetBase):
@@ -1052,14 +968,15 @@ class MovieFileTreeDataset(FileTreeDatasetBase):
             val = val[target_group]
         return val.shape[-1]
 
+    @property
+    def statistics(self):
+        return DirectoryAttributeHandler(self.basepath / "meta/statistics", self.config["links"])
+
     def transformed_mean(self, stats_source=None):
         if stats_source is None:
             stats_source = self.stats_source
 
-        tmp = [
-            np.atleast_1d(self.statistics[g][stats_source]["mean"][()])
-            for g in self.data_keys
-        ]
+        tmp = [np.atleast_1d(self.statistics[g][stats_source]["mean"][()]) for g in self.data_keys]
         x = self.transform(self.data_point(*tmp), exclude=(Subsequence, Delay))
         if self.rename_output:
             x = self._output_point(*x)

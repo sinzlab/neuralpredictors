@@ -22,8 +22,7 @@ def zip_dir(zip_name: str, source_dir):
 
 
 def _savenpy(path, val, overwrite):
-
-    if not np.isscalar(val) and val[0].dtype.char == "S":  # convert bytes to unicode
+    if not np.isscalar(val) and len(val.shape) > 0 and val[0].dtype.char == "S":  # convert bytes to unicode
         val = val.astype(str)
     if not path.exists() or overwrite:
         logger.info("Saving", path)
@@ -39,7 +38,7 @@ def convert_movies_h5_dataset_to_folder(
     data_keys=("inputs", "responses", "behavior", "eye_position"),
 ):
     """
-    Converts an HDF5 dataset used for mouse movie data into a directory structure 
+    Converts an HDF5 dataset used for mouse movie data into a directory structure
     that can be used by the FileTreeDataset.
 
     Args:
@@ -51,15 +50,16 @@ def convert_movies_h5_dataset_to_folder(
         data_keys = {k: k for k in data_keys}
 
     h5file = Path(filename)
-    outpath = Path(outpath) or h5file.with_suffix(
-        ""
-    )  # drop extension to form target output
+    outpath = Path(outpath) or h5file.with_suffix("")  # drop extension to form target output
 
     with h5py.File(filename, "r") as fid:
         for data_key, mapped_name in data_keys.items():
             subpath = outpath / "data/{}".format(mapped_name)
             subpath.mkdir(exist_ok=True, parents=True)
-            for key in tqdm(fid[data_key].keys(), desc="Saving {}".format(data_key),):
+            for key in tqdm(
+                fid[data_key].keys(),
+                desc="Saving {}".format(data_key),
+            ):
                 outfile = subpath / "{}.npy".format(key)
                 _savenpy(outfile, fid[data_key][key][()], overwrite)
 
@@ -103,7 +103,9 @@ def convert_movies_h5_dataset_to_folder(
                 data_file = outpath / "meta/statistics/{}.npy".format(name)
                 data_file.parent.mkdir(exist_ok=True, parents=True)
                 _savenpy(
-                    data_file, node[()], overwrite,
+                    data_file,
+                    node[()],
+                    overwrite,
                 )
 
         logger.info("Saving statistics")
@@ -140,9 +142,7 @@ def convert_static_h5_dataset_to_folder(filename, outpath=None, overwrite=False)
         for data_key in ["tiers"]:
             subpath = outpath / "meta/trials"
             subpath.mkdir(exist_ok=True, parents=True)
-            _savenpy(
-                subpath / "{}.npy".format(data_key), fid[data_key].value, overwrite
-            )
+            _savenpy(subpath / "{}.npy".format(data_key), fid[data_key][...], overwrite)
 
         # save meta info
         for meta_type, target in zip(["item_info", "neurons"], ["trials", "neurons"]):
@@ -150,11 +150,7 @@ def convert_static_h5_dataset_to_folder(filename, outpath=None, overwrite=False)
                 subpath = outpath / "meta/{}".format(target)
                 subpath.mkdir(exist_ok=True, parents=True)
 
-                _savenpy(
-                    subpath / "{}.npy".format(meta_key),
-                    fid[meta_type][meta_key].value,
-                    overwrite,
-                )
+                _savenpy(subpath / "{}.npy".format(meta_key), fid[meta_type][meta_key][...], overwrite)
 
         # save statistics
         def statistics_func(name, node):
@@ -163,10 +159,6 @@ def convert_static_h5_dataset_to_folder(filename, outpath=None, overwrite=False)
                 subpath = outpath / "meta/statistics" / name
                 subpath.mkdir(exist_ok=True, parents=True)
             else:
-                _savenpy(
-                    outpath / "meta/statistics" / "{}.npy".format(name),
-                    node.value,
-                    overwrite,
-                )
+                _savenpy(outpath / "meta/statistics" / "{}.npy".format(name), node[...], overwrite)
 
         fid["statistics"].visititems(statistics_func)

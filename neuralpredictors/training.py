@@ -300,21 +300,13 @@ def early_stopping(
         old_objective = _objective()
         if restore_best:
             model.load_state_dict(best_state_dict)
-            print(
-                "Restoring best model after lr decay! {:.6f} ---> {:.6f}".format(
-                    old_objective, _objective()
-                )
-            )
+            print("Restoring best model after lr decay! {:.6f} ---> {:.6f}".format(old_objective, _objective()))
 
     def finalize(model, best_state_dict):
         old_objective = _objective()
         if restore_best:
             model.load_state_dict(best_state_dict)
-            print(
-                "Restoring best model! {:.6f} ---> {:.6f}".format(
-                    old_objective, _objective()
-                )
-            )
+            print("Restoring best model! {:.6f} ---> {:.6f}".format(old_objective, _objective()))
         else:
             print("Final best model! objective {:.6f}".format(_objective()))
 
@@ -347,9 +339,7 @@ def early_stopping(
 
             if current_objective * maximize < best_objective * maximize - tolerance:
                 print(
-                    "[{:03d}|{:02d}/{:02d}] ---> {}".format(
-                        epoch, patience_counter, patience, current_objective
-                    ),
+                    "[{:03d}|{:02d}/{:02d}] ---> {}".format(epoch, patience_counter, patience, current_objective),
                     flush=True,
                 )
                 best_state_dict = copy_state(model)
@@ -358,9 +348,7 @@ def early_stopping(
             else:
                 patience_counter += 1
                 print(
-                    "[{:03d}|{:02d}/{:02d}] -/-> {}".format(
-                        epoch, patience_counter, patience, current_objective
-                    ),
+                    "[{:03d}|{:02d}/{:02d}] -/-> {}".format(epoch, patience_counter, patience, current_objective),
                     flush=True,
                 )
 

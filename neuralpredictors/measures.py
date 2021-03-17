@@ -17,12 +17,8 @@ def corr(y1, y2, axis=-1, eps=1e-8, **kwargs):
 
     Returns: correlation array
     """
-    y1 = (y1 - y1.mean(axis=axis, keepdims=True)) / (
-        y1.std(axis=axis, keepdims=True, ddof=0) + eps
-    )
-    y2 = (y2 - y2.mean(axis=axis, keepdims=True)) / (
-        y2.std(axis=axis, keepdims=True, ddof=0) + eps
-    )
+    y1 = (y1 - y1.mean(axis=axis, keepdims=True)) / (y1.std(axis=axis, keepdims=True, ddof=0) + eps)
+    y2 = (y2 - y2.mean(axis=axis, keepdims=True)) / (y2.std(axis=axis, keepdims=True, ddof=0) + eps)
     return (y1 * y2).mean(axis=axis, **kwargs)
 
 
@@ -47,10 +43,10 @@ def ptcorr(y1, y2, dim=-1, eps=1e-8, **kwargs):
 class Corr(nn.Module):
     def __init__(self, eps=1e-12, detach_target=True):
         """
-        Compute correlation between the output and the target 
+        Compute correlation between the output and the target
 
         Args:
-            eps (float, optional): Used to offset the computed variance to provide numerical stability. 
+            eps (float, optional): Used to offset the computed variance to provide numerical stability.
                 Defaults to 1e-12.
             detach_target (bool, optional): If True, `target` tensor is detached prior to computation. Appropriate when
                 using this as a loss to train on. Defaults to True.
@@ -112,9 +108,7 @@ class PoissonLoss(nn.Module):
         self.per_neuron = per_neuron
         self.avg = avg
         if self.avg:
-            warnings.warn(
-                "Poissonloss is averaged per batch. It's recommended to use `sum` instead"
-            )
+            warnings.warn("Poissonloss is averaged per batch. It's recommended to use `sum` instead")
 
     def forward(self, output, target):
         target = target.detach()
@@ -130,7 +124,7 @@ class PoissonLoss3d(PoissonLoss):
     """
     Same as PoissonLoss, except that this automatically adjusts the length of the
     target along the 1st dimension (expected to correspond to the temporal dimension), such that
-    when lag = target.size(1) - outout.size(1) > 0, 
+    when lag = target.size(1) - outout.size(1) > 0,
     PoissonLoss(output, target[:, lag:])
     is evaluted instead (thus equivalent to skipping the first `lag` frames).
 

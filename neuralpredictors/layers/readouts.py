@@ -2,7 +2,6 @@ import warnings
 from collections import OrderedDict
 
 import numpy as np
-from scipy.stats import ortho_group
 import torch
 from torch import nn as nn
 from torch.nn import ModuleDict
@@ -10,7 +9,6 @@ from torch.nn import Parameter
 from torch.nn import functional as F
 
 from ..constraints import positive
-from ..utils import BiasNet
 
 
 class ConfigurationError(Exception):
@@ -29,7 +27,8 @@ class Readout:
         s += " [{} regularizers: ".format(self.__class__.__name__)
         ret = []
         for attr in filter(
-            lambda x: not x.startswith("_") and ("gamma" in x or "pool" in x or "positive" in x), dir(self)
+            lambda x: not x.startswith("_") and ("gamma" in x or "pool" in x or "positive" in x),
+            dir(self),
         ):
             ret.append("{} = {}".format(attr, getattr(self, attr)))
         return s + "|".join(ret) + "]\n"
@@ -40,7 +39,16 @@ class SpatialXFeatureLinear(nn.Module):
     Factorized fully connected layer. Weights are a sum of outer products between a spatial filter and a feature vector.
     """
 
-    def __init__(self, in_shape, outdims, bias, normalize=True, init_noise=1e-3, constrain_pos=False, **kwargs):
+    def __init__(
+        self,
+        in_shape,
+        outdims,
+        bias,
+        normalize=True,
+        init_noise=1e-3,
+        constrain_pos=False,
+        **kwargs,
+    ):
         super().__init__()
         self.in_shape = in_shape
         self.outdims = outdims
@@ -98,9 +106,9 @@ class SpatialXFeatureLinear(nn.Module):
         if self.constrain_pos:
             positive(self.features)
             positive(self.normalized_spatial)
-            
-        y = torch.einsum('ncwh,owh->nco', x, self.normalized_spatial)
-        y = torch.einsum('nco,oc->no', y, self.features)
+
+        y = torch.einsum("ncwh,owh->nco", x, self.normalized_spatial)
+        y = torch.einsum("nco,oc->no", y, self.features)
         if self.bias is not None:
             y = y + self.bias
         return y
@@ -148,7 +156,17 @@ class ClonedReadout(Readout, nn.Module):
 
 
 class PointPooled2d(nn.Module):
-    def __init__(self, in_shape, outdims, pool_steps, bias, pool_kern, init_range, align_corners=True, **kwargs):
+    def __init__(
+        self,
+        in_shape,
+        outdims,
+        pool_steps,
+        bias,
+        pool_kern,
+        init_range,
+        align_corners=True,
+        **kwargs,
+    ):
         """
         This readout learns a point in the core feature space for each neuron, with help of torch.grid_sample, that best
         predicts its response. Multiple average pooling steps are applied to reduce search space in each stage and thereby, faster convergence to the best prediction point.
@@ -497,7 +515,12 @@ class Pyramid(nn.Module):
         if self.downsample:
             lo = smooth[:, :, ::2, ::2]
             lo2 = 4 * F.conv_transpose2d(
-                lo, filter, stride=2, padding=self._pad, output_padding=output_padding, groups=c
+                lo,
+                filter,
+                stride=2,
+                padding=self._pad,
+                output_padding=output_padding,
+                groups=c,
             )
         else:
             lo = lo2 = smooth
@@ -522,7 +545,17 @@ class Pyramid(nn.Module):
 
 class PointPyramid2d(nn.Module):
     def __init__(
-        self, in_shape, outdims, scale_n, positive, bias, init_range, downsample, type, align_corners=True, **kwargs
+        self,
+        in_shape,
+        outdims,
+        scale_n,
+        positive,
+        bias,
+        init_range,
+        downsample,
+        type,
+        align_corners=True,
+        **kwargs,
     ):
         super().__init__()
         self.in_shape = in_shape
@@ -599,6 +632,7 @@ class FullGaussian2d(nn.Module):
     """
     A readout using a spatial transformer layer whose positions are sampled from one Gaussian per neuron. Mean
     and covariance of that Gaussian are learned.
+
     Args:
         in_shape (list, tuple): shape of the input feature map [channels, width, height]
         outdims (int): number of output units
@@ -638,18 +672,10 @@ class FullGaussian2d(nn.Module):
                     'shared_grid': torch.nn.Parameter or None
                 }
                 See documentation of `shared_features` for specification.
+
         source_grid (numpy.array):
                 Source grid for the grid_mean_predictor.
                 Needs to be of size neurons x grid_mean_predictor[input_dimensions]
-        shared_transform (torch.nn.Parameter or None):
-                This is only used if grid_mean_predictor is not None. If `shared_transform` is None, this readout will
-                create its own mu_transform. If it is set to a mu_transform Parameter of another readout, it will replace
-                 the mu_transform of this readout up to an additional unique bias.
-        init_noise (float):
-                Std of the normal distribution used to initialize the weights and biases.
-        init_transform_scale (float):
-                Only used if grid_mean_predictor is not None and shared_transform is None. Scale for the random
-                orthogonal matrix that the mu_transform is initialized with.
 
     """
 
@@ -667,9 +693,6 @@ class FullGaussian2d(nn.Module):
         shared_features=None,
         shared_grid=None,
         source_grid=None,
-        shared_transform=None,
-        init_noise=1e-3,
-        init_transform_scale=0.2,
         **kwargs,
     ):
 
@@ -684,8 +707,7 @@ class FullGaussian2d(nn.Module):
         # store statistics about the images and neurons
         self.in_shape = in_shape
         self.outdims = outdims
-        self.init_noise = init_noise
-        self.init_transform_scale = init_transform_scale
+
         # sample a different location per example
         self.batch_sample = batch_sample
 
@@ -702,7 +724,7 @@ class FullGaussian2d(nn.Module):
         elif grid_mean_predictor is not None and shared_grid is not None:
             raise ConfigurationError("Shared grid_mean_predictor and shared_grid_mean cannot both be set")
         elif grid_mean_predictor is not None:
-            self.init_grid_predictor(source_grid=source_grid, shared_transform=shared_transform, **grid_mean_predictor)
+            self.init_grid_predictor(source_grid=source_grid, **grid_mean_predictor)
         elif shared_grid is not None:
             self.initialize_shared_grid(**(shared_grid or {}))
 
@@ -805,24 +827,27 @@ class FullGaussian2d(nn.Module):
             )  # grid locations in feature space sampled randomly around the mean self.mu
         else:
             return torch.clamp(
-                torch.einsum("ancd,bnid->bnic", self.sigma, norm) + self.mu, min=-1, max=1
+                torch.einsum("ancd,bnid->bnic", self.sigma, norm) + self.mu,
+                min=-1,
+                max=1,
             )  # grid locations in feature space sampled randomly around the mean self.mu
 
-    def init_grid_predictor(
-        self, source_grid, hidden_features=20, hidden_layers=0, final_tanh=False, shared_transform=None
-    ):
+    def init_grid_predictor(self, source_grid, hidden_features=20, hidden_layers=0, final_tanh=False):
         self._original_grid = False
-        if shared_transform is None:
-            layers = [nn.Linear(source_grid.shape[1], hidden_features if hidden_layers > 0 else 2)]
+        layers = [nn.Linear(source_grid.shape[1], hidden_features if hidden_layers > 0 else 2)]
 
-            for i in range(hidden_layers):
-                layers.extend([nn.ELU(), nn.Linear(hidden_features, hidden_features if i < hidden_layers - 1 else 2)])
+        for i in range(hidden_layers):
+            layers.extend(
+                [
+                    nn.ELU(),
+                    nn.Linear(hidden_features, hidden_features if i < hidden_layers - 1 else 2),
+                ]
+            )
 
-            if final_tanh:
-                layers.append(nn.Tanh())
-            self.mu_transform = nn.Sequential(*layers)
-        else:
-            self.mu_transform = BiasNet(base_net=shared_transform)
+        if final_tanh:
+            layers.append(nn.Tanh())
+        self.mu_transform = nn.Sequential(*layers)
+
         source_grid = source_grid - source_grid.mean(axis=0, keepdims=True)
         source_grid = source_grid / np.abs(source_grid).max()
         self.register_buffer("source_grid", torch.from_numpy(source_grid.astype(np.float32)))
@@ -840,28 +865,11 @@ class FullGaussian2d(nn.Module):
             self.sigma.data.fill_(self.init_sigma)
         else:
             self.sigma.data.uniform_(-self.init_sigma, self.init_sigma)
-
-        self._features.data.normal_(0, self.init_noise)
-
-        if self._predicted_grid:
-            if isinstance(self.mu_transform, nn.Sequential):
-                for layer in self.mu_transform:
-                    layer.bias.data.normal_(0, self.init_noise)
-                if len(self.mu_transform) == 1:
-                    self.mu_transform[0].weight.data = torch.from_numpy(
-                        self.init_transform_scale * ortho_group.rvs(2).astype(np.float32)
-                    )
-            else:
-                self.mu_transform.bias.data.normal_(0, self.init_noise)
-
-        if self._shared_grid:
-            self.mu_transform.bias.data.normal_(0, self.init_noise)
-            self.mu_transform.weight.data = torch.eye(2)
-
+        self._features.data.fill_(1 / self.in_shape[0])
         if self._shared_features:
-            self.scales.data.normal_(1.0, self.init_noise)
+            self.scales.data.fill_(1.0)
         if self.bias is not None:
-            self.bias.data.normal_(0, self.init_noise)
+            self.bias.data.fill_(0)
 
     def initialize_features(self, match_ids=None, shared_features=None):
         """
@@ -916,6 +924,8 @@ class FullGaussian2d(nn.Module):
             self._mu = shared_grid
             self._original_grid = False
             self.mu_transform = nn.Linear(2, 2)
+            self.mu_transform.bias.data.fill_(0.0)
+            self.mu_transform.weight.data = torch.eye(2)
         else:
             self._mu = Parameter(torch.Tensor(1, n_match_ids, 1, 2))  # feature weights for each channel of the core
         _, sharing_idx = np.unique(match_ids, return_inverse=True)
@@ -934,6 +944,7 @@ class FullGaussian2d(nn.Module):
                            if sample is True/False, overrides the model_state (i.e training or eval) and does as instructed
             shift (bool): shifts the location of the grid (from eye-tracking data)
             out_idx (bool): index of neurons to be predicted
+
         Returns:
             y: neuronal activity
         """
@@ -989,6 +1000,92 @@ class FullGaussian2d(nn.Module):
         for ch in self.children():
             r += "  -> " + ch.__repr__() + "\n"
         return r
+
+
+class RemappedGaussian2d(FullGaussian2d):
+    """
+    A readout using a spatial transformer layer whose positions are sampled from one Gaussian per neuron. Mean
+    and covariance of that Gaussian are learned. In addition, there is an image dependent remapping of neurons
+    locations.
+
+    For most parameters see:  FullGaussian2d
+
+    Args:
+        remap_layers (int): number of layers of the remapping network
+        remap_kernel (int): conv kernel size of the remapping network
+        max_remap_amplitude (int): maximal amplitude of remapping (factor on output of remapping network)
+
+
+    """
+
+    def __init__(self, *args, remap_layers=2, remap_kernel=3, max_remap_amplitude=0.2, **kwargs):
+
+        super().__init__(*args, **kwargs)
+        channels, width, height = self.in_shape
+        remapper = nn.Sequential()
+        for i in range(remap_layers - 1):
+            remapper.add_module(f"conv{i}", nn.Conv2d(channels, channels, remap_kernel, padding=True))
+            remapper.add_module(f"norm{i}", nn.BatchNorm2d(channels))
+            remapper.add_module(f"nonlin{i}", nn.ELU())
+        else:
+            remapper.add_module(
+                f"conv{remap_layers}",
+                nn.Conv2d(channels, 2, remap_kernel, padding=True),
+            )
+            remapper.add_module(f"norm{remap_layers}", nn.BatchNorm2d(2))
+            remapper.add_module(f"nonlin{remap_layers}", nn.Tanh())
+        self.remap_field = remapper
+        self.max_remap_amplitude = max_remap_amplitude
+
+    @staticmethod
+    def init_conv(m):
+        if isinstance(m, nn.Conv2d):
+            nn.init.xavier_normal_(m.weight.data)
+            if m.bias is not None:
+                m.bias.data.fill_(0)
+
+    def initialize_remap_field(self):
+        self.apply(self.init_conv)
+
+    def forward(self, x, sample=None, shift=None, out_idx=None):
+        offset_field = self.remap_field(x) * self.max_remap_amplitude
+
+        N, c, w, h = x.size()
+        c_in, w_in, h_in = self.in_shape
+        if (c_in, w_in, h_in) != (c, w, h):
+            raise ValueError("the specified feature map dimension is not the readout's expected input dimension")
+        feat = self.features.view(1, c, self.outdims)
+        bias = self.bias
+        outdims = self.outdims
+
+        if self.batch_sample:
+            # sample the grid_locations separately per image per batch
+            grid = self.sample_grid(batch_size=N, sample=sample)  # sample determines sampling from Gaussian
+        else:
+            # use one sampled grid_locations for all images in the batch
+            grid = self.sample_grid(batch_size=1, sample=sample).expand(N, outdims, 1, 2)
+
+        if out_idx is not None:
+            if isinstance(out_idx, np.ndarray):
+                if out_idx.dtype == bool:
+                    out_idx = np.where(out_idx)[0]
+            feat = feat[:, :, out_idx]
+            grid = grid[:, out_idx]
+            if bias is not None:
+                bias = bias[out_idx]
+            outdims = len(out_idx)
+
+        offsets = F.grid_sample(offset_field, grid, align_corners=self.align_corners)
+        grid = grid + offsets.permute(0, 2, 3, 1)
+        if shift is not None:
+            grid = grid + shift[:, None, None, :]
+
+        y = F.grid_sample(x, grid, align_corners=self.align_corners)
+        y = (y.squeeze(-1) * feat).sum(1).view(N, outdims)
+
+        if self.bias is not None:
+            y = y + bias
+        return y
 
 
 class Gaussian3d(nn.Module):
@@ -1402,6 +1499,79 @@ class UltraSparse(nn.Module):
         return r
 
 
+class AttentionReadout(nn.Module):
+    def __init__(
+        self,
+        in_shape,
+        outdims,
+        bias,
+        init_noise=1e-3,
+        attention_kernel=1,
+        attention_layers=1,
+        **kwargs,
+    ):
+        super().__init__()
+        self.in_shape = in_shape
+        self.outdims = outdims
+        c, w, h = in_shape
+        self.features = Parameter(torch.Tensor(self.outdims, c))
+
+        attention = nn.Sequential()
+        for i in range(attention_layers - 1):
+            attention.add_module(f"conv{i}", nn.Conv2d(c, c, attention_kernel, padding=attention_kernel > 1))
+            attention.add_module(f"norm{i}", nn.BatchNorm2d(c))
+            attention.add_module(f"nonlin{i}", nn.ELU())
+        else:
+            attention.add_module(
+                f"conv{attention_layers}",
+                nn.Conv2d(c, outdims, attention_kernel, padding=attention_kernel > 1),
+            )
+        self.attention = attention
+
+        self.init_noise = init_noise
+        if bias:
+            bias = Parameter(torch.Tensor(self.outdims))
+            self.register_parameter("bias", bias)
+        else:
+            self.register_parameter("bias", None)
+        self.initialize()
+
+    @staticmethod
+    def init_conv(m):
+        if isinstance(m, nn.Conv2d):
+            nn.init.xavier_normal_(m.weight.data)
+            if m.bias is not None:
+                m.bias.data.fill_(0)
+
+    def initialize_attention(self):
+        self.apply(self.init_conv)
+
+    def initialize(self):
+        self.features.data.normal_(0, self.init_noise)
+        if self.bias is not None:
+            self.bias.data.fill_(0)
+        self.initialize_attention()
+
+    def feature_l1(self, average=True):
+        if average:
+            return self.features.abs().mean()
+        else:
+            return self.features.abs().sum()
+
+    def forward(self, x, shift=None):
+        attention = self.attention(x)
+        b, c, w, h = attention.shape
+        attention = F.softmax(attention.view(b, c, -1), dim=-1).view(b, c, w, h)
+        y = torch.einsum("bnwh,bcwh->bcn", attention, x)
+        y = torch.einsum("bcn,nc->bn", y, self.features)
+        if self.bias is not None:
+            y = y + self.bias
+        return y
+
+    def __repr__(self):
+        return self.__class__.__name__ + " (" + "{} x {} x {}".format(*self.in_shape) + " -> " + str(self.outdims) + ")"
+
+
 # ------------ Multi Readouts ------------------------
 
 
@@ -1423,7 +1593,10 @@ class MultiReadout(Readout, ModuleDict):
 
         for i, (k, n_neurons) in enumerate(self.neurons.items()):
             if i == 0 or clone_readout is False:
-                self.add_module(k, self._base_readout(in_shape=in_shape, outdims=n_neurons, **kwargs))
+                self.add_module(
+                    k,
+                    self._base_readout(in_shape=in_shape, outdims=n_neurons, **kwargs),
+                )
                 original_readout = k
             elif i > 0 and clone_readout is True:
                 self.add_module(k, ClonedReadout(self[original_readout], **kwargs))

@@ -43,7 +43,7 @@ def hermite_2d(N, npts, xvalmax=None):
     xvalmax *= 1 - 1 / npts
     xvals = np.linspace(-xvalmax, xvalmax, npts, endpoint=True)[..., None]
 
-    gxv = np.exp(-xvals ** 2 / 4)
+    gxv = np.exp(-(xvals ** 2) / 4)
     gaussian = np.dot(gxv, gxv.T)
 
     # Hermite polynomials

@@ -162,7 +162,8 @@ class H5SequenceSet(TransformDataset):
         self.transforms = transforms or []
 
         self.data_point = namedtuple("DataPoint", data_keys)
-        self.output_point = namedtuple("OutputPoint", [output_rename.get(k, k) for k in data_keys])
+        renamed_keys = [output_rename.get(k, k) for k in data_keys]
+        self.output_point = namedtuple("OutputPoint", renamed_keys)
 
     def __dir__(self):
         attrs = set(super().__dir__())
@@ -611,11 +612,8 @@ class FileTreeDatasetBase(TransformDataset):
         # a flag that can be changed to turn renaming on/off
         self.rename_output = bool(output_rename)
         self._output_rename = output_rename
-        self._output_point = (
-            namedtuple("OutputPoint", [output_rename.get(k, k) for k in data_keys])
-            if output_rename
-            else self.data_point
-        )
+        renamed_keys = [output_rename.get(k, k) for k in data_keys]
+        self._output_point = namedtuple("OutputPoint", renamed_keys) if output_rename else self.data_point
 
         # if dirname is a zip file, auto expand into the container folder
         if dirname.endswith(".zip"):

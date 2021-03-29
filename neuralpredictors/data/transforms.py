@@ -266,7 +266,6 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
         out_name = "responses" if "responses" in data.statistics.keys() else "targets"
         eye_name = "pupil_center" if "pupil_center" in data.data_keys else "eye_position"
 
-
         self._inputs_mean = data.statistics[in_name][stats_source]["mean"][()] if inputs_mean is None else inputs_mean
         self._inputs_std = data.statistics[in_name][stats_source]["std"][()] if inputs_mean is None else inputs_std
 

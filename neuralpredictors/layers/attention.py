@@ -9,7 +9,16 @@ class AttentionConv(nn.Module):
     Implementation adapted from https://github.com/leaderj1001/Stand-Alone-Self-Attention
     """
 
-    def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0, groups=1, bias=False):
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        kernel_size,
+        stride=1,
+        padding=0,
+        groups=1,
+        bias=False,
+    ):
         """
         Parameters are intended to behave equivalently (and therefore sever as a drop-in replacement) to `torch.Conv2d`.
         Nevertheless, the underlying mechanism is conceptually different.
@@ -70,4 +79,7 @@ class AttentionConv(nn.Module):
 
     @property
     def weight(self):
-        return torch.cat((self.key_conv.weight, self.value_conv.weight, self.query_conv.weight), dim=0)
+        return torch.cat(
+            (self.key_conv.weight, self.value_conv.weight, self.query_conv.weight),
+            dim=0,
+        )

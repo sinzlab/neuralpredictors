@@ -264,6 +264,8 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
 
         in_name = "images" if "images" in data.statistics.keys() else "inputs"
         out_name = "responses" if "responses" in data.statistics.keys() else "targets"
+        eye_name = "pupil_center" if "pupil_center" in data.data_keys else "eye_position"
+
 
         self._inputs_mean = data.statistics[in_name][stats_source]["mean"][()] if inputs_mean is None else inputs_mean
         self._inputs_std = data.statistics[in_name][stats_source]["std"][()] if inputs_mean is None else inputs_std
@@ -294,11 +296,11 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
         transforms["trial_idx"] = lambda x: (x - trial_idx_mean) / trial_idx_std
         itransforms["trial_idx"] = lambda x: x * trial_idx_std + trial_idx_mean
 
-        if "pupil_center" in data.data_keys:
-            self._eye_mean = np.array(data.statistics["pupil_center"][stats_source]["mean"])
-            self._eye_std = np.array(data.statistics["pupil_center"][stats_source]["std"])
-            transforms["pupil_center"] = lambda x: (x - self._eye_mean) / self._eye_std
-            itransforms["pupil_center"] = lambda x: x * self._eye_std + self._eye_mean
+        if eye_name in data.data_keys:
+            self._eye_mean = np.array(data.statistics[eye_name][stats_source]["mean"])
+            self._eye_std = np.array(data.statistics[eye_name][stats_source]["std"])
+            transforms[eye_name] = lambda x: (x - self._eye_mean) / self._eye_std
+            itransforms[eye_name] = lambda x: x * self._eye_std + self._eye_mean
 
         if "behavior" in data.data_keys:
             s = np.array(data.statistics["behavior"][stats_source]["std"])

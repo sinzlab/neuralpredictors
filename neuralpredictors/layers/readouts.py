@@ -771,6 +771,7 @@ class FullGaussian2d(nn.Module):
     def grid(self):
         return self.sample_grid(batch_size=1, sample=False)
 
+    @property
     def mu_dispersion(self):
         """
         Returns the standard deviation of the learned positions.

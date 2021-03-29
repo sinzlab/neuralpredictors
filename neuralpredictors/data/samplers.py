@@ -1,6 +1,7 @@
 from collections import Counter
 import numpy as np
 from torch.utils.data import Sampler
+import torch
 
 
 class RepeatsBatchSampler(Sampler):

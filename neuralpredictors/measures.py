@@ -4,13 +4,60 @@ import numpy as np
 import warnings
 
 
+def corr(y1, y2, axis=-1, eps=1e-8, **kwargs):
+    """
+    Compute the correlation between two NumPy arrays along the specified dimension(s).
+
+    Args:
+        y1:      first NumPy array
+        y2:      second NumPy array
+        axis:    dimension(s) along which the correlation is computed. Any valid NumPy axis spec works here
+        eps:     offset to the standard deviation to avoid exploding the correlation due to small division (default 1e-8)
+        **kwargs: passed to final numpy.mean operatoin over standardized y1 * y2
+
+    Returns: correlation array
+    """
+    y1 = (y1 - y1.mean(axis=axis, keepdims=True)) / (y1.std(axis=axis, keepdims=True, ddof=0) + eps)
+    y2 = (y2 - y2.mean(axis=axis, keepdims=True)) / (y2.std(axis=axis, keepdims=True, ddof=0) + eps)
+    return (y1 * y2).mean(axis=axis, **kwargs)
+
+
+def ptcorr(y1, y2, dim=-1, eps=1e-8, **kwargs):
+    """
+    Compute the correlation between two PyTorch tensors along the specified dimension(s).
+
+    Args:
+        y1:      first PyTorch tensor
+        y2:      second PyTorch tensor
+        dim:     dimension(s) along which the correlation is computed. Any valid PyTorch dim spec works here
+        eps:     offset to the standard deviation to avoid exploding the correlation due to small division (default 1e-8)
+        **kwargs: passed to final numpy.mean operatoin over standardized y1 * y2
+
+    Returns: correlation tensor
+    """
+    y1 = (y1 - y1.mean(dim=dim, keepdim=True)) / (y1.std(dim=dim, keepdim=True) + eps)
+    y2 = (y2 - y2.mean(dim=dim, keepdim=True)) / (y2.std(dim=dim, keepdim=True) + eps)
+    return (y1 * y2).mean(dim=dim, **kwargs)
+
+
 class Corr(nn.Module):
-    def __init__(self, eps=1e-12):
+    def __init__(self, eps=1e-12, detach_target=True):
+        """
+        Compute correlation between the output and the target
+
+        Args:
+            eps (float, optional): Used to offset the computed variance to provide numerical stability.
+                Defaults to 1e-12.
+            detach_target (bool, optional): If True, `target` tensor is detached prior to computation. Appropriate when
+                using this as a loss to train on. Defaults to True.
+        """
         self.eps = eps
+        self.detach_target = detach_target
         super().__init__()
 
     def forward(self, output, target):
-        target = target.detach()
+        if self.detach_target:
+            target = target.detach()
         delta_out = output - output.mean(0, keepdim=True)
         delta_target = target - target.mean(0, keepdim=True)
 
@@ -21,6 +68,27 @@ class Corr(nn.Module):
             (var_out + self.eps) * (var_target + self.eps)
         ).sqrt()
         return corrs
+
+
+class AvgCorr(nn.Module):
+    def __init__(self, eps=1e-12):
+        self.eps = eps
+        super().__init__()
+
+    def forward(self, output, target):
+        # Add target detach here
+
+        delta_out = output - output.mean(0, keepdim=True)
+        delta_target = target - target.mean(0, keepdim=True)
+
+        var_out = delta_out.pow(2).mean(0, keepdim=True)
+        var_target = delta_target.pow(2).mean(0, keepdim=True)
+
+        corrs = (delta_out * delta_target).mean(0, keepdim=True) / (
+            (var_out + self.eps) * (var_target + self.eps)
+        ).sqrt()
+        # TODO: address the sign flip applied here
+        return -corrs.mean()
 
 
 class PoissonLoss(nn.Module):
@@ -40,7 +108,7 @@ class PoissonLoss(nn.Module):
         self.per_neuron = per_neuron
         self.avg = avg
         if self.avg:
-            warnings.warn("Poissonloss is averaged per batch. It's recommended so use sum instead")
+            warnings.warn("Poissonloss is averaged per batch. It's recommended to use `sum` instead")
 
     def forward(self, output, target):
         target = target.detach()
@@ -52,19 +120,20 @@ class PoissonLoss(nn.Module):
             return loss.mean(dim=0) if self.avg else loss.sum(dim=0)
 
 
-class PoissonLoss3d(nn.Module):
-    def __init__(self, bias=1e-16, per_neuron=False):
-        super().__init__()
-        self.bias = bias
-        self.per_neuron = per_neuron
+class PoissonLoss3d(PoissonLoss):
+    """
+    Same as PoissonLoss, except that this automatically adjusts the length of the
+    target along the 1st dimension (expected to correspond to the temporal dimension), such that
+    when lag = target.size(1) - outout.size(1) > 0,
+    PoissonLoss(output, target[:, lag:])
+    is evaluted instead (thus equivalent to skipping the first `lag` frames).
+
+    The constructor takes in the same arguments as in PoissonLoss
+    """
 
     def forward(self, output, target):
         lag = target.size(1) - output.size(1)
-        loss = output - target[:, lag:, :] * torch.log(output + self.bias)
-        if not self.per_neuron:
-            return loss.mean()
-        else:
-            return loss.view(-1, loss.shape[-1]).mean(dim=0)
+        return super().forward(output, target[:, lag:])
 
 
 class GammaLoss(nn.Module):
@@ -126,40 +195,3 @@ class AnscombeMSE(nn.Module):
             return loss.mean()
         else:
             return loss.view(-1, loss.shape[-1]).mean(dim=0)
-
-
-class AvgCorr(nn.Module):
-    def __init__(self, eps=1e-12):
-        self.eps = eps
-        super().__init__()
-
-    def forward(self, output, target):
-        delta_out = output - output.mean(0, keepdim=True)
-        delta_target = target - target.mean(0, keepdim=True)
-
-        var_out = delta_out.pow(2).mean(0, keepdim=True)
-        var_target = delta_target.pow(2).mean(0, keepdim=True)
-
-        corrs = (delta_out * delta_target).mean(0, keepdim=True) / (
-            (var_out + self.eps) * (var_target + self.eps)
-        ).sqrt()
-        return -corrs.mean()
-
-
-def corr(y1, y2, axis=-1, eps=1e-8, **kwargs):
-    """
-    Compute the correlation between two matrices along certain dimensions.
-
-    Args:
-        y1:      first matrix
-        y2:      second matrix
-        axis:    dimension along which the correlation is computed.
-        eps:     offset to the standard deviation to make sure the correlation is well defined (default 1e-8)
-        **kwargs passed to final mean of standardized y1 * y2
-
-    Returns: correlation vector
-
-    """
-    y1 = (y1 - y1.mean(axis=axis, keepdims=True)) / (y1.std(axis=axis, keepdims=True, ddof=0) + eps)
-    y2 = (y2 - y2.mean(axis=axis, keepdims=True)) / (y2.std(axis=axis, keepdims=True, ddof=0) + eps)
-    return (y1 * y2).mean(axis=axis, **kwargs)

@@ -19,7 +19,7 @@ def laplace():
 
 def laplace5x5():
     """
-    Returns a 5x5 laplace filter.
+    Returns a 5x5 LaplacianOfGaussians (LoG) filter.
 
     """
     return np.array([[0, 0, 1, 0, 0], [0, 1, 2, 1, 0], [1, 2, -16, 2, 1], [0, 1, 2, 1, 0], [0, 0, 1, 0, 0],]).astype(
@@ -29,7 +29,7 @@ def laplace5x5():
 
 def laplace7x7():
     """
-    Returns a 5x5 laplace filter.
+    Returns a 7x7 LaplacianOfGaussians (LoG) filter.
 
     """
     return np.array(

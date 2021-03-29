@@ -195,7 +195,11 @@ class Stacked2dCore(Core2d, nn.Module):
                 if independent_bn_bias:
                     layer["norm"] = nn.BatchNorm2d(hidden_channels, momentum=momentum)
                 else:
-                    layer["norm"] = nn.BatchNorm2d(hidden_channels, momentum=momentum, affine=bias and batch_norm_scale)
+                    layer["norm"] = nn.BatchNorm2d(
+                        hidden_channels,
+                        momentum=momentum,
+                        affine=bias and batch_norm_scale,
+                    )
                     if bias:
                         if not batch_norm_scale:
                             layer["bias"] = Bias2DLayer(hidden_channels)
@@ -368,7 +372,9 @@ class RotationEquivariant2dCore(Core2d, nn.Module):
                 layer["norm"] = BatchNormLayer(num_features=hidden_channels, momentum=momentum)
             else:
                 layer["norm"] = BatchNormLayer(
-                    num_features=hidden_channels, momentum=momentum, affine=bias and batch_norm_scale
+                    num_features=hidden_channels,
+                    momentum=momentum,
+                    affine=bias and batch_norm_scale,
                 )
                 if bias:
                     if not batch_norm_scale:
@@ -405,7 +411,9 @@ class RotationEquivariant2dCore(Core2d, nn.Module):
                     layer["norm"] = BatchNormLayer(num_features=hidden_channels, momentum=momentum)
                 else:
                     layer["norm"] = BatchNormLayer(
-                        num_features=hidden_channels, momentum=momentum, affine=bias and batch_norm_scale
+                        num_features=hidden_channels,
+                        momentum=momentum,
+                        affine=bias and batch_norm_scale,
                     )
                     if bias:
                         if not batch_norm_scale:
@@ -482,7 +490,8 @@ class TransferLearningCore(Core2d, nn.Module):
         """
         if kwargs:
             warnings.warn(
-                "Ignoring input {} when creating {}".format(repr(kwargs), self.__class__.__name__), UserWarning
+                "Ignoring input {} when creating {}".format(repr(kwargs), self.__class__.__name__),
+                UserWarning,
             )
         super().__init__()
 
@@ -493,7 +502,10 @@ class TransferLearningCore(Core2d, nn.Module):
         TL_model = getattr(torchvision.models, tl_model_name)(pretrained=pretrained)
         TL_model_clipped = nn.Sequential(*list(TL_model.features.children())[:layers])
         if not isinstance(TL_model_clipped[-1], nn.Conv2d):
-            warnings.warn("Final layer is of type {}, not nn.Conv2d".format(type(TL_model_clipped[-1])), UserWarning)
+            warnings.warn(
+                "Final layer is of type {}, not nn.Conv2d".format(type(TL_model_clipped[-1])),
+                UserWarning,
+            )
 
         # Fix pretrained parameters during training
         if not fine_tune:
@@ -541,7 +553,16 @@ class TransferLearningCore(Core2d, nn.Module):
 
 
 class DepthSeparableConv2d(nn.Sequential):
-    def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0, dilation=1, bias=True):
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        kernel_size,
+        stride=1,
+        padding=0,
+        dilation=1,
+        bias=True,
+    ):
         super().__init__()
         self.add_module("in_depth_conv", nn.Conv2d(in_channels, out_channels, 1, bias=bias))
         self.add_module(

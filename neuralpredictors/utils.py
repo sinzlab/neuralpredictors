@@ -1,9 +1,13 @@
+import os, sys
 import warnings
+from contextlib import contextmanager
 import numpy as np
 import h5py
 import torch
 from torch import nn as nn
 from torch.nn import Parameter
+
+from .training import eval_state
 
 
 def flatten_json(nested_dict, keep_nested_name=True):
@@ -39,7 +43,7 @@ def flatten_json(nested_dict, keep_nested_name=True):
 
 
 def gini(x):
-    """ Calculates the Gini coefficient from a list of numbers. The Gini coefficient is used as a measure of (in)equality
+    """Calculates the Gini coefficient from a list of numbers. The Gini coefficient is used as a measure of (in)equality
     where a Gini coefficient of 1 (or 100%) expresses maximal inequality among values. A value greater than one may occur
      if some value represents negative contribution.
 
@@ -103,6 +107,33 @@ def recursively_load_dict_contents_from_group(h5file, path="/"):
     return ans
 
 
+def get_module_output(model, input_shape, use_cuda=True):
+    """
+    Returns the output shape of the model when fed in an array of `input_shape`.
+    Note that a zero array of shape `input_shape` is fed into the model and the
+    shape of the output of the model is returned.
+
+    Args:
+        model (nn.Module): PyTorch module for which to compute the output shape
+        input_shape (tuple): Shape specification for the input array into the model
+        use_cuda (bool, optional): If True, model will be evaluated on CUDA if available. Othewrise
+            model evaluation will take place on CPU. Defaults to True.
+
+    Returns:
+        tuple: output shape of the model
+
+    """
+    # infer the original device
+    initial_device = next(iter(model.parameters())).device
+    device = "cuda" if torch.cuda.is_available() and use_cuda else "cpu"
+    with eval_state(model):
+        with torch.no_grad():
+            input = torch.zeros(1, *input_shape[1:], device=device)
+            output = model.to(device)(input)
+    model.to(initial_device)
+    return output.shape
+
+
 class BiasNet(nn.Module):
     """
     Small helper network that adds a learnable bias to an already instantiated base network
@@ -115,3 +146,23 @@ class BiasNet(nn.Module):
 
     def forward(self, x):
         return self.base_net(x) + self.bias
+
+
+class HiddenPrints:
+    def __enter__(self):
+        self._original_stdout = sys.stdout
+        sys.stdout = open(os.devnull, "w")
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        sys.stdout.close()
+        sys.stdout = self._original_stdout
+
+
+@contextmanager
+def no_transforms(dat):
+    transforms = dat.transforms
+    try:
+        dat.transforms = []
+        yield dat
+    finally:
+        dat.transforms = transforms

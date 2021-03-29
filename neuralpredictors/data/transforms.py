@@ -305,12 +305,7 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
         if "behavior" in data.data_keys:
             s = np.array(data.statistics["behavior"][stats_source]["std"])
 
-            # TODO: same as above - consider other baselines
-            threshold = 0.01 * s
-            idx = s > threshold
-            self._behavior_precision = np.ones_like(s) / threshold
-            self._behavior_precision[idx] = 1 / s[idx]
-
+            self._behavior_precision = 1 / s
             # -- behavior
             transforms["behavior"] = lambda x: x * self._behavior_precision
             itransforms["behavior"] = lambda x: x / self._behavior_precision
@@ -427,9 +422,9 @@ class SelectInputChannel(StaticTransform):
         return x.__class__(**key_vals)
 
 
-class ScaleInputs(MovieTransform, StaticTransform, Invertible):
+class ScaleInputs(StaticTransform, Invertible):
     """
-    Given a StaticImage object that includes "images", will rescale the image with a given factor.
+    Applies skimage.transform.rescale to the data_key "images".
     """
 
     def __init__(

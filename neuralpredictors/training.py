@@ -50,9 +50,7 @@ class Tracker:
         Raises:
             NotImplementedError: Override this method to provide a functional behavior.
         """
-        raise NotImplementedError(
-            "Please override this method to provide functional behavior"
-        )
+        raise NotImplementedError("Please override this method to provide functional behavior")
 
     def finalize(self, obj):
         pass
@@ -73,14 +71,12 @@ class TimeObjectiveTracker(Tracker):
         Args:
             add_creation_event (bool, optional): If set to True, an event for creation with value of 0.0 is added to the log. Defaults to False.
         """
-        self.tracker = (
-            np.array([[time.time(), 0.0]]) if add_creation_event else np.empty((0, 0))
-        )
+        self.tracker = np.array([[time.time(), 0.0]]) if add_creation_event else np.empty((0, 0))
 
     def log_objective(self, obj):
         """
         Logs the provided object paired with the timestamp. Before finalizing by invoking `finalize()`, all events
-        are logged with absolute time in epoch time in seconds. 
+        are logged with absolute time in epoch time in seconds.
 
         Args:
             obj (Any): Object to be logged.
@@ -95,7 +91,7 @@ class TimeObjectiveTracker(Tracker):
 
         Args:
             reference (float, optional): Timestamp to relativize all logged even times to. If None, relativizes all
-                time entries to first time entry of the log. Defaults to None. 
+                time entries to first time entry of the log. Defaults to None.
         """
         # relativize to the first entry of the tracked events unless reference provided
         reference = self.tracker[0, 0] if reference is None else reference
@@ -115,7 +111,7 @@ class MultipleObjectiveTracker(Tracker):
         Initializes the tracker. Pass any additional objective functions as keywords arguments.
 
         Args:
-            default_name (string, optional): Name under which the objective value passed into `log_objective` is saved under. 
+            default_name (string, optional): Name under which the objective value passed into `log_objective` is saved under.
                 If set to None, the passed in value is NOT saved. Defaults to None.
         """
         self._default_name = default_name
@@ -157,7 +153,7 @@ class MultipleObjectiveTracker(Tracker):
 
         Args:
             reference (float, optional): Timestamp to relativize all logged even times to. If None, relativizes all
-                time entries to first time entry of the log. Defaults to None. 
+                time entries to first time entry of the log. Defaults to None.
         """
         self.time = np.array(self.time)
         reference = self.time[0] if reference is None else reference
@@ -167,7 +163,7 @@ class MultipleObjectiveTracker(Tracker):
 
     def asdict(self, time_key="time", make_copy=True):
         """
-        Output the cotent of the tracker as a single dictionary. The time value 
+        Output the cotent of the tracker as a single dictionary. The time value
 
 
         Args:
@@ -208,7 +204,7 @@ def eval_state(model):
 def device_state(model, device):
     """
     Within the context, attemps to place the `model` onto the specified
-    `device`. If `device` is CUDA and the specified device does not exist, 
+    `device`. If `device` is CUDA and the specified device does not exist,
     the context falls back to using `cpu`. Upon existing the context, the model
     will be placed back on to the original device inferred based on the first entry
     of the model's parameter.
@@ -378,14 +374,14 @@ def alternate(*args):
 
 def cycle_datasets(loaders):
     """
-    Given a dictionary mapping data_key into dataloader objects, returns a generator that alternately yields 
+    Given a dictionary mapping data_key into dataloader objects, returns a generator that alternately yields
     output from the loaders in the dictionary. The order of data_key traversal is determined by the first invocation to `.keys()`.
     To obtain deterministic behavior of key traversal, recommended to use OrderedDict.
 
     The generator terminates as soon as any one of the constituent loaders is exhausted.
 
     Args:
-        loaders (dict): Dict mapping a data_key to a dataloader object. 
+        loaders (dict): Dict mapping a data_key to a dataloader object.
 
     Yields:
         string, Any: data_key  and and the next output from the data loader corresponding to the data_key
@@ -400,7 +396,7 @@ def cycle_datasets(loaders):
 class Exhauster:
     """
     Given a dictionary of data loaders, mapping data_key into a data loader, steps through each data loader, moving onto the next data loader
-    only upon exhausing the content of the current data loader. 
+    only upon exhausing the content of the current data loader.
     """
 
     def __init__(self, loaders):

@@ -158,7 +158,7 @@ class Stack(MovieTransform):
     ):
         """
         Stack source data elements into the target data elements. In stacking, the source data elements are
-        left aligned with the target, and it's dimensions expanded as necessary before stacking along the 
+        left aligned with the target, and it's dimensions expanded as necessary before stacking along the
         specified existing axis.
 
         Examples:
@@ -170,7 +170,7 @@ class Stack(MovieTransform):
 
         Args:
             target (str, optional): Data key for the target to be modified with stacking. Defaults to "inputs".
-            sources (str or tuple, optional): A single source or atuple of sources to be stacked into the target. 
+            sources (str or tuple, optional): A single source or atuple of sources to be stacked into the target.
                 Defaults to ("eye_pos", "behavior").
             concat_axis (int, optional): Axis along which sources are concatenated into the target. Defaults to 0.
             transpose (bool, optional): Whether to transpose the sources first. Defaults to True.
@@ -192,10 +192,7 @@ class Stack(MovieTransform):
             n_target = len(target.shape)
             n_source = len(source.shape)
             dims = list(range(-n_target + n_source, 0))
-            groups.append(
-                np.ones((1,) * n_source + target.shape[n_source:])
-                * np.expand_dims(source, axis=dims)
-            )
+            groups.append(np.ones((1,) * n_source + target.shape[n_source:]) * np.expand_dims(source, axis=dims))
         x_dict[self.target] = np.concatenate(groups, axis=self.concat_axis)
         return x.__class__(**x_dict)
 
@@ -205,9 +202,7 @@ class Stack(MovieTransform):
 
     def __repr__(self):
         items = ", ".join(s + ".T" if self.transpose else s for s in self.sources)
-        return self.__class__.__name__ + "(stack [{}] on {} along axis={})".format(
-            items, self.target, self.concat_axis
-        )
+        return self.__class__.__name__ + "(stack [{}] on {} along axis={})".format(items, self.target, self.concat_axis)
 
 
 class Subsample(MovieTransform, StaticTransform):

@@ -3,3 +3,4 @@ torch
 tqdm
 pandas
 h5py
+scipy

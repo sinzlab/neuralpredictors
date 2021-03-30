@@ -1,12 +1,20 @@
-version: '2'
-services:
+version: "3.8"
 
+services:
   jupyter:
     build: .
-    ports:
-      - "7777:8888"
     volumes:
-      - ./:/src/ml-utils
-      - ./notebooks:/notebooks
-      - $HOME/data:/notebooks/data
-
+      - .:/src/neuralpredictors
+    ports:
+      - "8888:8888"
+    env_file: .env
+    entrypoint: ["jupyter", "lab", "--allow-root"]
+  pytest:
+    build: .
+    volumes:
+      - .:/src/neuralpredictors
+    entrypoint: ["pytest"]
+  python:
+    build: .
+    volumes:
+      - .:/src/neuralpredictors

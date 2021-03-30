@@ -2,6 +2,9 @@ from collections import Counter
 import numpy as np
 from torch.utils.data import Sampler
 import torch
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class RepeatsBatchSampler(Sampler):
@@ -11,9 +14,9 @@ class RepeatsBatchSampler(Sampler):
 
         Args:
             keys (Any): list of keys used to group indicies.
-            subset_index (list of indices, optional): List of indices to subselect entries from keys. Defaults to None, where all indices from keys are used.
+            subset_index (list of indices, optional): List of indices to subselect entries from keys.
+                            Defaults to None, where all indices from keys are used.
         """
-
         if subset_index is None:
             subset_index = np.arange(len(keys))
         _, inv = np.unique(keys[subset_index], return_inverse=True)
@@ -67,7 +70,7 @@ class SampledSubsetRandomSampler(Sampler):
 
 
 class SampledSubsetSequentialSampler(Sampler):
-    r"""Samples elements sequentially from sampled subset of indices.
+    """Samples elements sequentially from sampled subset of indices.
     Arguments:
         indices (sequence): a sequence of indices
         num_samples (int): number of samples to draw
@@ -133,7 +136,6 @@ class BalancedSubsetSampler(Sampler):
 
     def __iter__(self):
         selection = torch.multinomial(self.weights, self.num_samples, self.replacement)
-        # print(Counter(self.types[self.indices[i]] for i in selection), len(selection)))
         return (self.indices[i] for i in selection)
 
     def __len__(self):

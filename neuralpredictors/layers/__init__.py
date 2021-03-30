@@ -1,23 +1,13 @@
-import torch
+"""
+This package contains all the components that are used to construct system identification models.
+This includes:
+  - cores: Modules used for extracting nonlinearly computed features shared among neurons.
+  - readouts: Linear layers added on top of the core output to predict neurons' responses.
+  - encoders: Classes which fuse core, readout, shifter (optional), and modulator (optional) into a single model.
+  - shifters: Modules used for shifting (i.e. spatially) the features computed via core.
+  - modulators: Modules used to incorporate the effect of other variables (e.g. behavioral variables) in response prediction.
+  - special layers (e.g. DepthSeparable Convolution) and activation functions.
+"""
 
-from torch import nn
-
-
-class Bias2DLayer(nn.Module):
-    def __init__(self, channels, initial=0, **kwargs):
-        super(Bias2DLayer, self).__init__(**kwargs)
-
-        self.bias = torch.nn.Parameter(torch.empty((1, channels, 1, 1)).fill_(initial))
-
-    def forward(self, x):
-        return x + self.bias
-
-
-class Scale2DLayer(nn.Module):
-    def __init__(self, channels, initial=1, **kwargs):
-        super(Scale2DLayer, self).__init__(**kwargs)
-
-        self.scale = torch.nn.Parameter(torch.empty((1, channels, 1, 1)).fill_(initial))
-
-    def forward(self, x):
-        return x * self.scale
+from .affine import Bias2DLayer, Scale2DLayer
+from .conv import DepthSeparableConv2d

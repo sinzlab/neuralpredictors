@@ -1,9 +1,7 @@
 from contextlib import contextmanager
 
-import logging
+import warnings
 import torch
-
-logger = logging.getLogger(__name__)
 
 
 @contextmanager
@@ -51,7 +49,7 @@ def device_state(model, device):
     device = torch.device(device)
     if device.type == "cuda" and device.index >= torch.cuda.device_count():
         # fall back to using CPU
-        logger.warning("Incompatible CUDA spec. Falling back to CPU usage")
+        warnings.warn("Incompatible CUDA spec. Falling back to CPU usage")
         device = "cpu"
 
     try:

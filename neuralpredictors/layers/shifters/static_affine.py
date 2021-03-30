@@ -1,5 +1,4 @@
 from .base import Shifter
-
 import torch
 from torch import nn
 from torch.nn import ModuleDict

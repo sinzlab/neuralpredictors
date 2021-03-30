@@ -62,9 +62,7 @@ class SampledSubsetRandomSampler(Sampler):
         self.replace = num_samples > len(indices)
 
     def __iter__(self):
-        indices = np.random.choice(
-            self.indices, size=self.num_samples, replace=self.replace
-        )
+        indices = np.random.choice(self.indices, size=self.num_samples, replace=self.replace)
         return iter(indices.tolist())
 
     def __len__(self):
@@ -84,9 +82,7 @@ class SampledSubsetSequentialSampler(Sampler):
         self.replace = num_samples > len(indices)
 
     def __iter__(self):
-        indices = np.random.choice(
-            self.indices, size=self.num_samples, replace=self.replace
-        )
+        indices = np.random.choice(self.indices, size=self.num_samples, replace=self.replace)
         sorted_indices = np.sort(indices)
         return iter(sorted_indices.tolist())
 
@@ -107,9 +103,7 @@ class SubSubsetRandomSequentialSampler(Sampler):
         self.subsubset_size = subsubset_size
 
     def __iter__(self):
-        subsubset_indices = np.random.choice(
-            self.indices, size=self.subsubset_size, replace=False
-        )
+        subsubset_indices = np.random.choice(self.indices, size=self.subsubset_size, replace=False)
         return (subsubset_indices[i] for i in range(len(subsubset_indices)))
 
     def __len__(self):

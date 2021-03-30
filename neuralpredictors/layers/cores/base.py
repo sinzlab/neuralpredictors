@@ -10,7 +10,7 @@ class Core:
         """
         Initialization applied on the core.
         """
-        raise NotImplementedError()
+        raise NotImplementedError("initialize method must be implemented by the inheriting class")
 
     def __repr__(self):
         s = super().__repr__()
@@ -54,10 +54,10 @@ class Core2d(Core):
         Args:
             x (torch.tensor): input of shape (batch, channels, height, width)
         """
-        raise NotImplementedError()
+        raise NotImplementedError("forward method must be implemented by the inheriting class")
 
     def regularizer(self):
         """
         Regularization applied on the core. Returns a scalar value.
         """
-        raise NotImplementedError()
+        raise NotImplementedError("regularizer method must be implemented by the inheriting class")

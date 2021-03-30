@@ -1,6 +1,7 @@
 import logging
 
 import numpy as np
+from neuralpredictors.utils import anscombe
 
 logger = logging.getLogger(__name__)
 
@@ -163,8 +164,3 @@ def snr(repeated_outputs, per_neuron=True):
     sigma_2_bar = np.mean(sigma_2, axis=0)
     snr = (1 / mu.shape[0] * np.sum((mu - mu_bar) ** 2, axis=0)) / sigma_2_bar
     return snr if per_neuron else np.mean(snr)
-
-
-def anscombe(x):
-    """Helper function for snr"""
-    return 2 * np.sqrt(x + 3 / 8)

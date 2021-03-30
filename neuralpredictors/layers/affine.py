@@ -13,7 +13,7 @@ class Bias2DLayer(nn.Module):
             channels (int): number of channels in the input.
             initial (int, optional): intial value. Defaults to 0.
         """
-        super(Bias2DLayer, self).__init__(**kwargs)
+        super().__init__(**kwargs)
 
         self.bias = torch.nn.Parameter(torch.empty((1, channels, 1, 1)).fill_(initial))
 
@@ -32,7 +32,7 @@ class Scale2DLayer(nn.Module):
             channels (int): number of channels in the input.
             initial (int, optional): intial value. Defaults to 1.
         """
-        super(Scale2DLayer, self).__init__(**kwargs)
+        super().__init__(**kwargs)
 
         self.scale = torch.nn.Parameter(torch.empty((1, channels, 1, 1)).fill_(initial))
 

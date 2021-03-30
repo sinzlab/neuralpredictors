@@ -17,7 +17,7 @@ WORKDIR /src
 WORKDIR /notebooks
 
 RUN mkdir -p /scripts
-ADD ./jupyter/run_jupyter.sh /scripts/
-ADD ./jupyter/jupyter_notebook_config.py /root/.jupyter/
+ADD jupyter/run_jupyter.sh /scripts/
+ADD jupyter/jupyter_notebook_config.py /root/.jupyter/
 RUN chmod -R a+x /scripts
 ENTRYPOINT ["/scripts/run_jupyter.sh"]

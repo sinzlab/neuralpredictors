@@ -2,7 +2,7 @@ version: '2'
 services:
 
   jupyter:
-    build: .
+    build: ""
     ports:
       - "7777:8888"
     volumes:

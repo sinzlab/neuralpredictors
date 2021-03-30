@@ -23,7 +23,7 @@ def corr(y1, y2, axis=-1, eps=1e-8, **kwargs):
     return (y1 * y2).mean(axis=axis, **kwargs)
 
 
-def gini(x):
+def gini(x, axis=None):
     """
     Calculate the Gini coefficient from a list of numbers. The Gini coefficient is used as a measure of (in)equality
     where a Gini coefficient of 1 (or 100%) expresses maximal inequality among values. A value greater than 1 may occur
@@ -32,14 +32,19 @@ def gini(x):
     Args:
         x: 1 D array or list
             Array of numbers from which to calculate the Gini coefficient.
+        axis: axis along which to compute gini. If None, then the array is flattened first.
 
     Returns: float
             Gini coefficient
     """
     x = np.asarray(x)
-    if any(x < 0):
+    if axis is None:
+        x = x.flatten()
+        axis = -1
+    if np.any(x < 0):
         warnings.warn("Input x contains negative values")
-    sorted_x = np.sort(x)
-    n = len(x)
-    cumx = np.cumsum(sorted_x, dtype=float)
-    return (n + 1 - 2 * np.sum(cumx) / cumx[-1]) / n
+    sorted_x = np.sort(x, axis=axis)
+    n = x.shape[axis]
+    cumx = np.cumsum(sorted_x, dtype=float, axis=axis)
+    return (n + 1 - 2 * np.sum(cumx, axis=axis) / cumx.take(-1, axis=axis)) / n
+

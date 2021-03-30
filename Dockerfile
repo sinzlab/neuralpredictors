@@ -1,23 +1,10 @@
-FROM eywalker/pytorch-jupyter:v0.4.1-cuda9.2
+FROM sinzlab/pytorch:v3.8-torch1.7.0-cuda11.0-dj0.12.7
 
+COPY . /src/neuralpredictors
 
-RUN apt-get -y update && apt-get  -y install ffmpeg libhdf5-10 git python3-pip
-RUN pip3 install imageio ffmpy h5py opencv-python statsmodels datajoint
+RUN python3 -m pip install --upgrade pip &&\
+    python3 -m pip install -e /src/neuralpredictors
 
-RUN pip3 install torch torchvision datajoint --upgrade
+WORKDIR /src/neuralpredictors
 
-RUN pip install jupyterlab && \
-    jupyter serverextension enable --py jupyterlab --sys-prefix
-
-ADD . /src/ml-utils
-RUN pip install -e /src/ml-utils
-
-WORKDIR /src
-
-WORKDIR /notebooks
-
-RUN mkdir -p /scripts
-ADD jupyter/run_jupyter.sh /scripts/
-ADD jupyter/jupyter_notebook_config.py /root/.jupyter/
-RUN chmod -R a+x /scripts
-ENTRYPOINT ["/scripts/run_jupyter.sh"]
+ENTRYPOINT ["python3"]

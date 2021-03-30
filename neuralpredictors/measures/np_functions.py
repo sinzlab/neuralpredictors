@@ -1,12 +1,16 @@
 import logging
 
 import numpy as np
+from numpy.typing import ArrayLike
+from typing import Tuple, Union
 from neuralpredictors.utils import anscombe
 
 logger = logging.getLogger(__name__)
 
 
-def corr(y1, y2, axis=-1, eps=1e-8, **kwargs):
+def corr(
+    y1: ArrayLike, y2: ArrayLike, axis: Union[None, int, Tuple[int]] = -1, eps: int = 1e-8, **kwargs
+) -> np.ndarray:
     """
     Compute the correlation between two NumPy arrays along the specified dimension(s).
 
@@ -25,7 +29,7 @@ def corr(y1, y2, axis=-1, eps=1e-8, **kwargs):
     return (y1 * y2).mean(axis=axis, **kwargs)
 
 
-def oracle_corr_corrected(repeated_outputs):
+def oracle_corr_corrected(repeated_outputs: ArrayLike) -> np.ndarray:
     """
     Compute the corrected oracle correlations per neuron.
 
@@ -50,7 +54,7 @@ def oracle_corr_corrected(repeated_outputs):
     return var_mean / np.sqrt(var_mean * (var_mean + var_noise))
 
 
-def oracle_corr(repeated_outputs):
+def oracle_corr(repeated_outputs: ArrayLike) -> np.ndarray:
     """
     Compute the oracle correlations per neuron.
 
@@ -92,7 +96,7 @@ def oracle_corr(repeated_outputs):
         return corr(np.vstack(repeated_outputs), np.vstack(oracles), axis=0)
 
 
-def explainable_var(repeated_outputs, eps=1e-9):
+def explainable_var(repeated_outputs: ArrayLike, eps: int = 1e-9) -> np.ndarray:
     """
     Compute the explainable variance per neuron.
 
@@ -114,14 +118,14 @@ def explainable_var(repeated_outputs, eps=1e-9):
     return explainable_var
 
 
-def fev(targets, predictions, return_exp_var=False):
+def fev(targets: ArrayLike, predictions: ArrayLike, return_exp_var: bool = False) -> Union[ArrayLike, Tuple[ArrayLike]]:
     """
     Compute the fraction of explainable variance explained per neuron
 
     Args:
-        targets (list): Neuronal responses (ground truth) to image repeats. Dimensions:
+        targets (array-like): Neuronal responses (ground truth) to image repeats. Dimensions:
             [num_images] np.array(num_repeats, num_neurons)
-        outputs (list): Model predictions to the repeated images, with an identical shape as the targets
+        outputs (array-like): Model predictions to the repeated images, with an identical shape as the targets
         return_exp_var (bool): returns the fraction of explainable variance per neuron if set to True
     Returns:
         FEVe (np.array): the fraction of explainable variance explained per neuron
@@ -145,7 +149,7 @@ def fev(targets, predictions, return_exp_var=False):
     return [fev, fev_e] if return_exp_var else fev_e
 
 
-def snr(repeated_outputs, per_neuron=True):
+def snr(repeated_outputs: ArrayLike, per_neuron: bool = True) -> np.ndarray:
     """
     Compute signal to noise ratio.
 

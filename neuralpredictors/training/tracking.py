@@ -1,6 +1,13 @@
-from collections import defaultdict
-import numpy as np
+import copy
 import time
+import logging
+from collections import defaultdict
+from typing import Dict, Tuple, List
+import numpy as np
+
+from .utils import deep_update
+
+logger = logging.getLogger(__name__)
 
 
 class Tracker:
@@ -146,3 +153,360 @@ class MultipleObjectiveTracker(Tracker):
         log_copy = {k: np.copy(v) if make_copy else v for k, v in self.log.items()}
         log_copy[time_key] = np.copy(self.time) if make_copy else self.time
         return log_copy
+
+
+class AdvancedTracker(Tracker):
+    """
+    This class implements a more advanced, universal tracker that offers many useful features:
+     - Store logging information in an arbitrary hierarchical structure, e.g.:
+       ```
+       {
+        "learning_rate" : [0.1, 0.08],
+        "Training":
+        {
+            "img_classification": {
+               "accuracy" : [345.234234, 242.34],
+               "loss" : [0.342342, 0.78432],
+               "normalization": [4,3],
+            }
+            "neural_prediction": {
+               "accuracy" : [345.234234, 242.34],
+               "loss" : [0.342342, 0.78432],
+               "normalization": [4,3],
+            }
+        }
+        "Validation": {
+             "img_classification": {
+               "accuracy" : [348.234234, 0.0],
+               "loss" : [0.42342, 0.0],
+               "normalization": [2,1],
+             },
+             "patience": [0],
+         },
+       }
+       ```
+     - Retrieving and manipulating information via a simple hierarchical key,
+       e.g. `("Training","img_classification","loss")`
+     - Scores for the same epoch are automatically accumulated via `log_objective(...)` (usually unnormalized)
+     - Scores can be automatically normalized if `"normalization"` (e.g. total examples) is tracked on the same hierarchy level
+     - Automatic per-epoch initialization for each objective when a new epoch is started via `start_epoch()`
+     - Automatic output of current logs to a logger or even tqdm
+     - Easy extraction and reloading of tracker state via `state_dict()`, `from_dict(sd)` and `load_state_dict(sd)`
+
+
+     Example usage:
+     1. Specify the log structure and initial values:
+         ```
+        objectives = {
+            "lr": 0,
+            "training": {
+                "img_classification": {"loss": 0, "accuracy": 0, "normalization": 0}
+            },
+            "validation": {
+                "img_classification": {
+                    "loss": 0,
+                    "accuracy": 0,
+                    "normalization": 0,
+                },
+                "patience": 0,
+            },
+        }
+        tracker = AdvancedTracker(
+            main_objective=("img_classification", "accuracy"), **objectives
+        )
+         ```
+     2. Start a new epoch:
+     ```
+        self.tracker.start_epoch()
+     ```
+     3. Log the objectives:
+     ```
+        tracker.log_objective(
+                100 * predicted.eq(targets).sum().item(),
+                keys=(mode, task_key, "accuracy"),
+            )
+        tracker.log_objective(
+            batch_size,
+            keys=(mode, task_key, "normalization"),
+        )
+        tracker.log_objective(
+            loss.item() * batch_size,
+            keys=(mode, task_key, "loss"),
+        )
+    ```
+    4. Display the current objective values, e.g. everything related to training:
+    ```
+        self.tracker.display_log(tqdm_iterator=t, keys=("training",))
+    ```
+    5. Save the tracker (i.e. save the training progress):
+    ```
+        self.tracker.state_dict()
+    ```
+    """
+
+    def __init__(self, main_objective: Tuple[str, ...] = (), **objectives):
+        """
+        In principle, `objectives` is expected to be a dictionary of dictionaries
+        The hierarchy can in principle be arbitrary deep.
+        The only restriction is that the lowest level has to be a dictionary with values being
+        either a numerical value which will be interpreted as the initial value for this objective
+        (to be accumulated manually) or a callable (e.g. a function) that returns the objective value.
+
+        Args:
+            main_objective: key of the main objective that is used to e.g. decide lr reductions
+            **objectives: e.g. {"dataset": {"objective1": o_fct1, "objective2": 0, "normalization": 0},...}
+                           or {"dataset": {"task_key": {"objective1": o_fct1, "objective2": 0},...},...}
+        """
+        self.objectives = objectives
+        self.log = self._initialize_log(objectives)
+        self.time = []
+        self.main_objective = main_objective
+        self.epoch = -1
+        self.start_epoch()
+
+    def add_objectives(self, objectives: Dict, init_epoch: bool = False):
+        """
+        Add new objectives (with initial values) to the logs.
+        Args:
+            objectives: dictionary that needs to follow the same structure as self.log
+            init_epoch: flag that decides whether the a new epoch is initialized for this objective
+        """
+        deep_update(self.objectives, objectives)
+        new_log = self._initialize_log(objectives)
+        if init_epoch:
+            self._initialize_epoch(new_log, objectives)
+        deep_update(self.log, new_log)
+
+    def start_epoch(self):
+        """ Start a new epoch. Initialize each accumulation with its default value. """
+        t = time.time()
+        self.time.append(t)
+        self.epoch += 1
+        self._initialize_epoch(self.log, self.objectives)
+
+    def log_objective(self, value: float, key: Tuple[str, ...] = ()):
+        """
+        Add a new entry to the logs
+        Args:
+            value: objective score
+            key: hierarchical key to match in `self.log`
+        """
+        if key:
+            self._log_objective_value(value, self.log, key)
+        else:
+            self._log_objective_callables(self.log, self.objectives)
+
+    def display_log(self, key=(), tqdm_iterator=None):
+        """
+        Display the current objective value of everything under `key`
+        Args:
+            key: Tuple describing the objective to display.
+                 This could be something like `("Training","img_classification","loss")`
+                 to display the current classification loss or something like `("Training","img_classification")`
+                 to display everything we save for image classifcation training.
+            tqdm_iterator: A tqdm object that the log could be displayed on.
+        """
+        # normalize (if applicable) and turn into np.arrays:
+        n_log = self._normalize_log(self.log)
+        # flatten a subset of the dictionary:
+        current_log = self._gather_log(n_log, key, index=-1)
+        if tqdm_iterator:
+            tqdm_iterator.set_postfix(**current_log)
+        else:
+            logger.info(current_log)
+
+    def check_isfinite(self, log: dict = None) -> bool:
+        """
+        Checks if all entries in `log` or `self.log` are finite.
+        Args:
+            log: dict that is recursively searched for infinite entries
+
+        Returns: True if all entries are finite.
+        """
+        if log is None:
+            log = self._normalize_log(self.log)
+        if isinstance(log, dict):
+            for k, l in log.items():
+                if not self._check_isfinite(l):
+                    return False
+        else:
+            return np.isfinite(log).any()
+        return True
+
+    def get_objective(self, log=None, key: Tuple[str, ...] = ()) -> np.array:
+        """
+        Args:
+            log: log to retrieve objective from
+            key: key to match with the log
+
+        Returns:
+            value array (across epochs and normalized) for a specific objective key
+        """
+        if log is None:
+            log = self._normalize_log(self.log)
+        if len(key) > 1:
+            return self.get_objective(log[key[0]], key[1:])
+        else:
+            return log[key[0]]
+
+    def get_current_objective(self, key) -> float:
+        return self.get_objective(self._normalize_log(self.log), key)[-1]
+
+    def get_current_main_objective(self, key) -> float:
+        combined_key = key + self.main_objective if isinstance(key, tuple) else (key,) + self.main_objective
+        return self.get_current_objective(combined_key)
+
+    def finalize(self):
+        """ After training, normalize the log and save the total time. """
+        self.time = np.array(self.time)
+        self.time -= self.time[0]
+        self.log = self._normalize_log(self.log)
+
+    def state_dict(self) -> Dict[str, any]:
+        """
+        Serializes this instance to a Python dictionary.
+
+        Returns:
+            :obj:`Dict[str, any]`: Dictionary of all the attributes that make up this configuration instance,
+        """
+        output = copy.deepcopy(self.__dict__)
+        return output
+
+    def load_state_dict(self, tracker_dict: Dict):
+        """
+        Loads given state_dict from another tracker.
+        Args:
+            tracker_dict: state that should override this tracker
+
+        """
+        self.main_objective = tracker_dict["main_objective"]
+        self.objectives = tracker_dict["objectives"]
+        self.log = tracker_dict["log"]
+        self.time = tracker_dict["time"]
+        self.epoch = tracker_dict["epoch"]
+
+    @classmethod
+    def from_dict(cls, tracker_dict: Dict) -> "AdvancedTracker":
+        """
+        Same as `load_state_dict`, but creates a new tracker from scratch.
+        Args:
+            tracker_dict: state of tracker that should be loaded in new tracker
+
+        Returns:
+            new tracker with `tracker_dict` loaded
+
+        """
+        tracker = cls(main_objective=tracker_dict["main_objective"], **tracker_dict["objectives"])
+        tracker.log = tracker_dict["log"]
+        tracker.time = tracker_dict["time"]
+        tracker.epoch = tracker_dict["epoch"]
+        return tracker
+
+    def _initialize_log(self, objectives) -> Dict:
+        log = {}
+        for key, objective in objectives.items():
+            if isinstance(objective, dict):
+                log[key] = self._initialize_log(objective)
+            elif not callable(objective):
+                log[key] = []
+        return log
+
+    def _initialize_epoch(self, log, objectives):
+        """
+        For each key in `objectives`, go through log and append a new entry to its list.
+        The entry reflects the default value saved in `objectives`.
+        Args:
+            log: sub dictionary to add the objectives to
+            objectives: dictionary of default values
+        """
+        for key, objective in objectives.items():
+            if isinstance(objective, dict):
+                self._initialize_epoch(log[key], objective)
+            elif not callable(objective):
+                while len(log[key]) <= self.epoch:
+                    log[key].append(objective)
+
+    def _log_objective_value(self, value: float, log: Dict, key: Tuple[str, ...] = ()):
+        """
+        Recursively walk through the log dictionary to get to follow `key`.
+        When on lowest level: add `value` to entry at current epoch.
+        Args:
+            value: objective value to log
+            log: log subdict to add value to
+            key: key for where `value` is saved
+        """
+        if len(key) > 1:
+            self._log_objective_value(value, log[key[0]], key[1:])
+        else:
+            log[key[0]][self.epoch] += value
+
+    def _log_objective_callables(self, log: Dict, objectives: Dict):
+        """
+        Log objectives that are specified as callables
+        Disclaimer: this is not very well tested!
+        Args:
+            log:
+            objectives:
+        """
+        for key, objective in objectives.items():
+            if isinstance(objective, dict):
+                self._log_objective_callables(log[key], objective)
+            elif callable(objective):
+                log[key].append(objective())
+
+    def _normalize_log(self, log: [Dict, List]) -> [Dict, np.array]:
+        """
+        Recursively go through the log and normalize the entries that
+        have `"normalization"` information on the same level.
+        Args:
+            log: subdict on which to apply normalization or list (if on lowest level)
+
+        Returns:
+            Normalized log dictionary that has numpy arrays on the lowest level
+
+        """
+        if isinstance(log, dict):
+            n_log = {}
+            norm = None
+            for key, l in log.items():
+                res = self._normalize_log(l)  # to turn into arrays
+                if key == "normalization":
+                    assert isinstance(res, np.ndarray)
+                    norm = res
+                else:
+                    n_log[key] = res
+            if norm is not None:
+                nonzero_start = (norm != 0).argmax(axis=0)
+                norm = norm[nonzero_start:]
+                for key, l in n_log.items():
+                    l = l[nonzero_start:]
+                    if isinstance(l, np.ndarray):
+                        n_log[key] = l / np.where(norm > 0, norm, np.ones_like(norm))
+            return n_log
+        else:
+            return np.array(log)
+
+    def _gather_log(self, log: Dict, key: Tuple[str, ...], index: int = -1) -> Dict:
+        """
+        Get a flattened and print-ready version of the log dictionary for a given key
+        Args:
+            log: subdict to retrieve values from
+            key: tuple describing on which level to retrieve from
+            index: which epoch to retrieve from
+
+        Returns:
+            Flattened dictionary, e.g. `{"img_clasisification accuracy": 98.5, "img_classsifcation loss": 0.456}
+        """
+        if len(key) > 1:
+            return self._gather_log(log[key[0]], key[1:], index)
+        elif key:
+            return self._gather_log(log[key[0]], (), index)
+        elif isinstance(log, dict):
+            gathered = {}
+            for key, l in log.items():
+                logs = self._gather_log(l, (), index)
+                for k, v in logs.items():
+                    gathered[key + " " + k] = v
+            return gathered
+        else:
+            return {"": "{:03.4f}".format(log[index])}

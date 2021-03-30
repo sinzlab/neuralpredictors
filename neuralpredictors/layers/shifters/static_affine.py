@@ -9,7 +9,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class StaticAffine2d(Shifter):
+class StaticAffine2d(nn.Linear):
     def __init__(self, input_channels=2, output_channels=2, bias=True):
         """
         A simple FC network with bias between input and output channels without a hidden layer.

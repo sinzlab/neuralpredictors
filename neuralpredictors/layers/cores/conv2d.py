@@ -80,8 +80,6 @@ class Stacked2dCore(Core2d, nn.Module):
             laplace_padding: Padding size for the laplace convolution. If padding = None, it defaults to half of
                 the kernel size (recommended). Setting Padding to 0 is not recommended and leads to artefacts,
                 zero is the default however to recreate backwards compatibility.
-            normalize_laplace_regularizer: Boolean, if set to True, will use the LaplaceL2norm function from
-                neuralpredictors.regularizers, which returns the regularizer as |laplace(filters)| / |filters|
             input_regularizer:  String that must match one of the regularizers in ..regularizers
             stack:        Int or iterable. Selects which layers of the core should be stacked for the readout.
                             default value will stack all layers on top of each other.
@@ -277,8 +275,6 @@ class RotationEquivariant2dCore(Core2d, nn.Module):
             laplace_padding: Padding size for the laplace convolution. If padding = None, it defaults to half of
                 the kernel size (recommended). Setting Padding to 0 is not recommended and leads to artefacts,
                 zero is the default however to recreate backwards compatibility.
-            normalize_laplace_regularizer: Boolean, if set to True, will use the LaplaceL2norm function from
-                neuralpredictors.regularizers, which returns the regularizer as |laplace(filters)| / |filters|
             input_regularizer:  String that must match one of the regularizers in ..regularizers
             stack:        Int or iterable. Selects which layers of the core should be stacked for the readout.
                             default value will stack all layers on top of each other.

@@ -1,7 +1,6 @@
 import logging
 
 import numpy as np
-from neuralpredictors.utils import anscombe
 
 logger = logging.getLogger(__name__)
 
@@ -104,13 +103,13 @@ def explainable_var(repeated_outputs, eps=1e-9):
         array: Corrected oracle correlations per neuron
     """
 
-    img_var = []
-    total_var = np.var(np.vstack(repeated_outputs), axis=0, ddof=1)
+    ImgVariance = []
+    TotalVar = np.var(np.vstack(repeated_outputs), axis=0, ddof=1)
     for out in repeated_outputs:
-        img_var.append(np.var(out, axis=0, ddof=1))
-    img_var = np.vstack(img_var)
-    noise_var = np.mean(img_var, axis=0)
-    explainable_var = (total_var - noise_var) / (total_var + eps)
+        ImgVariance.append(np.var(out, axis=0, ddof=1))
+    ImgVariance = np.vstack(ImgVariance)
+    NoiseVar = np.mean(ImgVariance, axis=0)
+    explainable_var = (TotalVar - NoiseVar) / (TotalVar + eps)
     return explainable_var
 
 
@@ -128,21 +127,21 @@ def fev(targets, predictions, return_exp_var=False):
         --- optional: FEV (np.array): the fraction
     """
 
-    img_var = []
-    pred_var = []
+    ImgVariance = []
+    PredVariance = []
     for i, _ in enumerate(targets):
-        pred_var.append((targets[i] - predictions[i]) ** 2)
-        img_var.append(np.var(targets[i], axis=0, ddof=1))
-    pred_var = np.vstack(pred_var)
-    img_var = np.vstack(img_var)
+        PredVariance.append((targets[i] - predictions[i]) ** 2)
+        ImgVariance.append(np.var(targets[i], axis=0, ddof=1))
+    PredVariance = np.vstack(PredVariance)
+    ImgVariance = np.vstack(ImgVariance)
 
-    total_var = np.var(np.vstack(targets), axis=0, ddof=1)
-    noise_var = np.mean(img_var, axis=0)
-    fev = (total_var - noise_var) / total_var
+    TotalVar = np.var(np.vstack(targets), axis=0, ddof=1)
+    NoiseVar = np.mean(ImgVariance, axis=0)
+    FEV = (TotalVar - NoiseVar) / TotalVar
 
-    PredVar = np.mean(pred_var, axis=0)
-    fev_e = 1 - (PredVar - noise_var) / (total_var - noise_var)
-    return [fev, fev_e] if return_exp_var else fev_e
+    PredVar = np.mean(PredVariance, axis=0)
+    FEVe = 1 - (PredVar - NoiseVar) / (TotalVar - NoiseVar)
+    return [FEV, FEVe] if return_exp_var else FEVe
 
 
 def snr(repeated_outputs, per_neuron=True):
@@ -164,3 +163,8 @@ def snr(repeated_outputs, per_neuron=True):
     sigma_2_bar = np.mean(sigma_2, axis=0)
     snr = (1 / mu.shape[0] * np.sum((mu - mu_bar) ** 2, axis=0)) / sigma_2_bar
     return snr if per_neuron else np.mean(snr)
+
+
+def anscombe(x):
+    """Helper function for snr"""
+    return 2 * np.sqrt(x + 3 / 8)

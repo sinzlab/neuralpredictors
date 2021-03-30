@@ -3,7 +3,7 @@ import logging
 import numpy as np
 from numpy.typing import ArrayLike
 from typing import Tuple, Union
-from neuralpredictors.utils import anscombe
+from ..utils import anscombe
 
 logger = logging.getLogger(__name__)
 
@@ -41,16 +41,12 @@ def oracle_corr_corrected(repeated_outputs: ArrayLike) -> np.ndarray:
         array: Corrected oracle correlations per neuron
     """
 
-    if len(repeated_outputs.shape) == 3:
-        var_noise = repeated_outputs.var(axis=1).mean(0)
-        var_mean = repeated_outputs.mean(axis=1).var(0)
-    else:
-        var_noise, var_mean = [], []
-        for repeat in repeated_outputs:
-            var_noise.append(repeat.var(axis=0))
-            var_mean.append(repeat.mean(axis=0))
-        var_noise = np.mean(np.array(var_noise), axis=0)
-        var_mean = np.var(np.array(var_mean), axis=0)
+    var_noise, var_mean = [], []
+    for repeat in repeated_outputs:
+        var_noise.append(repeat.var(axis=0))
+        var_mean.append(repeat.mean(axis=0))
+    var_noise = np.mean(np.array(var_noise), axis=0)
+    var_mean = np.var(np.array(var_mean), axis=0)
     return var_mean / np.sqrt(var_mean * (var_mean + var_noise))
 
 
@@ -134,9 +130,9 @@ def fev(targets: ArrayLike, predictions: ArrayLike, return_exp_var: bool = False
 
     img_var = []
     pred_var = []
-    for i, _ in enumerate(targets):
-        pred_var.append((targets[i] - predictions[i]) ** 2)
-        img_var.append(np.var(targets[i], axis=0, ddof=1))
+    for target, prediction in zip(targets, predictions):
+        pred_var.append((target - prediction) ** 2)
+        img_var.append(np.var(target, axis=0, ddof=1))
     pred_var = np.vstack(pred_var)
     img_var = np.vstack(img_var)
 

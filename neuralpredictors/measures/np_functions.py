@@ -8,7 +8,7 @@ from ..utils import anscombe
 logger = logging.getLogger(__name__)
 
 
-def corr( 
+def corr(
     y1: ArrayLike, y2: ArrayLike, axis: Union[None, int, Tuple[int]] = -1, eps: int = 1e-8, **kwargs
 ) -> np.ndarray:
     """
@@ -61,7 +61,7 @@ def oracle_corr(repeated_outputs: ArrayLike) -> np.ndarray:
     Returns:
         array: Oracle correlations per neuron
     """
-    
+
     oracles = []
     for outputs in repeated_outputs:
         r, n = outputs.shape
@@ -72,9 +72,7 @@ def oracle_corr(repeated_outputs: ArrayLike) -> np.ndarray:
 
         if np.any(np.isnan(oracle)):
             logger.warning(
-                "{}% NaNs when calculating the oracle. NaNs will be set to Zero.".format(
-                    np.isnan(oracle).mean() * 100
-                )
+                "{}% NaNs when calculating the oracle. NaNs will be set to Zero.".format(np.isnan(oracle).mean() * 100)
             )
             oracle[np.isnan(oracle)] = 0
 

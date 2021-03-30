@@ -106,3 +106,80 @@ class MultipleUltraSparse(MultiReadout):
     """
 
     _base_readout = UltraSparse
+
+
+
+##############################################
+
+class MultiReadout(Readout, ModuleDict):
+    _base_readout = None
+
+    def __init__(self, in_shape, n_neurons_dict, clone_readout=False, **kwargs):
+        if self._base_readout is None:
+            raise ValueError("Attribute _base_readout must be set")
+
+        super().__init__()
+
+        self.gamma_readout = kwargs.get('gamma_readout', 0.)
+        grid_mean_predictor = kwargs.get('grid_mean_predictor', None)
+
+        readout_kwargs = some_filtering_function(kwargs)
+
+        for i, (k, n_neurons) in enumerate(n_neurons_dict.items()):
+
+            source_grid = None
+            shared_grid = None
+            shared_transform = None
+            if grid_mean_predictor is not None:
+                if kwargs['grid_mean_predictor_type'] == 'cortex':
+                    readout_kwargs['source_grid'] = kwargs['source_grids'][k]
+                else:
+                    raise KeyError('grid mean predictor {} does not exist'.format(kwargs['grid_mean_predictor_type']))
+                if kwargs['share_transform']:
+                    readout_kwargs['shared_transform'] = None if i == 0 else self[k0].mu_transform
+
+            elif share_grid:
+                shared_grid = {
+                    'match_ids': shared_match_ids[k],
+                    'shared_grid': None if i == 0 else self[k0].shared_grid
+                }
+
+            if share_features:
+                shared_features = {
+                    'match_ids': shared_match_ids[k],
+                    'shared_features': None if i == 0 else self[k0].shared_features
+                }
+            else:
+                shared_features = None
+
+            if i == 0 or clone_readout is False:
+                self.add_module(
+                    k,
+                    self._base_readout(in_shape=in_shape, outdims=n_neurons, **kwargs),
+                )
+                original_readout = k
+            elif i > 0 and clone_readout is True:
+                self.add_module(k, ClonedReadout(self[original_readout], **kwargs))
+
+    def initialize(self, mean_activity_dict):
+        for k, mu in mean_activity_dict.items():
+            self[k].initialize()
+            if hasattr(self[k], "bias"):
+                self[k].bias.data = mu.squeeze() - 1
+
+    def regularizer(self, readout_key):
+        return self[readout_key].feature_l1() * self.gamma_readout
+        # TODO: change this to -> return self[readout_key].regularizer()
+
+    @property
+    def positive(self):
+        if hasattr(self, "_positive"):
+            return self._positive
+        else:
+            return False
+
+    @positive.setter
+    def positive(self, value):
+        self._positive = value
+        for k in self:
+            self[k].positive = value

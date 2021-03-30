@@ -22,6 +22,7 @@ def corr(y1, y2, axis=-1, eps=1e-8, **kwargs):
     y2 = (y2 - y2.mean(axis=axis, keepdims=True)) / (y2.std(axis=axis, keepdims=True, ddof=0) + eps)
     return (y1 * y2).mean(axis=axis, **kwargs)
 
+
 def gini(x):
     """
     Calculate the Gini coefficient from a list of numbers. The Gini coefficient is used as a measure of (in)equality
@@ -36,7 +37,7 @@ def gini(x):
             Gini coefficient
     """
     x = np.asarray(x)
-    if any(i < 0 for i in x):
+    if any(x < 0):
         warnings.warn("Input x contains negative values")
     sorted_x = np.sort(x)
     n = len(x)

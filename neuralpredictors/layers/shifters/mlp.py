@@ -21,16 +21,13 @@ class MLP(Shifter):
         """
         super().__init__()
 
+        prev_output = input_features
         feat = []
-        if shift_layers > 1:
-            feat = [nn.Linear(input_features, hidden_channels), nn.Tanh()]
-        else:
-            hidden_channels = input_features
+        for _ in range(shift_layers - 1):
+            feat.extend([nn.Linear(prev_output, hidden_channels), nn.Tanh()])
+            prev_output = hidden_channels
 
-        for _ in range(shift_layers - 2):
-            feat.extend([nn.Linear(hidden_channels, hidden_channels), nn.Tanh()])
-
-        feat.extend([nn.Linear(hidden_channels, 2), nn.Tanh()])
+        feat.extend([nn.Linear(prev_output, 2), nn.Tanh()])
         self.mlp = nn.Sequential(*feat)
 
     def regularizer(self):

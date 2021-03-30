@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 
-from neuralpredictors.constraints import positive
+from neuralpredictors.old_constraints import positive
 
 
 class GradientMixin:

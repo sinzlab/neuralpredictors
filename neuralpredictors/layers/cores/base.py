@@ -10,7 +10,7 @@ class Core:
         """
         Initialization applied on the core.
         """
-        raise NotImplementedError("Not initializing")
+        raise NotImplementedError()
 
     def __repr__(self):
         s = super().__repr__()

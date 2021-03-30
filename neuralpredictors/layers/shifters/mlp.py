@@ -16,7 +16,7 @@ class MLP(Shifter):
         Args:
             input_features (int): number of input features, defaults to 2.
             hidden_channels (int): number of hidden units.
-            shift_layers(int): number of hidden layers.
+            shift_layers(int): number of shifter layers (n=1 will correspond to a network without a hidden layer).
             **kwargs:
         """
         super().__init__()

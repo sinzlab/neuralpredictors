@@ -47,4 +47,3 @@ def gini(x, axis=None):
     n = x.shape[axis]
     cumx = np.cumsum(sorted_x, dtype=float, axis=axis)
     return (n + 1 - 2 * np.sum(cumx, axis=axis) / cumx.take(-1, axis=axis)) / n
-

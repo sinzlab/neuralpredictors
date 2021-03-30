@@ -8,7 +8,7 @@ from ..utils import anscombe
 logger = logging.getLogger(__name__)
 
 
-def corr(
+def corr( 
     y1: ArrayLike, y2: ArrayLike, axis: Union[None, int, Tuple[int]] = -1, eps: int = 1e-8, **kwargs
 ) -> np.ndarray:
     """
@@ -34,8 +34,8 @@ def oracle_corr_corrected(repeated_outputs: ArrayLike) -> np.ndarray:
     Compute the corrected oracle correlations per neuron.
 
     Args:
-        repeated_outputs (array-like): numpy array with shape (images, repeats, responses), or a list of lists of
-            responses (with len: num of repeats) per image.
+        repeated_outputs (array-like): numpy array with shape (images, repeats, responses), or a list containing for each
+            image an array of shape (repeats, responses).
 
     Returns:
         array: Corrected oracle correlations per neuron
@@ -55,41 +55,31 @@ def oracle_corr(repeated_outputs: ArrayLike) -> np.ndarray:
     Compute the oracle correlations per neuron.
 
     Args:
-        repeated_outputs (array-like): numpy array with shape (images, repeats, responses), or a list of lists of
-            responses (with len: num of repeats) per image.
+        repeated_outputs (array-like): numpy array with shape (images, repeats, responses), or a list containing for each
+            image an array of shape (repeats, responses).
 
     Returns:
         array: Oracle correlations per neuron
     """
+    
+    oracles = []
+    for outputs in repeated_outputs:
+        r, n = outputs.shape
+        # compute the mean over repeats, for each neuron
+        mu = outputs.mean(axis=0, keepdims=True)
+        # compute oracle predictor
+        oracle = (mu - outputs / r) * r / (r - 1)
 
-    if len(repeated_outputs.shape) == 3:
-        _, r, n = repeated_outputs.shape
-        oracles = (repeated_outputs.mean(axis=1, keepdims=True) - repeated_outputs / r) * r / (r - 1)
-        if np.any(np.isnan(oracles)):
+        if np.any(np.isnan(oracle)):
             logger.warning(
-                "{}% NaNs when calculating the oracle. NaNs will be set to Zero.".format(np.isnan(oracles).mean() * 100)
-            )
-        oracles[np.isnan(oracles)] = 0
-        return corr(oracles.reshape(-1, n), repeated_outputs.reshape(-1, n), axis=0)
-    else:
-        oracles = []
-        for outputs in repeated_outputs:
-            r, n = outputs.shape
-            # compute the mean over repeats, for each neuron
-            mu = outputs.mean(axis=0, keepdims=True)
-            # compute oracle predictor
-            oracle = (mu - outputs / r) * r / (r - 1)
-
-            if np.any(np.isnan(oracle)):
-                logger.warning(
-                    "{}% NaNs when calculating the oracle. NaNs will be set to Zero.".format(
-                        np.isnan(oracle).mean() * 100
-                    )
+                "{}% NaNs when calculating the oracle. NaNs will be set to Zero.".format(
+                    np.isnan(oracle).mean() * 100
                 )
-                oracle[np.isnan(oracle)] = 0
+            )
+            oracle[np.isnan(oracle)] = 0
 
-            oracles.append(oracle)
-        return corr(np.vstack(repeated_outputs), np.vstack(oracles), axis=0)
+        oracles.append(oracle)
+    return corr(np.vstack(repeated_outputs), np.vstack(oracles), axis=0)
 
 
 def explainable_var(repeated_outputs: ArrayLike, eps: int = 1e-9) -> np.ndarray:
@@ -97,8 +87,8 @@ def explainable_var(repeated_outputs: ArrayLike, eps: int = 1e-9) -> np.ndarray:
     Compute the explainable variance per neuron.
 
     Args:
-        repeated_outputs (array): numpy array with shape (images, repeats, responses), or a list of lists of
-            responses (with len: num of repeats) per image.
+        repeated_outputs (array): numpy array with shape (images, repeats, responses), or a list containing for each
+            image an array of shape (repeats, responses).
 
     Returns:
         array: Corrected oracle correlations per neuron
@@ -150,8 +140,8 @@ def snr(repeated_outputs: ArrayLike, per_neuron: bool = True) -> np.ndarray:
     Compute signal to noise ratio.
 
     Args:
-        repeated_outputs (array-like): numpy array with shape (images, repeats, responses), or a list of lists of
-            responses (with len: num of repeats) per image.
+        repeated_outputs (array-like): numpy array with shape (images, repeats, responses), or a list containing for each
+            image an array of shape (repeats, responses).
         per_neuron (bool, optional): Return snr per neuron or averaged across neurons. Defaults to True.
 
     Returns:

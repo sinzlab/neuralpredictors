@@ -1,4 +1,6 @@
 import logging
+import numpy as np
+import warnings
 
 logger = logging.getLogger(__name__)
 
@@ -19,3 +21,24 @@ def corr(y1, y2, axis=-1, eps=1e-8, **kwargs):
     y1 = (y1 - y1.mean(axis=axis, keepdims=True)) / (y1.std(axis=axis, keepdims=True, ddof=0) + eps)
     y2 = (y2 - y2.mean(axis=axis, keepdims=True)) / (y2.std(axis=axis, keepdims=True, ddof=0) + eps)
     return (y1 * y2).mean(axis=axis, **kwargs)
+
+def gini(x):
+    """
+    Calculate the Gini coefficient from a list of numbers. The Gini coefficient is used as a measure of (in)equality
+    where a Gini coefficient of 1 (or 100%) expresses maximal inequality among values. A value greater than 1 may occur
+     if some value represents negative contribution.
+
+    Args:
+        x: 1 D array or list
+            Array of numbers from which to calculate the Gini coefficient.
+
+    Returns: float
+            Gini coefficient
+    """
+    x = np.asarray(x)
+    if any(i < 0 for i in x):
+        warnings.warn("Input x contains negative values")
+    sorted_x = np.sort(x)
+    n = len(x)
+    cumx = np.cumsum(sorted_x, dtype=float)
+    return (n + 1 - 2 * np.sum(cumx) / cumx[-1]) / n

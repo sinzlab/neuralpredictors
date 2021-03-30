@@ -173,3 +173,46 @@ def convert_static_h5_dataset_to_folder(filename, outpath=None, overwrite=False,
                 )
 
         fid["statistics"].visititems(statistics_func)
+
+
+def load_dict_from_hdf5(filename):
+    """
+    Given a `filename` of a HDF5 file, opens the file and
+    load the entire content as a (nested) dictionary.
+
+    Args:
+        filename - name of HDF5 file
+
+    Returns:
+        (nested) dictionary corresponding to the content of the HDF5 file.
+    """
+    with h5py.File(filename, "r") as h5file:
+        return recursively_load_dict_contents_from_group(h5file)
+
+
+def recursively_load_dict_contents_from_group(h5file, path="/"):
+    """
+    Given a `h5file` h5py object, loads the object at `path`
+    as nested dictionary.
+
+    Args:
+        h5file - h5py object
+        path - Path within the h5py file to load the content of recursively.
+
+    Returns:
+        (nested) dictionary corresponding to the content of the HDF5 file at the path.
+    """
+    ans = {}
+    for key, item in h5file[path].items():
+        if isinstance(item, h5py.Dataset):
+            dtype = item.dtype
+            v = item[()]
+            if dtype.char == "S":  # convert bytes to univcode
+                v = v.astype(str)
+            ans[key] = v
+        elif isinstance(item, h5py.Group):
+            if item.attrs.get("_iterable", False):
+                ans[key] = [item[str(i)][()] for i in range(len(item))]
+            else:
+                ans[key] = recursively_load_dict_contents_from_group(h5file, path + key + "/")
+    return ans

@@ -5,6 +5,7 @@ from torch import nn
 from torch.nn import ModuleDict
 
 import logging
+
 logger = logging.getLogger(__name__)
 
 
@@ -38,7 +39,7 @@ class StaticAffine2d(nn.Linear):
         self.weight.data.normal_(0, 1e-6)
         if self.bias is not None:
             if bias is not None:
-                logger.info('Setting bias to predefined value')
+                logger.info("Setting bias to predefined value")
                 self.bias.data = bias
             else:
                 self.bias.data.normal_(0, 1e-6)

@@ -32,6 +32,7 @@ class MultiReadout(Readout, ModuleDict):
 
     def regularizer(self, readout_key):
         return self[readout_key].feature_l1() * self.gamma_readout
+        # TODO: change this to -> return self[readout_key].regularizer()
 
     @property
     def positive(self):

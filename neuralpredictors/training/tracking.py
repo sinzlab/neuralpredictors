@@ -1,9 +1,10 @@
 import copy
 import time
 import logging
-from collections import defaultdict
-from typing import Dict, Tuple, List
+from collections import defaultdict, abc
+from typing import Dict, Tuple, List, Mapping, Union, Optional, Sequence
 import numpy as np
+from tqdm import tqdm
 
 from .utils import deep_update
 
@@ -244,16 +245,18 @@ class AdvancedTracker(Tracker):
     ```
     """
 
-    def __init__(self, main_objective: Tuple[str, ...] = (), **objectives):
+    def __init__(self, main_objective: Tuple[str, ...] = (), **objectives: Mapping) -> None:
         """
         In principle, `objectives` is expected to be a dictionary of dictionaries
-        The hierarchy can in principle be arbitrary deep.
+        The hierarchy can in principle be arbitrarily deep.
         The only restriction is that the lowest level has to be a dictionary with values being
         either a numerical value which will be interpreted as the initial value for this objective
         (to be accumulated manually) or a callable (e.g. a function) that returns the objective value.
 
         Args:
             main_objective: key of the main objective that is used to e.g. decide lr reductions
+                            can be something like `("img_classification","accuracy")` to always look at accruacy.
+                            Can be combined with a setting specific key in `get_current_main_objective(...)`
             **objectives: e.g. {"dataset": {"objective1": o_fct1, "objective2": 0, "normalization": 0},...}
                            or {"dataset": {"task_key": {"objective1": o_fct1, "objective2": 0},...},...}
         """
@@ -261,10 +264,10 @@ class AdvancedTracker(Tracker):
         self.log = self._initialize_log(objectives)
         self.time = []
         self.main_objective = main_objective
-        self.epoch = -1
+        self.epoch = -1  # will be increased to 0 in next line
         self.start_epoch()
 
-    def add_objectives(self, objectives: Dict, init_epoch: bool = False):
+    def add_objectives(self, objectives: Mapping, init_epoch: bool = False) -> None:
         """
         Add new objectives (with initial values) to the logs.
         Args:
@@ -277,14 +280,14 @@ class AdvancedTracker(Tracker):
             self._initialize_epoch(new_log, objectives)
         deep_update(self.log, new_log)
 
-    def start_epoch(self):
+    def start_epoch(self) -> None:
         """ Start a new epoch. Initialize each accumulation with its default value. """
         t = time.time()
         self.time.append(t)
         self.epoch += 1
         self._initialize_epoch(self.log, self.objectives)
 
-    def log_objective(self, value: float, key: Tuple[str, ...] = ()):
+    def log_objective(self, value: float, key: Tuple[str, ...] = ()) -> None:
         """
         Add a new entry to the logs
         Args:
@@ -296,7 +299,7 @@ class AdvancedTracker(Tracker):
         else:
             self._log_objective_callables(self.log, self.objectives)
 
-    def display_log(self, key=(), tqdm_iterator=None):
+    def display_log(self, key: Tuple[str, ...] = (), tqdm_iterator: Optional[tqdm] = None) -> None:
         """
         Display the current objective value of everything under `key`
         Args:
@@ -315,9 +318,9 @@ class AdvancedTracker(Tracker):
         else:
             logger.info(current_log)
 
-    def check_isfinite(self, log: dict = None) -> bool:
+    def check_isfinite(self, log: Optional[Union[Mapping, Sequence]] = None) -> bool:
         """
-        Checks if all entries in `log` or `self.log` are finite.
+        Checks if all entries in `log` or (normalized) `self.log` are finite.
         Args:
             log: dict that is recursively searched for infinite entries
 
@@ -325,7 +328,7 @@ class AdvancedTracker(Tracker):
         """
         if log is None:
             log = self._normalize_log(self.log)
-        if isinstance(log, dict):
+        if isinstance(log, abc.Mapping):
             for k, l in log.items():
                 if not self._check_isfinite(l):
                     return False
@@ -333,8 +336,9 @@ class AdvancedTracker(Tracker):
             return np.isfinite(log).any()
         return True
 
-    def get_objective(self, log=None, key: Tuple[str, ...] = ()) -> np.array:
+    def get_objective(self, log: Optional[Union[Mapping, Sequence]] = None, key: Tuple[str, ...] = ()) -> np.array:
         """
+        Get the value of the objective that corresponds to the key.
         Args:
             log: log to retrieve objective from
             key: key to match with the log
@@ -349,14 +353,14 @@ class AdvancedTracker(Tracker):
         else:
             return log[key[0]]
 
-    def get_current_objective(self, key) -> float:
+    def get_current_objective(self, key: Tuple[str, ...]) -> float:
         return self.get_objective(self._normalize_log(self.log), key)[-1]
 
-    def get_current_main_objective(self, key) -> float:
+    def get_current_main_objective(self, key: Tuple[str, ...]) -> float:
         combined_key = key + self.main_objective if isinstance(key, tuple) else (key,) + self.main_objective
         return self.get_current_objective(combined_key)
 
-    def finalize(self):
+    def finalize(self) -> None:
         """ After training, normalize the log and save the total time. """
         self.time = np.array(self.time)
         self.time -= self.time[0]
@@ -372,7 +376,7 @@ class AdvancedTracker(Tracker):
         output = copy.deepcopy(self.__dict__)
         return output
 
-    def load_state_dict(self, tracker_dict: Dict):
+    def load_state_dict(self, tracker_dict: Dict) -> None:
         """
         Loads given state_dict from another tracker.
         Args:
@@ -402,16 +406,16 @@ class AdvancedTracker(Tracker):
         tracker.epoch = tracker_dict["epoch"]
         return tracker
 
-    def _initialize_log(self, objectives) -> Dict:
+    def _initialize_log(self, objectives: Mapping[str, any]) -> Dict:
         log = {}
         for key, objective in objectives.items():
-            if isinstance(objective, dict):
+            if isinstance(objective, abc.Mapping):
                 log[key] = self._initialize_log(objective)
             elif not callable(objective):
                 log[key] = []
         return log
 
-    def _initialize_epoch(self, log, objectives):
+    def _initialize_epoch(self, log: Union[Mapping, Sequence], objectives: Mapping[str, any]) -> None:
         """
         For each key in `objectives`, go through log and append a new entry to its list.
         The entry reflects the default value saved in `objectives`.
@@ -420,13 +424,13 @@ class AdvancedTracker(Tracker):
             objectives: dictionary of default values
         """
         for key, objective in objectives.items():
-            if isinstance(objective, dict):
+            if isinstance(objective, abc.Mapping):
                 self._initialize_epoch(log[key], objective)
             elif not callable(objective):
                 while len(log[key]) <= self.epoch:
                     log[key].append(objective)
 
-    def _log_objective_value(self, value: float, log: Dict, key: Tuple[str, ...] = ()):
+    def _log_objective_value(self, value: float, log: Union[Mapping, Sequence], key: Tuple[str, ...] = ()) -> None:
         """
         Recursively walk through the log dictionary to get to follow `key`.
         When on lowest level: add `value` to entry at current epoch.
@@ -440,21 +444,21 @@ class AdvancedTracker(Tracker):
         else:
             log[key[0]][self.epoch] += value
 
-    def _log_objective_callables(self, log: Dict, objectives: Dict):
+    def _log_objective_callables(self, log: Union[Mapping, Sequence], objectives: Mapping[str, any]) -> None:
         """
-        Log objectives that are specified as callables
+        Log all objectives that are specified as callables
         Disclaimer: this is not very well tested!
         Args:
             log:
             objectives:
         """
         for key, objective in objectives.items():
-            if isinstance(objective, dict):
+            if isinstance(objective, abc.Mapping):
                 self._log_objective_callables(log[key], objective)
             elif callable(objective):
-                log[key].append(objective())
+                log[key][self.epoch] += objective()
 
-    def _normalize_log(self, log: [Dict, List]) -> [Dict, np.array]:
+    def _normalize_log(self, log: Union[Mapping, Sequence]) -> Union[Mapping, np.array]:
         """
         Recursively go through the log and normalize the entries that
         have `"normalization"` information on the same level.
@@ -465,7 +469,7 @@ class AdvancedTracker(Tracker):
             Normalized log dictionary that has numpy arrays on the lowest level
 
         """
-        if isinstance(log, dict):
+        if isinstance(log, abc.Mapping):
             n_log = {}
             norm = None
             for key, l in log.items():
@@ -475,18 +479,24 @@ class AdvancedTracker(Tracker):
                     norm = res
                 else:
                     n_log[key] = res
-            if norm is not None:
-                nonzero_start = (norm != 0).argmax(axis=0)
-                norm = norm[nonzero_start:]
-                for key, l in n_log.items():
-                    l = l[nonzero_start:]
-                    if isinstance(l, np.ndarray):
-                        n_log[key] = l / np.where(norm > 0, norm, np.ones_like(norm))
+            self._normalize(n_log, norm)
             return n_log
         else:
             return np.array(log)
 
-    def _gather_log(self, log: Dict, key: Tuple[str, ...], index: int = -1) -> Dict:
+    def _normalize(self, n_log: Mapping, norm: np.ndarray):
+        """
+        Normalizes sub-dict `n_log`
+        """
+        if norm is not None:
+            nonzero_start = (norm != 0).argmax(axis=0)
+            norm = norm[nonzero_start:]
+            for key, l in n_log.items():
+                l = l[nonzero_start:]
+                if isinstance(l, np.ndarray):
+                    n_log[key] = l / np.where(norm > 0, norm, np.ones_like(norm))
+
+    def _gather_log(self, log: Union[Mapping, Sequence], key: Tuple[str, ...], index: int = -1) -> Mapping[str, str]:
         """
         Get a flattened and print-ready version of the log dictionary for a given key
         Args:
@@ -501,7 +511,7 @@ class AdvancedTracker(Tracker):
             return self._gather_log(log[key[0]], key[1:], index)
         elif key:
             return self._gather_log(log[key[0]], (), index)
-        elif isinstance(log, dict):
+        elif isinstance(log, abc.Mapping):
             gathered = {}
             for key, l in log.items():
                 logs = self._gather_log(l, (), index)

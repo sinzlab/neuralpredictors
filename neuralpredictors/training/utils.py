@@ -1,8 +1,10 @@
 import collections
-from typing import Dict
+from typing import TypeVar
+
+T = TypeVar("T", bound=collections.abc.Mapping)
 
 
-def deep_update(d: Dict, u: Dict) -> Dict:
+def deep_update(d: T, u: collections.abc.Mapping) -> T:
     """
     Recursively update a dictionary with the values from another dictionary
     Args:

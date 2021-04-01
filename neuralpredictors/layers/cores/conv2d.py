@@ -45,7 +45,6 @@ class Stacked2dCore(Core2d, nn.Module):
         bias=True,
         momentum=0.1,
         pad_input=True,
-        hidden_padding=None,
         batch_norm=True,
         batch_norm_scale=True,
         independent_bn_bias=True,

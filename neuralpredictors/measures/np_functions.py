@@ -44,9 +44,9 @@ def oracle_corr_corrected(repeated_outputs: ArrayLike) -> np.ndarray:
     """
 
     var_noise, var_mean = [], []
-    for repeat in repeated_outputs:
-        var_noise.append(repeat.var(axis=0))
-        var_mean.append(repeat.mean(axis=0))
+    for output in repeated_outputs:
+        var_noise.append(output.var(axis=0))
+        var_mean.append(output.mean(axis=0))
     var_noise = np.mean(np.array(var_noise), axis=0)
     var_mean = np.var(np.array(var_mean), axis=0)
     return var_mean / np.sqrt(var_mean * (var_mean + var_noise))
@@ -66,18 +66,13 @@ def oracle_corr(repeated_outputs: ArrayLike) -> np.ndarray:
 
     oracles = []
     for outputs in repeated_outputs:
-        num_repeats, _ = outputs.shape
-        # compute the mean over repeats, for each neuron
-        mu = outputs.mean(axis=0, keepdims=True)
-        # compute oracle predictor
-        oracle = (mu - outputs / num_repeats) * num_repeats / (num_repeats - 1)
-
+        num_repeats = outputs.shape[0]
+        oracle = (outputs.sum(axis=0, keepdims=True) - outputs) / (num_repeats - 1)
         if np.any(np.isnan(oracle)):
             logger.warning(
                 "{}% NaNs when calculating the oracle. NaNs will be set to Zero.".format(np.isnan(oracle).mean() * 100)
             )
             oracle[np.isnan(oracle)] = 0
-
         oracles.append(oracle)
     return corr(np.vstack(repeated_outputs), np.vstack(oracles), axis=0)
 
@@ -127,8 +122,8 @@ def fev(targets: ArrayLike, predictions: ArrayLike, return_exp_var: bool = False
     noise_var = np.mean(img_var, axis=0)
     fev = (total_var - noise_var) / total_var
 
-    PredVar = np.mean(pred_var, axis=0)
-    fev_e = 1 - (PredVar - noise_var) / (total_var - noise_var)
+    pred_var = np.mean(pred_var, axis=0)
+    fev_e = 1 - (pred_var - noise_var) / (total_var - noise_var)
     return [fev, fev_e] if return_exp_var else fev_e
 
 

@@ -93,7 +93,7 @@ def explainable_var(repeated_outputs: ArrayLike, eps: int = 1e-9) -> np.ndarray:
     """
 
     total_var = np.var(np.vstack(repeated_outputs), axis=0, ddof=1)
-    img_var = np.var(repeated_outputs, axis=1, ddof=1) 
+    img_var = np.var(repeated_outputs, axis=1, ddof=1)
     noise_var = np.mean(img_var, axis=0)
     explainable_var = (total_var - noise_var) / (total_var + eps)
     return explainable_var

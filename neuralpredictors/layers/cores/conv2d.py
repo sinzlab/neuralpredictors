@@ -1,9 +1,31 @@
-from .base import Core2d
-from torch import nn
 import warnings
+from collections import OrderedDict, Iterable
+
+from torch import nn
+import torch
+import torchvision
+
+from .base import Core2d
+from ... import regularizers
+from ..affine import Bias2DLayer, Scale2DLayer
+from ..activations import AdaptiveELU
+from ..hermite import (
+    HermiteConv2D,
+    RotationEquivariantBatchNorm2D,
+    RotationEquivariantBias2DLayer,
+    RotationEquivariantScale2DLayer,
+)
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class Stacked2dCore(Core2d, nn.Module):
+    """
+    A core build of stacked conv2d layers.
+    """
+
     def __init__(
         self,
         input_channels,
@@ -159,7 +181,7 @@ class Stacked2dCore(Core2d, nn.Module):
                 layer["nonlin"] = AdaptiveELU(elu_xshift, elu_yshift)
             self.features.add_module("layer{}".format(l), nn.Sequential(layer))
 
-        self.apply(self.init_conv)
+        self.initialize()
 
     def forward(self, input_):
         ret = []
@@ -171,9 +193,15 @@ class Stacked2dCore(Core2d, nn.Module):
         return torch.cat([ret[ind] for ind in self.stack], dim=1)
 
     def laplace(self):
+        """
+        Laplace regularization for the filters of the first conv2d layer.
+        """
         return self._input_weights_regularizer(self.features[0].conv.weight, avg=self.use_avg_reg)
 
     def group_sparsity(self):
+        """
+        Sparsity regularization on the filters of all the conv2d layers except the first one.
+        """
         ret = 0
         for l in range(1, self.layers):
             ret = ret + self.features[l].conv.weight.pow(2).sum(3, keepdim=True).sum(2, keepdim=True).sqrt().mean()
@@ -188,6 +216,10 @@ class Stacked2dCore(Core2d, nn.Module):
 
 
 class RotationEquivariant2dCore(Core2d, nn.Module):
+    """
+    A core built of 2d rotation-equivariant layers. For more info refer to https://openreview.net/forum?id=H1fU8iAqKX.
+    """
+
     def __init__(
         self,
         input_channels,
@@ -374,7 +406,15 @@ class RotationEquivariant2dCore(Core2d, nn.Module):
                 layer["nonlin"] = AdaptiveELU(elu_xshift, elu_yshift)
             self.features.add_module("layer{}".format(l), nn.Sequential(layer))
 
+        self.initialize()
+
+    def initialize(self):
         self.apply(self.init_conv_hermite)
+
+    @staticmethod
+    def init_conv_hermite(m):
+        if isinstance(m, HermiteConv2D):
+            nn.init.normal_(m.coeffs.data, std=0.1)
 
     def forward(self, input_):
         ret = []
@@ -410,6 +450,10 @@ class RotationEquivariant2dCore(Core2d, nn.Module):
 
 
 class TransferLearningCore(Core2d, nn.Module):
+    """
+    Core from popular image recognition networks such as VGG or AlexNet. Can be already pretrained on ImageNet.
+    """
+
     def __init__(
         self,
         input_channels,
@@ -423,8 +467,6 @@ class TransferLearningCore(Core2d, nn.Module):
         **kwargs
     ):
         """
-        Core from popular image recognition networks such as VGG or AlexNet. Can be already pretrained on ImageNet.
-
         Args:
             input_channels (int): Number of input channels. 1 if greyscale, 3 if RBG
             tl_model_name (str): Name of the image recognition Transfer Learning model. Possible are all models in
@@ -496,35 +538,7 @@ class TransferLearningCore(Core2d, nn.Module):
                 i += 1
         return self.features.TransferLearning[-i].out_channels
 
-    def initialize(self, cuda=False):
-        # Overwrite parent class's initialize function because initialization is done by the 'pretrained' parameter
-        self.put_to_cuda(cuda=cuda)
-
-
-class DepthSeparableConv2d(nn.Sequential):
-    def __init__(
-        self,
-        in_channels,
-        out_channels,
-        kernel_size,
-        stride=1,
-        padding=0,
-        dilation=1,
-        bias=True,
-    ):
-        super().__init__()
-        self.add_module("in_depth_conv", nn.Conv2d(in_channels, out_channels, 1, bias=bias))
-        self.add_module(
-            "spatial_conv",
-            nn.Conv2d(
-                out_channels,
-                out_channels,
-                kernel_size,
-                stride=stride,
-                padding=padding,
-                dilation=dilation,
-                bias=bias,
-                groups=out_channels,
-            ),
+    def initialize(self):
+        logger.warning(
+            "Ignoring initialization since the parameters should be acquired from a pretrained model. If you want random weights, set pretrained = False."
         )
-        self.add_module("out_depth_conv", nn.Conv2d(out_channels, out_channels, 1, bias=bias))

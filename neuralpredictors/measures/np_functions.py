@@ -64,11 +64,11 @@ def oracle_corr(repeated_outputs: ArrayLike) -> np.ndarray:
 
     oracles = []
     for outputs in repeated_outputs:
-        num_resp, _ = outputs.shape
+        num_repeats, _ = outputs.shape
         # compute the mean over repeats, for each neuron
         mu = outputs.mean(axis=0, keepdims=True)
         # compute oracle predictor
-        oracle = (mu - outputs / num_resp) * num_resp / (num_resp - 1)
+        oracle = (mu - outputs / num_repeats) * num_repeats / (num_repeats - 1)
 
         if np.any(np.isnan(oracle)):
             logger.warning(

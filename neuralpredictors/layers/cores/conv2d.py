@@ -553,6 +553,7 @@ class SE2dCore(Core2d, nn.Module):
     layers. Finally, it is also possible to make this core fully linear, by disabling all nonlinearities.
     This makes it effectively possible to turn a core+readout CNN into a LNP-model.
     """
+
     def __init__(
         self,
         input_channels,

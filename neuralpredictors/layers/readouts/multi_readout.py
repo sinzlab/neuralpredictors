@@ -1,185 +1,108 @@
-class MultiReadout(Readout, ModuleDict):
+import torch
+from .base import ClonedReadout
+from .point_pooled import PointPooled2d
+from .gaussian import FullGaussian2d
+from .factorized import SpatialXFeatureLinear
+
+#################################################################
+#### MultiReadout Base Classes
+#################################################################
+
+class MultiReadoutBase(torch.nn.ModuleDict):
     _base_readout = None
 
-    def __init__(self, in_shape, loaders, gamma_readout, clone_readout=False, **kwargs):
+    def __init__(self, in_shape_dict, n_neurons_dict, clone_readout=False, **kwargs):
         if self._base_readout is None:
             raise ValueError("Attribute _base_readout must be set")
-
         super().__init__()
 
-        self.in_shape = in_shape
-        self.neurons = OrderedDict([(k, loader.dataset.n_neurons) for k, loader in loaders.items()])
-        if "positive" in kwargs:
-            self._positive = kwargs["positive"]
+        for i, k in enumerate(n_neurons_dict):
+            k0 = k0 or k
 
-        self.gamma_readout = gamma_readout  # regularisation strength
+            readout_kwargs = self.prepare_readout_kwargs(i, k, k0, **kwargs)
 
-        for i, (k, n_neurons) in enumerate(self.neurons.items()):
             if i == 0 or clone_readout is False:
                 self.add_module(
                     k,
-                    self._base_readout(in_shape=in_shape, outdims=n_neurons, **kwargs),
+                    self._base_readout(in_shape=in_shape_dict[k], outdims=n_neurons_dict[k], **readout_kwargs),
                 )
                 original_readout = k
             elif i > 0 and clone_readout is True:
-                self.add_module(k, ClonedReadout(self[original_readout], **kwargs))
+                self.add_module(k, ClonedReadout(self[original_readout]))
+
+    @staticmethod
+    def prepare_readout_kwargs(self, i, k, k0, **kwargs):
+        return kwargs
+
+    def forward(self, *args, data_key=None, **kwargs):
+        if data_key is None and len(self) == 1:
+            data_key = list(self.keys())[0]
+        return self[data_key](*args, **kwargs)
 
     def initialize(self, mean_activity_dict):
         for k, mu in mean_activity_dict.items():
             self[k].initialize()
+            # TODO: Do we want to initialize the biases with mean activity? Or just leave it to the readout to initialize the bias
             if hasattr(self[k], "bias"):
                 self[k].bias.data = mu.squeeze() - 1
 
-    def regularizer(self, readout_key):
-        return self[readout_key].feature_l1() * self.gamma_readout
-        # TODO: change this to -> return self[readout_key].regularizer()
+    def regularizer(self, data_key=None, average=True):
+        if data_key is None and len(self) == 1:
+            data_key = list(self.keys())[0]
 
-    @property
-    def positive(self):
-        if hasattr(self, "_positive"):
-            return self._positive
-        else:
-            return False
-
-    @positive.setter
-    def positive(self, value):
-        self._positive = value
-        for k in self:
-            self[k].positive = value
+        # TODO: Is the default average=True good here?
+        return self[data_key].feature_l1(average=average) * self.gamma_readout
+        # TODO: change this to -> return self[data_key].regularizer(average=average). Add regularizer method to all readouts
 
 
-class MultiplePointPyramid2d(MultiReadout):
-    _base_readout = PointPyramid2d
+class MultiReadoutSharedParametersBase(MultiReadoutBase):
+    def __init__(self, in_shape_dict, n_neurons_dict, clone_readout=False, **kwargs):
+        super().__init__(in_shape_dict, n_neurons_dict, clone_readout, **kwargs)
 
+    def prepare_readout_kwargs(self, i, k, k0, **kwargs):
+        readout_kwargs = kwargs.copy()
 
-class MultipleGaussian3d(MultiReadout):
-    """
-    Instantiates multiple instances of Gaussian3d Readouts
-    usually used when dealing with different datasets or areas sharing the same core.
-    Args:
-        in_shape (list): shape of the input feature map [channels, width, height]
-        loaders (list):  a list of dataset objects
-        gamma_readout (float): regularisation term for the readout which is usally set to 0.0 for gaussian3d readout
-                               as it contains one dimensional weight
+        if 'grid_mean_predictor' in readout_kwargs:
+            if readout_kwargs['grid_mean_predictor'] is not None:
+                if readout_kwargs['grid_mean_predictor_type'] == 'cortex':
+                    readout_kwargs['source_grid'] = readout_kwargs['source_grids'][k]
+                else:
+                    raise KeyError('grid mean predictor {} does not exist'.format(readout_kwargs['grid_mean_predictor_type']))
+                if readout_kwargs['share_transform']:
+                    readout_kwargs['shared_transform'] = None if i == 0 else self[k0].mu_transform
 
-    """
+            elif readout_kwargs['share_grid']:
+                    readout_kwargs['shared_grid'] = {
+                        'match_ids': readout_kwargs['shared_match_ids'][k],
+                        'shared_grid': None if i == 0 else self[k0].shared_grid
+                    }
 
-    _base_readout = Gaussian3d
+            del readout_kwargs['share_transform']
+            del readout_kwargs['share_grid']
+            del readout_kwargs['grid_mean_predictor_type']
 
-    # Make sure this is not a bug
-    def regularizer(self, readout_key):
-        return self.gamma_readout
+        if 'share_features' in readout_kwargs:
+            if readout_kwargs['share_features']:
+                readout_kwargs['shared_features'] = {
+                        'match_ids': readout_kwargs['shared_match_ids'][k],
+                        'shared_features': None if i == 0 else self[k0].shared_features
+                    }
+            else:
+                readout_kwargs['shared_features'] = None
+            del readout_kwargs['share_features']
+        return readout_kwargs
 
+#################################################################
+#### Actual MultiReadouts
+#################################################################
 
-class MultiplePointPooled2d(MultiReadout):
-    """
-    Instantiates multiple instances of PointPool2d Readouts
-    usually used when dealing with more than one dataset sharing the same core.
-    """
-
+class MultiplePointPooled2d(MultiReadoutBase):
     _base_readout = PointPooled2d
 
 
-class MultipleFullGaussian2d(MultiReadout):
-    """
-    Instantiates multiple instances of FullGaussian2d Readouts
-    usually used when dealing with more than one dataset sharing the same core.
+class MultipleSpatialXFeatureLinear(MultiReadoutBase):
+    _base_readout = SpatialXFeatureLinear
 
-    Args:
-        in_shape (list): shape of the input feature map [channels, width, height]
-        loaders (list):  a list of dataloaders
-        gamma_readout (float): regularizer for the readout
-    """
 
+class MultipleFullGaussian2d(MultiReadoutSharedParametersBase):
     _base_readout = FullGaussian2d
-
-
-class MultipleUltraSparse(MultiReadout):
-    """
-    This class instantiates multiple instances of UltraSparseReadout
-    useful when dealing with multiple datasets
-    Args:
-        in_shape (list): shape of the input feature map [channels, width, height]
-        loaders (list):  a list of dataset objects
-        gamma_readout (float): regularisation term for the readout which is usally set to 0.0 for UltraSparseReadout readout
-                               as it contains one dimensional weight
-    """
-
-    _base_readout = UltraSparse
-
-
-
-##############################################
-
-class MultiReadout(Readout, ModuleDict):
-    _base_readout = None
-
-    def __init__(self, in_shape, n_neurons_dict, clone_readout=False, **kwargs):
-        if self._base_readout is None:
-            raise ValueError("Attribute _base_readout must be set")
-
-        super().__init__()
-
-        self.gamma_readout = kwargs.get('gamma_readout', 0.)
-        grid_mean_predictor = kwargs.get('grid_mean_predictor', None)
-
-        readout_kwargs = some_filtering_function(kwargs)
-
-        for i, (k, n_neurons) in enumerate(n_neurons_dict.items()):
-
-            source_grid = None
-            shared_grid = None
-            shared_transform = None
-            if grid_mean_predictor is not None:
-                if kwargs['grid_mean_predictor_type'] == 'cortex':
-                    readout_kwargs['source_grid'] = kwargs['source_grids'][k]
-                else:
-                    raise KeyError('grid mean predictor {} does not exist'.format(kwargs['grid_mean_predictor_type']))
-                if kwargs['share_transform']:
-                    readout_kwargs['shared_transform'] = None if i == 0 else self[k0].mu_transform
-
-            elif share_grid:
-                shared_grid = {
-                    'match_ids': shared_match_ids[k],
-                    'shared_grid': None if i == 0 else self[k0].shared_grid
-                }
-
-            if share_features:
-                shared_features = {
-                    'match_ids': shared_match_ids[k],
-                    'shared_features': None if i == 0 else self[k0].shared_features
-                }
-            else:
-                shared_features = None
-
-            if i == 0 or clone_readout is False:
-                self.add_module(
-                    k,
-                    self._base_readout(in_shape=in_shape, outdims=n_neurons, **kwargs),
-                )
-                original_readout = k
-            elif i > 0 and clone_readout is True:
-                self.add_module(k, ClonedReadout(self[original_readout], **kwargs))
-
-    def initialize(self, mean_activity_dict):
-        for k, mu in mean_activity_dict.items():
-            self[k].initialize()
-            if hasattr(self[k], "bias"):
-                self[k].bias.data = mu.squeeze() - 1
-
-    def regularizer(self, readout_key):
-        return self[readout_key].feature_l1() * self.gamma_readout
-        # TODO: change this to -> return self[readout_key].regularizer()
-
-    @property
-    def positive(self):
-        if hasattr(self, "_positive"):
-            return self._positive
-        else:
-            return False
-
-    @positive.setter
-    def positive(self, value):
-        self._positive = value
-        for k in self:
-            self[k].positive = value

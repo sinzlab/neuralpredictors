@@ -26,7 +26,8 @@ logger = logging.getLogger(__name__)
 
 class Stacked2dCore(Core2d, nn.Module):
     """
-    A core build of stacked conv2d layers.
+    An instantiation of the Core base class. A simple core that is stacked per default.
+    This means that the output of all layers is concatenated at the last layer.
     """
 
     def __init__(
@@ -67,7 +68,7 @@ class Stacked2dCore(Core2d, nn.Module):
             final_nonlinearity: Boolean, if true, appends an ELU layer after the last BatchNorm (if BN=True)
             elu_xshift, elu_yshift: final_nonlinearity(x) = Elu(x - elu_xshift) + elu_yshift
             bias:           Adds a bias layer.
-            momentum:       BN momentum
+            momentum:       momentum in the batchnorm layer.
             pad_input:      Boolean, if True, applies zero padding to all convolutions
             hidden_padding: int or list of int. Padding for hidden layers. Note that this will apply to all the layers
                             except the first (input) layer.
@@ -263,7 +264,7 @@ class RotationEquivariant2dCore(Core2d, nn.Module):
             final_nonlinearity: Boolean, if true, appends an ELU layer after the last BatchNorm (if BN=True)
             elu_xshift, elu_yshift: final_nonlinearity(x) = Elu(x - elu_xshift) + elu_yshift
             bias:           Adds a bias layer.
-            momentum:       BN momentum
+            momentum:        momentum in the batchnorm layer.
             pad_input:      Boolean, if True, applies zero padding to all convolutions
             hidden_padding: int or list of int. Padding for hidden layers. Note that this will apply to all the layers
                             except the first (input) layer.
@@ -449,7 +450,9 @@ class RotationEquivariant2dCore(Core2d, nn.Module):
 
 class TransferLearningCore(Core2d, nn.Module):
     """
-    Core from popular image recognition networks such as VGG or AlexNet. Can be already pretrained on ImageNet.
+    Core based on popular image recognition networks from torchvision such as VGG or AlexNet.
+    Can be instantiated as random or pretrained. Core is frozen by default, which can be changed with the fine_tune
+    argument.
     """
 
     def __init__(
@@ -543,6 +546,13 @@ class TransferLearningCore(Core2d, nn.Module):
 
 
 class SE2dCore(Core2d, nn.Module):
+    """
+    An extension of the Stacked2dCore class. The convolutional layers can be set to be either depth-separable
+    (as used in the popular MobileNets) or based on self-attention (as used in Transformer networks).
+    Additionally, a SqueezeAndExcitation layer (also called SE-block) can be added after each layer or the n final
+    layers. Finally, it is also possible to make this core fully linear, by disabling all nonlinearities.
+    This makes it effectively possible to turn a core+readout CNN into a LNP-model.
+    """
     def __init__(
         self,
         input_channels,
@@ -579,7 +589,7 @@ class SE2dCore(Core2d, nn.Module):
             final_nonlinearity: Boolean, if true, appends an ELU layer after the last BatchNorm (if BN=True)
             elu_xshift, elu_yshift: final_nonlinearity(x) = Elu(x - elu_xshift) + elu_yshift
             bias:           Adds a bias layer.
-            momentum:       BN momentum
+            momentum:       Momentum term for batch norm. Irrelevant if batch_norm=False
             pad_input:      Boolean, if True, applies zero padding to all convolutions
             batch_norm:     Boolean, if True appends a BN layer after each convolutional layer
             hidden_dilation:    If set to > 1, will apply dilated convs for all hidden layers
@@ -596,7 +606,7 @@ class SE2dCore(Core2d, nn.Module):
             se_reduction:   Int, Reduction of channels for global pooling of the Squeeze and Excitation Block.
             n_se_blocks:    Int, number of squeeze and excitation blocks. Inserted from the last layer
                               Examples: layers=4, n_se_blocks=2:
-                                => layer0 -> layer1->layer2->SEblock->layer3->SEblock
+                                => layer0 -> layer1 -> layer2 -> SEblock -> layer3 -> SEblock
             depth_separable: Boolean, if True, uses depth-separable convolutions in all layers after the first one.
             attention_conv: Boolean, if True, uses self-attention instead of convolution for all layers after the first one.
             linear:         Boolean, if True, removes all nonlinearities
@@ -614,7 +624,7 @@ class SE2dCore(Core2d, nn.Module):
         )
         self._input_weights_regularizer = regularizers.__dict__[input_regularizer](**regularizer_config)
 
-        self.layers = layers
+        self.num_layers = layers
         self.gamma_input = gamma_input
         self.input_channels = input_channels
         self.hidden_channels = hidden_channels
@@ -622,9 +632,9 @@ class SE2dCore(Core2d, nn.Module):
         self.features = nn.Sequential()
         self.n_se_blocks = n_se_blocks
         if stack is None:
-            self.stack = range(self.layers)
+            self.stack = range(self.num_layers)
         else:
-            self.stack = [*range(self.layers)[stack:]] if isinstance(stack, int) else stack
+            self.stack = [*range(self.num_layers)[stack:]] if isinstance(stack, int) else stack
 
         # --- first layer
         layer = OrderedDict()
@@ -638,10 +648,10 @@ class SE2dCore(Core2d, nn.Module):
         self.features.add_module("layer0", nn.Sequential(layer))
 
         if not isinstance(hidden_kern, Iterable):
-            hidden_kern = [hidden_kern] * (self.layers - 1)
+            hidden_kern = [hidden_kern] * (self.num_layers - 1)
 
         # --- other layers
-        for l in range(1, self.layers):
+        for l in range(1, self.num_layers):
             layer = OrderedDict()
             hidden_padding = ((hidden_kern[l - 1] - 1) * hidden_dilation + 1) // 2
             if depth_separable:
@@ -674,10 +684,10 @@ class SE2dCore(Core2d, nn.Module):
             if batch_norm:
                 layer["norm"] = nn.BatchNorm2d(hidden_channels, momentum=momentum)
 
-            if (final_nonlinearity or l < self.layers - 1) and not linear:
+            if (final_nonlinearity or l < self.num_layers - 1) and not linear:
                 layer["nonlin"] = nn.ELU(inplace=True)
 
-            if (self.layers - l) <= self.n_se_blocks:
+            if (self.num_layers - l) <= self.n_se_blocks:
                 layer["seg_ex_block"] = SqueezeExcitationBlock(in_ch=hidden_channels, reduction=se_reduction)
 
             self.features.add_module("layer{}".format(l), nn.Sequential(layer))

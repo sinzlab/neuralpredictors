@@ -842,7 +842,7 @@ class FullGaussian2d(nn.Module):
                 self.max_val = max_val
 
             def forward(self, x):
-                return x.clamp(self.min_val, self.max_val)
+                x.data.clamp_(self.min_val, self.max_val)
 
         nonlinearities = {"ELU": nn.ELU, "ReLU": nn.ReLU}
         final_nonlinearities = {"Tanh": nn.Tanh(), "Clamp": Clamp(-1, 1)}

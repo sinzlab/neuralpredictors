@@ -843,8 +843,8 @@ class FullGaussian2d(nn.Module):
 
             def forward(self, x):
                 drange = self.max_val - self.min_val
-                x -= x.min()
-                x /= x.max()
+                x = x - x.min()
+                x = x / x.max()
                 return drange * x + self.min_val
 
         final_nonlinearities = {"Tanh": nn.Tanh(), "Clamp": Clamp(-1, 1.0)}

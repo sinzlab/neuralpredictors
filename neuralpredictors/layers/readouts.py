@@ -833,21 +833,8 @@ class FullGaussian2d(nn.Module):
             )  # grid locations in feature space sampled randomly around the mean self.mu
 
     def init_grid_predictor(
-        self, source_grid, hidden_features=20, hidden_layers=0, nonlinearity="ELU", final_nonlinearity=None
+        self, source_grid, hidden_features=20, hidden_layers=0, nonlinearity="ELU", final_tanh=False
     ):
-        class Clamp(nn.Module):
-            def __init__(self, min_val, max_val):
-                super().__init__()
-                self.min_val = min_val
-                self.max_val = max_val
-
-            def forward(self, x):
-                drange = self.max_val - self.min_val
-                x = x - x.min()
-                x = x / x.max()
-                return drange * x + self.min_val
-
-        final_nonlinearities = {"Tanh": nn.Tanh(), "Clamp": Clamp(-1, 1.0)}
 
         self._original_grid = False
         layers = [nn.Linear(source_grid.shape[1], hidden_features if hidden_layers > 0 else 2)]
@@ -860,8 +847,8 @@ class FullGaussian2d(nn.Module):
                 ]
             )
 
-        if final_nonlinearity is not None:
-            layers.append(final_nonlinearities[final_nonlinearity])
+        if final_tanh:
+            layers.append(nn.Tanh())
 
         self.mu_transform = nn.Sequential(*layers)
 

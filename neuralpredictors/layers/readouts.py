@@ -944,7 +944,7 @@ class FullGaussian2d(nn.Module):
         self.register_buffer("grid_sharing_index", torch.from_numpy(sharing_idx))
         self._shared_grid = True
 
-    def forward(self, x, sample=None, shift=None, out_idx=None, multiplex=None):
+    def forward(self, x, sample=None, shift=None, out_idx=None, multiplex=None, crop_edge_px=None):
         """
         Propagates the input forwards through the readout
         Args:
@@ -960,6 +960,9 @@ class FullGaussian2d(nn.Module):
                             but from every position, i.e. every pixel, instead. Thus, each neuron is effectively copied
                             to all positions in the image. The neuronal activity output matrix is then no longer
                             (Batch, Neurons), but (Batch, Neurons x locations)
+            crop_edge_px (int): When multiplex is True, the response to all pixels that are cropped. Cropping
+                            will be symmetric by n pixels as specified by this argument.
+
 
         Returns:
             y: neuronal activity
@@ -1000,7 +1003,14 @@ class FullGaussian2d(nn.Module):
 
         if self.bias is not None:
             y = y + bias
-        return y if multiplex is not True else y.view(N, -1)
+
+        if multiplex is True:
+            y = (
+                y.reshape(N, -1)
+                if crop_edge_px is None
+                else y[:, crop_edge_px:-crop_edge_px, crop_edge_px:-crop_edge_px, :].reshape(N, -1)
+            )
+        return y
 
     def __repr__(self):
         c, w, h = self.in_shape

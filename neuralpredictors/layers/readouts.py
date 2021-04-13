@@ -944,7 +944,7 @@ class FullGaussian2d(nn.Module):
         self.register_buffer("grid_sharing_index", torch.from_numpy(sharing_idx))
         self._shared_grid = True
 
-    def forward(self, x, sample=None, shift=None, out_idx=None):
+    def forward(self, x, sample=None, shift=None, out_idx=None, multiplex=None):
         """
         Propagates the input forwards through the readout
         Args:
@@ -956,6 +956,10 @@ class FullGaussian2d(nn.Module):
                            if sample is True/False, overrides the model_state (i.e training or eval) and does as instructed
             shift (bool): shifts the location of the grid (from eye-tracking data)
             out_idx (bool): index of neurons to be predicted
+            multiplex (bool): if True, the neurons do not readout from their grid position,
+                            but from every position, i.e. every pixel, instead. Thus, each neuron is effectively copied
+                            to all positions in the image. The neuronal activity output matrix is then no longer
+                            (Batch, Neurons), but (Batch, Neurons x locations)
 
         Returns:
             y: neuronal activity
@@ -988,12 +992,15 @@ class FullGaussian2d(nn.Module):
         if shift is not None:
             grid = grid + shift[:, None, None, :]
 
-        y = F.grid_sample(x, grid, align_corners=self.align_corners)
-        y = (y.squeeze(-1) * feat).sum(1).view(N, outdims)
+        if multiplex is not True:
+            y = F.grid_sample(x, grid, align_corners=self.align_corners)
+            y = (y.squeeze(-1) * feat).sum(1).view(N, outdims)
+        else:
+            y = torch.einsum("ncwh,nco->nwho", x, feat)
 
         if self.bias is not None:
             y = y + bias
-        return y
+        return y if multiplex is not True else y.view(N, -1)
 
     def __repr__(self):
         c, w, h = self.in_shape

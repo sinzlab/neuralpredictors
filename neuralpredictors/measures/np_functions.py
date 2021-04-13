@@ -33,7 +33,7 @@ def corr(
 
 def oracle_corr_corrected(repeated_outputs: ArrayLike) -> np.ndarray:
     """
-    Compute the corrected oracle correlations per neuron. 
+    Compute the corrected oracle correlations per neuron.
     Note that an unequal number of repeats will introduce bias as it distorts assumptions made about the dataset.
     Oracle correlation corrected overestimates the true oracle correlation (might need a renaming in the future).
 

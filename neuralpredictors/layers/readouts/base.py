@@ -23,18 +23,32 @@ class Readout(nn.Module):
         raise NotImplementedError("initialize is not implemented for ", self.__class__.__name__)
 
     def __repr__(self):
-        s = super().__repr__()
-        s += " [{} regularizers: ".format(self.__class__.__name__)
-        ret = []
-        for attr in filter(
-            lambda x: not x.startswith("_") and ("gamma" in x or "pool" in x or "positive" in x),
-            dir(self),
-        ):
-            ret.append("{} = {}".format(attr, getattr(self, attr)))
-        return s + "|".join(ret) + "]\n"
+        return super().__repr__() + " [{}]\n".format(self.__class__.__name__)
 
+    def reduction_method(self, reduction="mean", average=None):
+        if average is not None:
+            warnings.warn("Use of average is deprecated, Please consider using `reduction` instead", DeprecationWarning)
+            reduction = "mean" if average else "sum"
+        return reduction
 
+    def apply_reduction(self, x, reduction="mean", average=None):
+        reduction = self.reduction_method(reduction=reduction, average=average)
 
+        if reduction == "mean":
+            return x.mean()
+        elif reduction == "sum":
+            return x.sum()
+        elif reduction is None:
+            return x
+        else:
+            raise ValueError(f"Reduction method '{reduction}' is not recognized. Valid values are ['mean', 'sum', None]")
+
+    def initialize_bias(self, mean_activity=None):
+        if mean_activity is None:
+            warnings.warn("Readout is NOT initialized with mean activity!")
+            self.bias.data.fill_(0)
+        else:
+            self.bias.data = mean_activity
 
 
 class ClonedReadout(nn.Module):
@@ -62,6 +76,6 @@ class ClonedReadout(nn.Module):
         else:
             return (self._source.features * self.alpha).abs().sum()
 
-    def initialize(self):
+    def initialize(self, **kwargs):
         self.alpha.data.fill_(1.0)
         self.beta.data.fill_(0.0)

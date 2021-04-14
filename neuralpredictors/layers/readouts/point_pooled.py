@@ -1,4 +1,13 @@
-class PointPooled2d(nn.Module):
+import warnings
+import torch
+from torch import nn
+from torch.nn import Parameter
+from torch.nn import functional as F
+import numpy as np
+
+from .base import Readout
+
+class PointPooled2d(Readout):
     def __init__(
         self,
         in_shape,
@@ -8,6 +17,8 @@ class PointPooled2d(nn.Module):
         pool_kern,
         init_range,
         align_corners=True,
+        mean_activity=None,
+        reg_weight=1.,
         **kwargs,
     ):
         """
@@ -40,6 +51,7 @@ class PointPooled2d(nn.Module):
         self.in_shape = in_shape
         c, w, h = in_shape
         self.outdims = outdims
+        self.reg_weight = reg_weight
         self.grid = Parameter(torch.Tensor(1, outdims, 1, 2))  # x-y coordinates for each neuron
         self.features = Parameter(
             torch.Tensor(1, c * (self._pool_steps + 1), 1, outdims)
@@ -57,7 +69,7 @@ class PointPooled2d(nn.Module):
         )  # setup kernel of size=[pool_kern,pool_kern] with stride=pool_kern
         self.init_range = init_range
         self.align_corners = align_corners
-        self.initialize()
+        self.initialize(mean_activity)
 
     @property
     def pool_steps(self):
@@ -73,27 +85,26 @@ class PointPooled2d(nn.Module):
             self.features = Parameter(torch.Tensor(1, c * (self._pool_steps + 1), 1, self.outdims))
             self.features.data.fill_(1 / self.in_shape[0])
 
-    def initialize(self):
+    def initialize(self, mean_activity=None):
         """
         Initialize function initialises the grid, features or weights and bias terms.
         """
         self.grid.data.uniform_(-self.init_range, self.init_range)
         self.features.data.fill_(1 / self.in_shape[0])
-
         if self.bias is not None:
-            self.bias.data.fill_(0)
+            self.initialize_bias(mean_activity=mean_activity)
 
-    def feature_l1(self, average=True):
+    def feature_l1(self, reduction="mean", average=None):
         """
         Returns l1 regularization term for features.
         Args:
-            average(bool): if True, use mean of weights for regularization
-
+            average(bool): Deprecated (see reduction) if True, use mean of weights for regularization
+            reduction(str): Specifies the reduction to apply to the output: 'none' | 'mean' | 'sum'
         """
-        if average:
-            return self.features.abs().mean()
-        else:
-            return self.features.abs().sum()
+        return self.apply_reduction(self.features.abs(), reduction=reduction, average=average)
+
+    def regularizer(self, reduction="mean", average=None):
+        return self.feature_l1(reduction=reduction, average=average) * self.reg_weight
 
     def forward(self, x, shift=None, out_idx=None):
         """
@@ -159,7 +170,7 @@ class PointPooled2d(nn.Module):
         return r
 
 
-class SpatialTransformerPooled3d(nn.Module):
+class SpatialTransformerPooled3d(Readout):
     def __init__(
         self,
         in_shape,
@@ -173,6 +184,8 @@ class SpatialTransformerPooled3d(nn.Module):
         grid=None,
         stop_grad=False,
         align_corners=True,
+        mean_activity=None,
+        reg_weight=1.,
     ):
         super().__init__()
         self._pool_steps = pool_steps
@@ -180,6 +193,7 @@ class SpatialTransformerPooled3d(nn.Module):
         c, t, w, h = in_shape
         self.outdims = outdims
         self.positive = positive
+        self.reg_weight=reg_weight
         if grid is None:
             self.grid = Parameter(torch.Tensor(1, outdims, 1, 2))
         else:
@@ -195,7 +209,7 @@ class SpatialTransformerPooled3d(nn.Module):
 
         self.avg = nn.AvgPool2d(kernel_size, stride=stride, count_include_pad=False)
         self.init_range = init_range
-        self.initialize()
+        self.initialize(mean_activity)
         self.stop_grad = stop_grad
         self.align_corners = align_corners
 
@@ -215,21 +229,20 @@ class SpatialTransformerPooled3d(nn.Module):
             self.mask = torch.ones_like(self.features)
             self.features.data.fill_(1 / self.in_shape[0])
 
-    def initialize(self, init_noise=1e-3, grid=True):
+    def initialize(self, init_noise=1e-3, grid=True, mean_activity=None):
         # randomly pick centers within the spatial map
-
         self.features.data.fill_(1 / self.in_shape[0])
-        if self.bias is not None:
-            self.bias.data.fill_(0)
         if grid:
             self.grid.data.uniform_(-self.init_range, self.init_range)
+        if self.bias is not None:
+            self.initialize_bias(mean_activity=mean_activity)
 
-    def feature_l1(self, average=True, subs_idx=None):
+    def feature_l1(self, reduction="mean", average=None, subs_idx=None):
         subs_idx = subs_idx if subs_idx is not None else slice(None)
-        if average:
-            return self.features[..., subs_idx].abs().mean()
-        else:
-            return self.features[..., subs_idx].abs().sum()
+        return self.apply_reduction(self.features[..., subs_idx].abs(), reduction=reduction, average=average)
+
+    def regularizer(self, reduction="mean", average=None):
+        return self.feature_l1(reduction=reduction, average=average) * self.reg_weight
 
     def reset_fisher_prune_scores(self):
         self._prune_n = 0

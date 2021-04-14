@@ -1,4 +1,14 @@
-class Pyramid(nn.Module):
+import warnings
+import torch
+from torch import nn as nn
+from torch.nn import Parameter
+from torch.nn import functional as F
+import numpy as np
+from .base import Readout
+
+
+
+class Pyramid(Readout):
     _filter_dict = {
         "gauss5x5": np.float32(
             [
@@ -74,7 +84,7 @@ class Pyramid(nn.Module):
         )
 
 
-class PointPyramid2d(nn.Module):
+class PointPyramid2d(Readout):
     def __init__(
         self,
         in_shape,
@@ -86,6 +96,8 @@ class PointPyramid2d(nn.Module):
         downsample,
         type,
         align_corners=True,
+        mean_activity=None,
+        reg_weight=1.,
         **kwargs,
     ):
         super().__init__()
@@ -93,6 +105,7 @@ class PointPyramid2d(nn.Module):
         c, w, h = in_shape
         self.outdims = outdims
         self.positive = positive
+        self.reg_weight = reg_weight
         self.gauss_pyramid = Pyramid(scale_n=scale_n, downsample=downsample, type=type)
         self.grid = Parameter(torch.Tensor(1, outdims, 1, 2))
         self.features = Parameter(torch.Tensor(1, c * (scale_n + 1), 1, outdims))
@@ -104,14 +117,13 @@ class PointPyramid2d(nn.Module):
             self.register_parameter("bias", None)
         self.init_range = init_range
         self.align_corners = align_corners
-        self.initialize()
+        self.initialize(mean_activity)
 
-    def initialize(self):
+    def initialize(self, mean_activity=None):
         self.grid.data.uniform_(-self.init_range, self.init_range)
         self.features.data.fill_(1 / self.in_shape[0])
-
         if self.bias is not None:
-            self.bias.data.fill_(0)
+            self.initialize_bias(mean_activity=mean_activity)
 
     def group_sparsity(self, group_size):
         f = self.features.size(1)
@@ -121,15 +133,17 @@ class PointPyramid2d(nn.Module):
             ret = ret + (self.features[:, chunk : chunk + group_size, ...].pow(2).mean(1) + 1e-12).sqrt().mean() / n
         return ret
 
-    def feature_l1(self, average=True):
-        if average:
-            return self.features.abs().mean()
-        else:
-            return self.features.abs().sum()
+
+    def feature_l1(self, reduction="mean", average=None):
+        return self.apply_reduction(self.features.abs(), reduction=reduction, average=average)
+
+    def regularizer(self, reduction="mean", average=None):
+        return self.feature_l1(reduction=reduction, average=average) * self.reg_weight
+
 
     def forward(self, x, shift=None):
         if self.positive:
-            positive(self.features)
+            self.features.data.clamp_min_(0)
         self.grid.data = torch.clamp(self.grid.data, -1, 1)
         N, c, w, h = x.size()
         m = self.gauss_pyramid.scale_n + 1

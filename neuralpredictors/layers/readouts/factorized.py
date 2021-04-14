@@ -11,24 +11,24 @@ class SpatialXFeatureLinear(Readout):
     """
 
     def __init__(
-            self,
-            in_shape,
-            outdims,
-            bias,
-            normalize=True,
-            init_noise=1e-3,
-            constrain_pos=False,
-            positive_weights=False,
-            mean_activity=None,
-            reg_weight=1.,
-            **kwargs,
+        self,
+        in_shape,
+        outdims,
+        bias,
+        normalize=True,
+        init_noise=1e-3,
+        constrain_pos=False,
+        positive_weights=False,
+        mean_activity=None,
+        reg_weight=1.0,
+        **kwargs,
     ):
         super().__init__()
         self.in_shape = in_shape
         self.outdims = outdims
         self.normalize = normalize
         self.positive_weights = positive_weights
-        self.reg_weight=reg_weight
+        self.reg_weight = reg_weight
         c, w, h = in_shape
         self.spatial = Parameter(torch.Tensor(self.outdims, w, h))
         self.features = Parameter(torch.Tensor(self.outdims, c))
@@ -65,7 +65,7 @@ class SpatialXFeatureLinear(Readout):
         return self.normalized_spatial.view(n, 1, w, h) * self.features.view(n, c, 1, 1)
 
     def regularizer(self, reduction="sum", average=None):
-        #TODO: the default for reduction here is different than for the other readouts. -> break backwards compatibility or break consistency between readouts?
+        # TODO: the default for reduction here is different than for the other readouts. -> break backwards compatibility or break consistency between readouts?
         return self.l1(reduction=reduction, average=average) * self.reg_weight
 
     def l1(self, reduction="sum", average=None):
@@ -76,10 +76,10 @@ class SpatialXFeatureLinear(Readout):
         n = self.outdims
         c, w, h = self.in_shape
         ret = (
-                self.normalized_spatial.view(self.outdims, -1).abs().sum(dim=1, keepdim=True)
-                * self.features.view(self.outdims, -1).abs().sum(dim=1)
+            self.normalized_spatial.view(self.outdims, -1).abs().sum(dim=1, keepdim=True)
+            * self.features.view(self.outdims, -1).abs().sum(dim=1)
         ).sum()
-        if reduction == 'mean':
+        if reduction == "mean":
             ret = ret / (n * c * w * h)
         return ret
 
@@ -101,11 +101,11 @@ class SpatialXFeatureLinear(Readout):
 
     def __repr__(self):
         return (
-                ("normalized " if self.normalize else "")
-                + self.__class__.__name__
-                + " ("
-                + "{} x {} x {}".format(*self.in_shape)
-                + " -> "
-                + str(self.outdims)
-                + ")"
+            ("normalized " if self.normalize else "")
+            + self.__class__.__name__
+            + " ("
+            + "{} x {} x {}".format(*self.in_shape)
+            + " -> "
+            + str(self.outdims)
+            + ")"
         )

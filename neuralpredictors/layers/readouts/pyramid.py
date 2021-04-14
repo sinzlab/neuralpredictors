@@ -7,7 +7,6 @@ import numpy as np
 from .base import Readout
 
 
-
 class Pyramid(Readout):
     _filter_dict = {
         "gauss5x5": np.float32(
@@ -97,7 +96,7 @@ class PointPyramid2d(Readout):
         type,
         align_corners=True,
         mean_activity=None,
-        reg_weight=1.,
+        reg_weight=1.0,
         **kwargs,
     ):
         super().__init__()
@@ -133,13 +132,11 @@ class PointPyramid2d(Readout):
             ret = ret + (self.features[:, chunk : chunk + group_size, ...].pow(2).mean(1) + 1e-12).sqrt().mean() / n
         return ret
 
-
     def feature_l1(self, reduction="mean", average=None):
         return self.apply_reduction(self.features.abs(), reduction=reduction, average=average)
 
     def regularizer(self, reduction="mean", average=None):
         return self.feature_l1(reduction=reduction, average=average) * self.reg_weight
-
 
     def forward(self, x, shift=None):
         if self.positive:

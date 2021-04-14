@@ -41,7 +41,9 @@ class Readout(nn.Module):
         elif reduction is None:
             return x
         else:
-            raise ValueError(f"Reduction method '{reduction}' is not recognized. Valid values are ['mean', 'sum', None]")
+            raise ValueError(
+                f"Reduction method '{reduction}' is not recognized. Valid values are ['mean', 'sum', None]"
+            )
 
     def initialize_bias(self, mean_activity=None):
         if mean_activity is None:

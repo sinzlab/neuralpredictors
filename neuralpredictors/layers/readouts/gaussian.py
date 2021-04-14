@@ -48,7 +48,7 @@ class Gaussian2d(Readout):
         align_corners=True,
         fixed_sigma=False,
         mean_activity=None,
-        reg_weight=1.,
+        reg_weight=1.0,
         **kwargs,
     ):
         warnings.warn(
@@ -59,7 +59,7 @@ class Gaussian2d(Readout):
         if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma_range <= 0.0:
             raise ValueError("either init_mu_range doesn't belong to [0.0, 1.0] or init_sigma_range is non-positive")
         self.in_shape = in_shape
-        self.reg_weight=reg_weight
+        self.reg_weight = reg_weight
         c, w, h = in_shape
         self.outdims = outdims
         self.batch_sample = batch_sample
@@ -129,7 +129,6 @@ class Gaussian2d(Readout):
     def grid(self):
         return self.sample_grid(batch_size=1, sample=False)
 
-
     def feature_l1(self, reduction="mean", average=None):
         """
         Returns l1 regularization term for features.
@@ -141,7 +140,6 @@ class Gaussian2d(Readout):
 
     def regularizer(self, reduction="mean", average=None):
         return self.feature_l1(reduction=reduction, average=average) * self.reg_weight
-
 
     def forward(self, x, sample=None, shift=None, out_idx=None):
         """
@@ -270,7 +268,7 @@ class FullGaussian2d(Readout):
         shared_grid=None,
         source_grid=None,
         mean_activity=None,
-        reg_weight=1.,
+        reg_weight=1.0,
         **kwargs,
     ):
 
@@ -361,7 +359,6 @@ class FullGaussian2d(Readout):
 
         return self._mu.squeeze().std(0).sum()
 
-
     def feature_l1(self, reduction="mean", average=None):
         """
         Returns l1 regularization term for features.
@@ -376,7 +373,6 @@ class FullGaussian2d(Readout):
 
     def regularizer(self, reduction="mean", average=None):
         return self.feature_l1(reduction=reduction, average=average) * self.reg_weight
-
 
     @property
     def mu(self):
@@ -713,7 +709,7 @@ class DeterministicGaussian2d(Readout):
         positive=False,
         constrain_mode="default",
         mean_activity=None,
-        reg_weight=1.,
+        reg_weight=1.0,
     ):
 
         super().__init__()
@@ -795,7 +791,6 @@ class DeterministicGaussian2d(Readout):
         if self.bias is not None:
             self.initialize_bias(mean_activity=mean_activity)
 
-
     def feature_l1(self, reduction="mean", average=None):
         """
         Returns l1 regularization term for features.
@@ -815,8 +810,10 @@ class DeterministicGaussian2d(Readout):
         return self.apply_reduction(torch.exp(self.log_var), reduction=reduction, average=average)
 
     def regularizer(self, reduction="mean", average=None):
-        return (self.feature_l1(reduction=reduction, average=average) + self.variance_l1(reduction=reduction, average=average)) * self.reg_weight
-
+        return (
+            self.feature_l1(reduction=reduction, average=average)
+            + self.variance_l1(reduction=reduction, average=average)
+        ) * self.reg_weight
 
     def forward(self, x, shift=None, out_idx=None):
         N, c, w, h = x.size()
@@ -906,7 +903,7 @@ class Gaussian3d(Readout):
         align_corners=True,
         fixed_sigma=False,
         mean_activity=None,
-        reg_weight=1.,
+        reg_weight=1.0,
         **kwargs,
     ):
         super().__init__()
@@ -1081,7 +1078,7 @@ class UltraSparse(Readout):
         align_corners=True,
         fixed_sigma=False,
         mean_activity=None,
-        reg_weight=1.,
+        reg_weight=1.0,
         **kwargs,
     ):
 
@@ -1185,8 +1182,10 @@ class UltraSparse(Readout):
         return self.apply_reduction(self.features.abs(), reduction=reduction, average=average)
 
     def regularizer(self, reduction="mean", average=None):
-        return (self.feature_l1(reduction=reduction, average=average) + self.variance_l1(reduction=reduction, average=average)) * self.reg_weight
-
+        return (
+            self.feature_l1(reduction=reduction, average=average)
+            + self.variance_l1(reduction=reduction, average=average)
+        ) * self.reg_weight
 
     def initialize(self, mean_activity=None):
         if self.shared_mean:

@@ -7,6 +7,7 @@ import numpy as np
 
 from .base import Readout
 
+
 class PointPooled2d(Readout):
     def __init__(
         self,
@@ -18,7 +19,7 @@ class PointPooled2d(Readout):
         init_range,
         align_corners=True,
         mean_activity=None,
-        reg_weight=1.,
+        reg_weight=1.0,
         **kwargs,
     ):
         """
@@ -185,7 +186,7 @@ class SpatialTransformerPooled3d(Readout):
         stop_grad=False,
         align_corners=True,
         mean_activity=None,
-        reg_weight=1.,
+        reg_weight=1.0,
     ):
         super().__init__()
         self._pool_steps = pool_steps
@@ -193,7 +194,7 @@ class SpatialTransformerPooled3d(Readout):
         c, t, w, h = in_shape
         self.outdims = outdims
         self.positive = positive
-        self.reg_weight=reg_weight
+        self.reg_weight = reg_weight
         if grid is None:
             self.grid = Parameter(torch.Tensor(1, outdims, 1, 2))
         else:

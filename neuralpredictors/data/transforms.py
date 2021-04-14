@@ -478,6 +478,32 @@ class SelectInputChannel(StaticTransform):
         return x.__class__(**key_vals)
 
 
+class AddPositionAsChannels(StaticTransform):
+    """
+    Given a StaticImage object that includes "images", it will add two channels,
+    which contain the pixel positions from -1 to 1.
+    """
+
+    def __call__(self, x):
+        key_vals = {k: v for k, v in zip(x._fields, x)}
+        img = key_vals["images"]
+        img_shape = img.shape
+        full_img = (
+            np.ones((img_shape[0] + 2, img_shape[1], img_shape[2]))
+            if len(img_shape) == 3
+            else np.ones((img_shape[0], img_shape[1] + 2, img_shape[2], img_shape[3]))
+        )
+        positions = np.stack(np.meshgrid(np.linspace(-1, 1, img_shape[-1]), np.linspace(-1, 1, img_shape[-2])))
+        if len(img_shape) == 3:
+            full_img[:-2, ...] = img
+            full_img[-2:, ...] = positions
+        else:
+            full_img[:, :-2, ...] = img
+            full_img[:, -2:, ...] = positions
+        key_vals["images"] = full_img
+        return x.__class__(**key_vals)
+
+
 class ScaleInputs(StaticTransform, Invertible):
     """
     Applies skimage.transform.rescale to the data_key "images".

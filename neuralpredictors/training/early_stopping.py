@@ -1,3 +1,8 @@
+from collections import OrderedDict
+
+import numpy as np
+
+
 def copy_state(model):
     """
     Given PyTorch module `model`, makes a copy of the state onto CPU.

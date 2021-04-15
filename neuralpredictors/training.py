@@ -219,6 +219,7 @@ def device_state(model, device):
     # infer the original device based on the device the first parameter is placed on
     original_device = next(model.parameters()).device
     # create device spec
+    # if device is simply "cuda", then device.index will evaluate to one, and the if statement will error out.
     device = torch.device("cuda:0") if device == "cuda" else torch.device(device)
     if device.type == "cuda" and device.index >= torch.cuda.device_count():
         # fall back to using CPU

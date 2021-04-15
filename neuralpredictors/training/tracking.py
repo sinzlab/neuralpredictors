@@ -5,6 +5,7 @@ from collections import defaultdict, abc
 from typing import Dict, Tuple, List, Mapping, Union, Optional, Sequence
 import numpy as np
 from tqdm import tqdm
+from __future__ import annotations
 
 from .utils import deep_update
 
@@ -255,7 +256,7 @@ class AdvancedTracker(Tracker):
 
         Args:
             main_objective: key of the main objective that is used to e.g. decide lr reductions
-                            can be something like `("img_classification","accuracy")` to always look at accruacy.
+                            can be something like `("img_classification","accuracy")` to always look at accuracy.
                             Can be combined with a setting specific key in `get_current_main_objective(...)`
             **objectives: e.g. {"dataset": {"objective1": o_fct1, "objective2": 0, "normalization": 0},...}
                            or {"dataset": {"task_key": {"objective1": o_fct1, "objective2": 0},...},...}
@@ -351,7 +352,10 @@ class AdvancedTracker(Tracker):
         if len(key) > 1:
             return self.get_objective(log[key[0]], key[1:])
         else:
-            return log[key[0]]
+            if isinstance(log[key[0]], list):
+                return log[key[0]]
+            else:
+                raise ValueError("The key does not fully match an objective. Try specifying the complete key sequence.")
 
     def get_current_objective(self, key: Tuple[str, ...]) -> float:
         return self.get_objective(self._normalize_log(self.log), key)[-1]
@@ -390,7 +394,7 @@ class AdvancedTracker(Tracker):
         self.epoch = tracker_dict["epoch"]
 
     @classmethod
-    def from_dict(cls, tracker_dict: Dict) -> "AdvancedTracker":
+    def from_dict(cls, tracker_dict: Dict) -> AdvancedTracker:
         """
         Same as `load_state_dict`, but creates a new tracker from scratch.
         Args:
@@ -496,7 +500,7 @@ class AdvancedTracker(Tracker):
                 if isinstance(l, np.ndarray):
                     n_log[key] = l / np.where(norm > 0, norm, np.ones_like(norm))
 
-    def _gather_log(self, log: Union[Mapping, Sequence], key: Tuple[str, ...], index: int = -1) -> Mapping[str, str]:
+    def _gather_log(self, log: Union[Mapping, Sequence], key: Tuple[str, ...], index: int = -1) -> Dict[str, str]:
         """
         Get a flattened and print-ready version of the log dictionary for a given key
         Args:

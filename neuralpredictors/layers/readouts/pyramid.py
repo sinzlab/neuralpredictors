@@ -7,7 +7,7 @@ import numpy as np
 from .base import Readout
 
 
-class Pyramid(Readout):
+class Pyramid(nn.Module):
     _filter_dict = {
         "gauss5x5": np.float32(
             [

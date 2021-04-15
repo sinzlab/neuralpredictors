@@ -93,6 +93,7 @@ class MultiReadoutSharedParametersBase(MultiReadoutBase):
     Base class for MultiReadouts that share parameters between readouts.
     For more information on which parameters can be shared, refer for example to the FullGaussian2d readout
     """
+
     def prepare_readout_kwargs(self, i, data_key, first_data_key, **kwargs):
         readout_kwargs = kwargs.copy()
 
@@ -133,11 +134,14 @@ class MultiReadoutSharedParametersBase(MultiReadoutBase):
 class MultiplePointPooled2d(MultiReadoutBase):
     _base_readout = PointPooled2d
 
+
 class MultipleSpatialXFeatureLinear(MultiReadoutBase):
     _base_readout = SpatialXFeatureLinear
 
+
 class MultipleFullSXF(MultiReadoutSharedParametersBase):
     _base_readout = FullSXF
+
 
 class MultipleFullGaussian2d(MultiReadoutSharedParametersBase):
     _base_readout = FullGaussian2d

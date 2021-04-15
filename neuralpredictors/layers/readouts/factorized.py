@@ -9,18 +9,21 @@ class FullFactorized2d(Readout):
     """
     Factorized fully connected layer. Weights are a sum of outer products between a spatial filter and a feature vector.
     """
-    def __init__(self,
-                 in_shape,
-                 outdims,
-                 bias,
-                 normalize=True,
-                 init_noise=1e-3,
-                 constrain_pos=False,
-                 positive_weights=False,
-                 shared_features=None,
-                 mean_activity=None,
-                 reg_weight=1.0,
-                 **kwargs):
+
+    def __init__(
+        self,
+        in_shape,
+        outdims,
+        bias,
+        normalize=True,
+        init_noise=1e-3,
+        constrain_pos=False,
+        positive_weights=False,
+        shared_features=None,
+        mean_activity=None,
+        reg_weight=1.0,
+        **kwargs,
+    ):
 
         super().__init__()
 
@@ -64,7 +67,6 @@ class FullFactorized2d(Readout):
         c, w, h = self.in_shape
         return self.normalized_spatial.view(n, 1, w, h) * self.features.view(n, c, 1, 1)
 
-
     @property
     def normalized_spatial(self):
         """
@@ -91,8 +93,8 @@ class FullFactorized2d(Readout):
         n = self.outdims
         c, w, h = self.in_shape
         ret = (
-                self.normalized_spatial.view(self.outdims, -1).abs().sum(dim=1, keepdim=True)
-                * self.features.view(self.outdims, -1).abs().sum(dim=1)
+            self.normalized_spatial.view(self.outdims, -1).abs().sum(dim=1, keepdim=True)
+            * self.features.view(self.outdims, -1).abs().sum(dim=1)
         ).sum()
         if reduction == "mean":
             ret = ret / (n * c * w * h)
@@ -105,7 +107,7 @@ class FullFactorized2d(Readout):
         self.spatial.data.normal_(0, self.init_noise)
         self._features.data.normal_(0, self.init_noise)
         if self._shared_features:
-            self.scales.data.fill_(1.)
+            self.scales.data.fill_(1.0)
         if self.bias is not None:
             self.initialize_bias(mean_activity=mean_activity)
 
@@ -121,20 +123,22 @@ class FullFactorized2d(Readout):
 
             n_match_ids = len(np.unique(match_ids))
             if shared_features is not None:
-                assert shared_features.shape == (n_match_ids, c), \
-                    f'shared features need to have shape ({n_match_ids}, {c})'
+                assert shared_features.shape == (
+                    n_match_ids,
+                    c,
+                ), f"shared features need to have shape ({n_match_ids}, {c})"
                 self._features = shared_features
                 self._original_features = False
             else:
                 self._features = nn.Parameter(
-                    torch.Tensor(n_match_ids, c))  # feature weights for each channel of the core
+                    torch.Tensor(n_match_ids, c)
+                )  # feature weights for each channel of the core
             self.scales = nn.Parameter(torch.Tensor(self.outdims, 1))  # feature weights for each channel of the core
             _, sharing_idx = np.unique(match_ids, return_inverse=True)
-            self.register_buffer('feature_sharing_index', torch.from_numpy(sharing_idx))
+            self.register_buffer("feature_sharing_index", torch.from_numpy(sharing_idx))
             self._shared_features = True
         else:
-            self._features = nn.Parameter(
-                torch.Tensor(self.outdims, c))  # feature weights for each channel of the core
+            self._features = nn.Parameter(torch.Tensor(self.outdims, c))  # feature weights for each channel of the core
             self._shared_features = False
 
     def forward(self, x):
@@ -146,8 +150,8 @@ class FullFactorized2d(Readout):
         if (c_in, w_in, h_in) != (c, w, h):
             raise ValueError("the specified feature map dimension is not the readout's expected input dimension")
 
-        y = torch.einsum('ncwh,owh->nco', x, self.normalized_spatial)
-        y = torch.einsum('nco,oc->no', y, self.features)
+        y = torch.einsum("ncwh,owh->nco", x, self.normalized_spatial)
+        y = torch.einsum("nco,oc->no", y, self.features)
         if self.bias is not None:
             y = y + self.bias
         return y
@@ -158,7 +162,7 @@ class FullFactorized2d(Readout):
         if self.bias is not None:
             r += " with bias"
         if self._shared_features:
-            r += ", with {} features".format('original' if self._original_features else 'shared')
+            r += ", with {} features".format("original" if self._original_features else "shared")
         if self.normalize:
             r += ", normalized"
         else:
@@ -171,6 +175,7 @@ class FullFactorized2d(Readout):
 # Classes for backwards compatibility
 class SpatialXFeatureLinear(FullFactorized2d):
     pass
+
 
 class FullSXF(FullFactorized2d):
     pass

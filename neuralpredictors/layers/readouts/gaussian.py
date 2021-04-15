@@ -980,7 +980,9 @@ class Gaussian3d(Readout):
             self.initialize_bias(mean_activity=mean_activity)
 
     def regularizer(self, reduction="sum", average=None):
-        raise NotImplementedError("The regularizer for this readout needs to be implemented! See issue https://github.com/sinzlab/neuralpredictors/issues/127")
+        raise NotImplementedError(
+            "The regularizer for this readout needs to be implemented! See issue https://github.com/sinzlab/neuralpredictors/issues/127"
+        )
 
     def forward(self, x, sample=None, shift=None, out_idx=None):
         """

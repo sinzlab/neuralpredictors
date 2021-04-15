@@ -28,7 +28,6 @@ class MultiReadoutBase(torch.nn.ModuleDict):
         if self._base_readout is None:
             raise ValueError("Attribute _base_readout must be set")
         super().__init__()
-        self.gamma_readout = gamma_readout
 
         for i, data_key in enumerate(n_neurons_dict):
             first_data_key = data_key if i == 0 else first_data_key

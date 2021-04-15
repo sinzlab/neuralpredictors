@@ -69,7 +69,7 @@ class SpatialXFeatureLinear(Readout):
         return self.l1(reduction=reduction, average=average) * self.reg_weight
 
     def l1(self, reduction="sum", average=None):
-        reduction = self.reduction_method(reduction=reduction, average=average)
+        reduction = self.resolve_reduction_method(reduction=reduction, average=average)
         if reduction is None:
             raise ValueError("Reduction of None is not supported in this regularizer")
 

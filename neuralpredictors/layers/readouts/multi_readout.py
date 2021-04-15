@@ -22,6 +22,7 @@ class MultiReadoutBase(torch.nn.ModuleDict):
         gamma_readout=1.0,
         **kwargs
     ):
+        # The `base_readout` can be overridden only if the static property `_base_readout` is not set
         if self._base_readout is None:
             self._base_readout = base_readout
 

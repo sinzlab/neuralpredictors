@@ -25,14 +25,14 @@ class Readout(nn.Module):
     def __repr__(self):
         return super().__repr__() + " [{}]\n".format(self.__class__.__name__)
 
-    def reduction_method(self, reduction="mean", average=None):
+    def resolve_reduction_method(self, reduction="mean", average=None):
         if average is not None:
             warnings.warn("Use of average is deprecated, Please consider using `reduction` instead", DeprecationWarning)
             reduction = "mean" if average else "sum"
         return reduction
 
     def apply_reduction(self, x, reduction="mean", average=None):
-        reduction = self.reduction_method(reduction=reduction, average=average)
+        reduction = self.resolve_reduction_method(reduction=reduction, average=average)
 
         if reduction == "mean":
             return x.mean()
@@ -47,7 +47,7 @@ class Readout(nn.Module):
 
     def initialize_bias(self, mean_activity=None):
         if mean_activity is None:
-            warnings.warn("Readout is NOT initialized with mean activity!")
+            warnings.warn("Readout is NOT initialized with mean activity but with 0!")
             self.bias.data.fill_(0)
         else:
             self.bias.data = mean_activity

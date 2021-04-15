@@ -46,7 +46,7 @@ def device_state(model, device):
     original_device = next(model.parameters()).device
 
     # create device spec
-    device = torch.device(device)
+    device = torch.device("cuda:0") if device == "cuda" else torch.device(device)
     if device.type == "cuda" and device.index >= torch.cuda.device_count():
         # fall back to using CPU
         warnings.warn("Incompatible CUDA spec. Falling back to CPU usage")

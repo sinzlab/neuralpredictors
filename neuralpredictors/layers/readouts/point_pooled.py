@@ -95,7 +95,7 @@ class PointPooled2d(Readout):
         if self.bias is not None:
             self.initialize_bias(mean_activity=mean_activity)
 
-    def feature_l1(self, reduction="mean", average=None):
+    def feature_l1(self, reduction="sum", average=None):
         """
         Returns l1 regularization term for features.
         Args:
@@ -104,7 +104,7 @@ class PointPooled2d(Readout):
         """
         return self.apply_reduction(self.features.abs(), reduction=reduction, average=average)
 
-    def regularizer(self, reduction="mean", average=None):
+    def regularizer(self, reduction="sum", average=None):
         return self.feature_l1(reduction=reduction, average=average) * self.reg_weight
 
     def forward(self, x, shift=None, out_idx=None):
@@ -238,11 +238,11 @@ class SpatialTransformerPooled3d(Readout):
         if self.bias is not None:
             self.initialize_bias(mean_activity=mean_activity)
 
-    def feature_l1(self, reduction="mean", average=None, subs_idx=None):
+    def feature_l1(self, reduction="sum", average=None, subs_idx=None):
         subs_idx = subs_idx if subs_idx is not None else slice(None)
         return self.apply_reduction(self.features[..., subs_idx].abs(), reduction=reduction, average=average)
 
-    def regularizer(self, reduction="mean", average=None):
+    def regularizer(self, reduction="sum", average=None):
         return self.feature_l1(reduction=reduction, average=average) * self.reg_weight
 
     def reset_fisher_prune_scores(self):

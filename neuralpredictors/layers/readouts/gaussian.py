@@ -129,7 +129,7 @@ class Gaussian2d(Readout):
     def grid(self):
         return self.sample_grid(batch_size=1, sample=False)
 
-    def feature_l1(self, reduction="mean", average=None):
+    def feature_l1(self, reduction="sum", average=None):
         """
         Returns l1 regularization term for features.
         Args:
@@ -138,7 +138,7 @@ class Gaussian2d(Readout):
         """
         return self.apply_reduction(self.features.abs(), reduction=reduction, average=average)
 
-    def regularizer(self, reduction="mean", average=None):
+    def regularizer(self, reduction="sum", average=None):
         return self.feature_l1(reduction=reduction, average=average) * self.reg_weight
 
     def forward(self, x, sample=None, shift=None, out_idx=None):
@@ -359,7 +359,7 @@ class FullGaussian2d(Readout):
 
         return self._mu.squeeze().std(0).sum()
 
-    def feature_l1(self, reduction="mean", average=None):
+    def feature_l1(self, reduction="sum", average=None):
         """
         Returns l1 regularization term for features.
         Args:
@@ -371,7 +371,7 @@ class FullGaussian2d(Readout):
         else:
             return 0
 
-    def regularizer(self, reduction="mean", average=None):
+    def regularizer(self, reduction="sum", average=None):
         return self.feature_l1(reduction=reduction, average=average) * self.reg_weight
 
     @property
@@ -791,7 +791,7 @@ class DeterministicGaussian2d(Readout):
         if self.bias is not None:
             self.initialize_bias(mean_activity=mean_activity)
 
-    def feature_l1(self, reduction="mean", average=None):
+    def feature_l1(self, reduction="sum", average=None):
         """
         Returns l1 regularization term for features.
         Args:
@@ -800,7 +800,7 @@ class DeterministicGaussian2d(Readout):
         """
         return self.apply_reduction(self.features.abs(), reduction=reduction, average=average)
 
-    def variance_l1(self, reduction="mean", average=None):
+    def variance_l1(self, reduction="sum", average=None):
         """
         variance_l1 function returns the l1 regularization term either the mean or just the sum of weights
         Args:
@@ -809,7 +809,7 @@ class DeterministicGaussian2d(Readout):
         """
         return self.apply_reduction(torch.exp(self.log_var), reduction=reduction, average=average)
 
-    def regularizer(self, reduction="mean", average=None):
+    def regularizer(self, reduction="sum", average=None):
         return (
             self.feature_l1(reduction=reduction, average=average)
             + self.variance_l1(reduction=reduction, average=average)
@@ -1172,7 +1172,7 @@ class UltraSparse(Readout):
     def grid(self):
         return self.sample_grid(batch_size=1, sample=False)
 
-    def feature_l1(self, reduction="mean", average=None):
+    def feature_l1(self, reduction="sum", average=None):
         """
         Returns l1 regularization term for features.
         Args:
@@ -1181,7 +1181,7 @@ class UltraSparse(Readout):
         """
         return self.apply_reduction(self.features.abs(), reduction=reduction, average=average)
 
-    def regularizer(self, reduction="mean", average=None):
+    def regularizer(self, reduction="sum", average=None):
         return (
             self.feature_l1(reduction=reduction, average=average)
             + self.variance_l1(reduction=reduction, average=average)

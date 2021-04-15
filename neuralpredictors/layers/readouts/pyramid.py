@@ -132,10 +132,10 @@ class PointPyramid2d(Readout):
             ret = ret + (self.features[:, chunk : chunk + group_size, ...].pow(2).mean(1) + 1e-12).sqrt().mean() / n
         return ret
 
-    def feature_l1(self, reduction="mean", average=None):
+    def feature_l1(self, reduction="sum", average=None):
         return self.apply_reduction(self.features.abs(), reduction=reduction, average=average)
 
-    def regularizer(self, reduction="mean", average=None):
+    def regularizer(self, reduction="sum", average=None):
         return self.feature_l1(reduction=reduction, average=average) * self.reg_weight
 
     def forward(self, x, shift=None):

@@ -64,10 +64,10 @@ class AttentionReadout(Readout):
             self.initialize_bias(mean_activity=mean_activity)
         self.initialize_attention()
 
-    def feature_l1(self, reduction="mean", average=None):
+    def feature_l1(self, reduction="sum", average=None):
         return self.apply_reduction(self.features.abs(), reduction=reduction, average=average)
 
-    def regularizer(self, reduction="mean", average=None):
+    def regularizer(self, reduction="sum", average=None):
         return self.feature_l1(reduction=reduction, average=average) * self.reg_weight
 
     def forward(self, x, shift=None):

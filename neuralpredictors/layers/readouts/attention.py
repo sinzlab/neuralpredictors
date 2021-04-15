@@ -1,4 +1,11 @@
-class AttentionReadout(nn.Module):
+import torch
+from torch import nn
+from torch.nn import Parameter
+from torch.nn import functional as F
+from .base import Readout
+
+
+class AttentionReadout(Readout):
     def __init__(
         self,
         in_shape,
@@ -7,11 +14,14 @@ class AttentionReadout(nn.Module):
         init_noise=1e-3,
         attention_kernel=1,
         attention_layers=1,
+        mean_activity=None,
+        reg_weight=1.0,
         **kwargs,
     ):
         super().__init__()
         self.in_shape = in_shape
         self.outdims = outdims
+        self.reg_weight = reg_weight
         c, w, h = in_shape
         self.features = Parameter(torch.Tensor(self.outdims, c))
 
@@ -36,7 +46,7 @@ class AttentionReadout(nn.Module):
             self.register_parameter("bias", bias)
         else:
             self.register_parameter("bias", None)
-        self.initialize()
+        self.initialize(mean_activity)
 
     @staticmethod
     def init_conv(m):
@@ -48,17 +58,17 @@ class AttentionReadout(nn.Module):
     def initialize_attention(self):
         self.apply(self.init_conv)
 
-    def initialize(self):
+    def initialize(self, mean_activity=None):
         self.features.data.normal_(0, self.init_noise)
         if self.bias is not None:
-            self.bias.data.fill_(0)
+            self.initialize_bias(mean_activity=mean_activity)
         self.initialize_attention()
 
-    def feature_l1(self, average=True):
-        if average:
-            return self.features.abs().mean()
-        else:
-            return self.features.abs().sum()
+    def feature_l1(self, reduction="mean", average=None):
+        return self.apply_reduction(self.features.abs(), reduction=reduction, average=average)
+
+    def regularizer(self, reduction="mean", average=None):
+        return self.feature_l1(reduction=reduction, average=average) * self.reg_weight
 
     def forward(self, x, shift=None):
         attention = self.attention(x)

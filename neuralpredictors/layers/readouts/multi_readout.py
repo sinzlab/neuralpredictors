@@ -1,15 +1,30 @@
 import torch
-from .base import ClonedReadout
-from .point_pooled import PointPooled2d
-from .gaussian import FullGaussian2d
-from .factorized import SpatialXFeatureLinear
-
-#################################################################
-#### MultiReadout Base Classes
-#################################################################
+from .base import *
+from .point_pooled import *
+from .gaussian import *
+from .factorized import *
+from .attention import *
+from .pyramid import *
 
 
 class MultiReadoutBase(torch.nn.ModuleDict):
+    """
+    Base class for MultiReadouts. It is a dictionary of data keys and readouts to the corresponding datasets.
+    If parameter-sharing between the readouts is desired, refer to MultiReadoutSharedParametersBase.
+
+    Args:
+        in_shape_dict (dict): dictionary of data_key and the corresponding dataset's shape as an output of the core.
+        n_neurons_dict (dict): dictionary of data_key and the corresponding dataset's number of neurons
+        base_readout (torch.nn.Module): base readout class. If None, self._base_readout must be set manually in the inheriting class's definition
+        mean_activity_dict (dict): dictionary of data_key and the corresponding dataset's mean responses. Used to initialize the readout bias with.
+                                   If None, the bias is initialized with 0.
+        clone_readout (bool): whether to clone the first data_key's readout to all other readouts, only allowing for a scale and offset.
+                              This is a rather simple method to enforce parameter-sharing between readouts. For more sophisticated methods,
+                              refer to MultiReadoutSharedParametersBase
+        gamma_readout (float): regularization strength
+        **kwargs:
+    """
+
     _base_readout = None
 
     def __init__(
@@ -22,6 +37,7 @@ class MultiReadoutBase(torch.nn.ModuleDict):
         gamma_readout=1.0,
         **kwargs
     ):
+
         # The `base_readout` can be overridden only if the static property `_base_readout` is not set
         if self._base_readout is None:
             self._base_readout = base_readout
@@ -73,6 +89,10 @@ class MultiReadoutBase(torch.nn.ModuleDict):
 
 
 class MultiReadoutSharedParametersBase(MultiReadoutBase):
+    """
+    Base class for MultiReadouts that share parameters between readouts.
+    For more information on which parameters can be shared, refer for example to the FullGaussian2d readout
+    """
     def prepare_readout_kwargs(self, i, data_key, first_data_key, **kwargs):
         readout_kwargs = kwargs.copy()
 
@@ -109,18 +129,15 @@ class MultiReadoutSharedParametersBase(MultiReadoutBase):
         return readout_kwargs
 
 
-#################################################################
-#### Actual MultiReadouts
-#################################################################
-
-
+#### MultiReadouts for backwards compatibility
 class MultiplePointPooled2d(MultiReadoutBase):
     _base_readout = PointPooled2d
-
 
 class MultipleSpatialXFeatureLinear(MultiReadoutBase):
     _base_readout = SpatialXFeatureLinear
 
+class MultipleFullSXF(MultiReadoutSharedParametersBase):
+    _base_readout = FullSXF
 
 class MultipleFullGaussian2d(MultiReadoutSharedParametersBase):
     _base_readout = FullGaussian2d

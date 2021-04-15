@@ -274,6 +274,7 @@ class FullGaussian2d(Readout):
 
         super().__init__()
         self.reg_weight = reg_weight
+        self.mean_activity = mean_activity
         # determines whether the Gaussian is isotropic or not
         self.gauss_type = gauss_type
 
@@ -637,6 +638,7 @@ class RemappedGaussian2d(FullGaussian2d):
         self.apply(self.init_conv)
 
     def initialize(self, **kwargs):
+        super().initialize(self.mean_activity)
         self.initialize_remap_field()
 
     def forward(self, x, sample=None, shift=None, out_idx=None):
@@ -976,6 +978,9 @@ class Gaussian3d(Readout):
         self.features.data.fill_(1 / self.in_shape[0])
         if self.bias is not None:
             self.initialize_bias(mean_activity=mean_activity)
+
+    def regularizer(self, reduction="sum", average=None):
+        raise NotImplementedError("The regularizer for this readout needs to be implemented! See issue https://github.com/sinzlab/neuralpredictors/issues/127")
 
     def forward(self, x, sample=None, shift=None, out_idx=None):
         """

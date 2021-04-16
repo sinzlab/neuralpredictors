@@ -78,7 +78,7 @@ class MultiReadoutBase(torch.nn.ModuleDict):
         return self[data_key](*args, **kwargs)
 
     def initialize(self, mean_activity_dict=None):
-        for data_key, readout in self.values():
+        for data_key, readout in self.items():
             mean_activity = mean_activity_dict[data_key] if mean_activity_dict is not None else None
             readout.initialize(mean_activity)
 

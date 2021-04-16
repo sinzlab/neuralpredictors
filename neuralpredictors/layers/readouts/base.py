@@ -1,14 +1,7 @@
 import warnings
-from collections import OrderedDict
-
-import numpy as np
 import torch
 from torch import nn as nn
-from torch.nn import ModuleDict
 from torch.nn import Parameter
-from torch.nn import functional as F
-
-from ..constraints import positive
 
 
 class ConfigurationError(Exception):
@@ -27,7 +20,7 @@ class Readout(nn.Module):
 
     def resolve_reduction_method(self, reduction="mean", average=None):
         if average is not None:
-            warnings.warn("Use of average is deprecated, Please consider using `reduction` instead", DeprecationWarning)
+            warnings.warn("Use of 'average' is deprecated. Please consider using `reduction` instead")
             reduction = "mean" if average else "sum"
         return reduction
 

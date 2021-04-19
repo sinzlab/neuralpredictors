@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import copy
 import time
 import logging
@@ -5,7 +7,6 @@ from collections import defaultdict, abc
 from typing import Dict, Tuple, List, Mapping, Union, Optional, Sequence
 import numpy as np
 from tqdm import tqdm
-from __future__ import annotations
 
 from .utils import deep_update
 
@@ -352,7 +353,7 @@ class AdvancedTracker(Tracker):
         if len(key) > 1:
             return self.get_objective(log[key[0]], key[1:])
         else:
-            if isinstance(log[key[0]], list):
+            if isinstance(log[key[0]], (list, np.ndarray)):
                 return log[key[0]]
             else:
                 raise ValueError("The key does not fully match an objective. Try specifying the complete key sequence.")

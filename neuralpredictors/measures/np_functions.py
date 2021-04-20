@@ -31,11 +31,11 @@ def corr(
     return (y1 * y2).mean(axis=axis, **kwargs)
 
 
-def oracle_corr_corrected(repeated_outputs: ArrayLike) -> np.ndarray:
+def oracle_corr_conservative(repeated_outputs: ArrayLike) -> np.ndarray:
     """
     Compute the corrected oracle correlations per neuron.
     Note that an unequal number of repeats will introduce bias as it distorts assumptions made about the dataset.
-    Oracle correlation corrected overestimates the true oracle correlation (might need a renaming in the future).
+    Note that oracle_corr_conservative overestimates the true oracle correlation.
 
     Args:
         repeated_outputs (array-like): numpy array with shape (images, repeats, neuron responses), or a list containing for each
@@ -54,11 +54,11 @@ def oracle_corr_corrected(repeated_outputs: ArrayLike) -> np.ndarray:
     return var_mean / np.sqrt(var_mean * (var_mean + var_noise))
 
 
-def oracle_corr(repeated_outputs: ArrayLike) -> np.ndarray:
+def oracle_corr_jackknife(repeated_outputs: ArrayLike) -> np.ndarray:
     """
     Compute the oracle correlations per neuron.
     Note that an unequal number of repeats will introduce bias as it distorts assumptions made about the dataset.
-    Note that oracle correlation underestimates the true oracle correlation.
+    Note that oracle_corr_jackknife underestimates the true oracle correlation.
 
     Args:
         repeated_outputs (array-like): numpy array with shape (images, repeats, neuron responses), or a list containing for each

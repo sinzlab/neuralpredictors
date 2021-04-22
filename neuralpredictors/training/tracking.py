@@ -1,3 +1,8 @@
+"""
+This module implements tracker classes that can be used to keep track
+of statistics that are generated throughout training.
+"""
+
 from __future__ import annotations
 
 import copy
@@ -260,7 +265,17 @@ class AdvancedTracker(Tracker):
                             can be something like `("img_classification","accuracy")` to always look at accuracy.
                             Can be combined with a setting specific key in `get_current_main_objective(...)`
             **objectives: e.g. {"dataset": {"objective1": o_fct1, "objective2": 0, "normalization": 0},...}
-                           or {"dataset": {"task_key": {"objective1": o_fct1, "objective2": 0},...},...}
+                           or {"dataset": {"task_key": {"objective1": o_fct1, "objective2": 0},...},...}.
+                          Here the key "normalization" is optional on each hierarchy level.
+                          If "normalization" exists, then this entry is expected to contain the value that
+                          is used to normalize all other values on the same level,
+                          and the normalization will be applied whenever the log is returned to the outside.
+                          E.g. if a loss is supposed to be tracked, then the "loss" entry will contain the
+                          un-normalized accumulation of loss for all inputs in that epoch at any point.
+                          To get the normalized loss that is commonly used in practice, simply accumulate the
+                          total number of inputs in the "normalization" entry and let AdvancedTracker do the rest.
+
+
         """
         self.objectives = objectives
         self.log = self._initialize_log(objectives)
@@ -320,24 +335,6 @@ class AdvancedTracker(Tracker):
         else:
             logger.info(current_log)
 
-    def check_isfinite(self, log: Optional[Union[Mapping, Sequence]] = None) -> bool:
-        """
-        Checks if all entries in `log` or (normalized) `self.log` are finite.
-        Args:
-            log: dict that is recursively searched for infinite entries
-
-        Returns: True if all entries are finite.
-        """
-        if log is None:
-            log = self._normalize_log(self.log)
-        if isinstance(log, abc.Mapping):
-            for k, l in log.items():
-                if not self._check_isfinite(l):
-                    return False
-        else:
-            return np.isfinite(log).any()
-        return True
-
     def get_objective(self, log: Optional[Union[Mapping, Sequence]] = None, key: Tuple[str, ...] = ()) -> np.array:
         """
         Get the value of the objective that corresponds to the key.
@@ -365,6 +362,24 @@ class AdvancedTracker(Tracker):
         combined_key = key + self.main_objective if isinstance(key, tuple) else (key,) + self.main_objective
         return self.get_current_objective(combined_key)
 
+    def check_isfinite(self, log: Optional[Union[Mapping, Sequence]] = None) -> bool:
+        """
+        Checks if all entries in `log` or (normalized) `self.log` are finite.
+        Args:
+            log: dict that is recursively searched for infinite entries
+
+        Returns: True if all entries are finite.
+        """
+        if log is None:
+            log = self._normalize_log(self.log)
+        if isinstance(log, abc.Mapping):
+            for k, l in log.items():
+                if not self._check_isfinite(l):
+                    return False
+        else:
+            return np.isfinite(log).any()
+        return True
+
     def finalize(self) -> None:
         """ After training, normalize the log and save the total time. """
         self.time = np.array(self.time)
@@ -376,10 +391,9 @@ class AdvancedTracker(Tracker):
         Serializes this instance to a Python dictionary.
 
         Returns:
-            :obj:`Dict[str, any]`: Dictionary of all the attributes that make up this configuration instance,
+            Dict[str, any]: All attributes that make up this configuration instance
         """
-        output = copy.deepcopy(self.__dict__)
-        return output
+        return copy.deepcopy(self.__dict__)
 
     def load_state_dict(self, tracker_dict: Dict) -> None:
         """

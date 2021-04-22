@@ -18,6 +18,20 @@ class Elu1(nn.Module):
     def forward(self, x):
         return elu1(x)
 
+class OffsetElu(nn.Module):
+    """
+    Elu activation function offset by a fixed value specified at the time
+    of the instantiation. That is:
+    OffsetElu(x) = Elu(x) + offset
+    """
+    def __init__(self, offset=1.0):
+        super().__init__()
+        self.offset = offset
+
+    def forward(self, x):
+        return F.elu(x, inplace=True) + self.offset
+
+
 
 def log1exp(x):
     return torch.log(1.0 + torch.exp(x))

@@ -359,6 +359,10 @@ class AdvancedTracker(Tracker):
         return self.get_objective(self._normalize_log(self.log), key)[-1]
 
     def get_current_main_objective(self, key: Tuple[str, ...]) -> float:
+        """
+        Main objective is saved in tracker to make it convenient to get the main objective
+        that would be used e.g. for learning-rate reduction or similar.
+        """
         combined_key = key + self.main_objective if isinstance(key, tuple) else (key,) + self.main_objective
         return self.get_current_objective(combined_key)
 

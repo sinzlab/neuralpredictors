@@ -16,6 +16,7 @@ class Readout(nn.Module):
     Base readout class for all individual readouts.
     The MultiReadout will expect its readouts to inherit from this base class.
     """
+
     def initialize(self, *args, **kwargs):
         raise NotImplementedError("initialize is not implemented for ", self.__class__.__name__)
 
@@ -24,8 +25,8 @@ class Readout(nn.Module):
 
     def resolve_reduction_method(self, reduction="mean", average=None):
         """
-        Helper method which transforms the old and depricated argument 'average' in the regularizer method into
-        the new argument 'reduction' (in order to agree with the terminology in pytorch).
+        Helper method which transforms the old and depricated argument 'average' in the regularizer into
+        the new argument 'reduction' (if average is not None). This is done in order to agree with the terminology in pytorch).
         """
         if average is not None:
             warnings.warn("Use of 'average' is deprecated. Please consider using `reduction` instead")
@@ -35,15 +36,13 @@ class Readout(nn.Module):
     def apply_reduction(self, x, reduction="mean", average=None):
         """
         Applies a reduction on the output of the regularizer.
-        The argument 'average' is depricated and
         Args:
             x (torch.tensor): output of the regularizer
             reduction(str/None): method of reduction for the regularizer. Currently possible are ['mean', 'sum', None].
             average (bool): Depricated. Whether to average the output of the regularizer.
-                            Is transformed into the corresponding value of 'reduction' (see method 'resolve_reduction_method').
+                            If not None, it is transformed into the corresponding value of 'reduction' (see method 'resolve_reduction_method').
 
         Returns (torch.tensor): reduced value of the regularizer
-
         """
         reduction = self.resolve_reduction_method(reduction=reduction, average=average)
 

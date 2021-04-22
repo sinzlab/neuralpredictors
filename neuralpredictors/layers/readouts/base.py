@@ -12,6 +12,10 @@ class ConfigurationError(Exception):
 
 
 class Readout(nn.Module):
+    """
+    Base readout class for all individual readouts.
+    The MultiReadout will expect its readouts to inherit from this base class.
+    """
     def initialize(self, *args, **kwargs):
         raise NotImplementedError("initialize is not implemented for ", self.__class__.__name__)
 
@@ -19,12 +23,28 @@ class Readout(nn.Module):
         return super().__repr__() + " [{}]\n".format(self.__class__.__name__)
 
     def resolve_reduction_method(self, reduction="mean", average=None):
+        """
+        Helper method which transforms the old and depricated argument 'average' in the regularizer method into
+        the new argument 'reduction' (in order to agree with the terminology in pytorch).
+        """
         if average is not None:
             warnings.warn("Use of 'average' is deprecated. Please consider using `reduction` instead")
             reduction = "mean" if average else "sum"
         return reduction
 
     def apply_reduction(self, x, reduction="mean", average=None):
+        """
+        Applies a reduction on the output of the regularizer.
+        The argument 'average' is depricated and
+        Args:
+            x (torch.tensor): output of the regularizer
+            reduction(str/None): method of reduction for the regularizer. Currently possible are ['mean', 'sum', None].
+            average (bool): Depricated. Whether to average the output of the regularizer.
+                            Is transformed into the corresponding value of 'reduction' (see method 'resolve_reduction_method').
+
+        Returns (torch.tensor): reduced value of the regularizer
+
+        """
         reduction = self.resolve_reduction_method(reduction=reduction, average=average)
 
         if reduction == "mean":
@@ -39,6 +59,15 @@ class Readout(nn.Module):
             )
 
     def initialize_bias(self, mean_activity=None):
+        """
+        Initialze the biases in readout.
+        Args:
+            mean_activity (dict): Dictionary containing the mean activity of neurons for a specific dataset.
+            Should be of form {'data_key': mean_activity}
+
+        Returns:
+
+        """
         if mean_activity is None:
             warnings.warn("Readout is NOT initialized with mean activity but with 0!")
             self.bias.data.fill_(0)

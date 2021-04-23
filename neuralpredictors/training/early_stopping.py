@@ -1,6 +1,8 @@
+import copy
 from collections import OrderedDict
 
 import numpy as np
+import torch
 
 
 def copy_state(model):
@@ -15,7 +17,10 @@ def copy_state(model):
     copy_dict = OrderedDict()
     state_dict = model.state_dict()
     for k, v in state_dict.items():
-        copy_dict[k] = v.cpu() if v.is_cuda else v.clone()
+        if torch.is_tensor(v):
+            copy_dict[k] = v.cpu() if v.is_cuda else v.clone()
+        else:
+            copy_dict[k] = copy.deepcopy(v)
 
     return copy_dict
 

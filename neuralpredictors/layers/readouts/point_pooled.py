@@ -53,6 +53,7 @@ class PointPooled2d(Readout):
         c, w, h = in_shape
         self.outdims = outdims
         self.reg_weight = reg_weight
+        self.mean_activity = mean_activity
         self.grid = Parameter(torch.Tensor(1, outdims, 1, 2))  # x-y coordinates for each neuron
         self.features = Parameter(
             torch.Tensor(1, c * (self._pool_steps + 1), 1, outdims)
@@ -90,6 +91,8 @@ class PointPooled2d(Readout):
         """
         Initialize function initialises the grid, features or weights and bias terms.
         """
+        if mean_activity is None:
+            mean_activity = self.mean_activity
         self.grid.data.uniform_(-self.init_range, self.init_range)
         self.features.data.fill_(1 / self.in_shape[0])
         if self.bias is not None:
@@ -195,6 +198,7 @@ class SpatialTransformerPooled3d(Readout):
         self.outdims = outdims
         self.positive = positive
         self.reg_weight = reg_weight
+        self.mean_activity = mean_activity
         if grid is None:
             self.grid = Parameter(torch.Tensor(1, outdims, 1, 2))
         else:
@@ -231,6 +235,8 @@ class SpatialTransformerPooled3d(Readout):
             self.features.data.fill_(1 / self.in_shape[0])
 
     def initialize(self, init_noise=1e-3, grid=True, mean_activity=None):
+        if mean_activity is None:
+            mean_activity = self.mean_activity
         # randomly pick centers within the spatial map
         self.features.data.fill_(1 / self.in_shape[0])
         if grid:

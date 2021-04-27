@@ -22,6 +22,7 @@ class AttentionReadout(Readout):
         self.in_shape = in_shape
         self.outdims = outdims
         self.reg_weight = reg_weight
+        self.mean_activity=mean_activity
         c, w, h = in_shape
         self.features = Parameter(torch.Tensor(self.outdims, c))
 
@@ -59,6 +60,8 @@ class AttentionReadout(Readout):
         self.apply(self.init_conv)
 
     def initialize(self, mean_activity=None):
+        if mean_activity is None:
+            mean_activity = self.mean_activity
         self.features.data.normal_(0, self.init_noise)
         if self.bias is not None:
             self.initialize_bias(mean_activity=mean_activity)

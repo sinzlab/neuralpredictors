@@ -35,6 +35,7 @@ class FullFactorized2d(Readout):
         self.init_noise = init_noise
         self.normalize = normalize
         self.reg_weight = reg_weight
+        self.mean_activity = mean_activity
 
         self._original_features = True
         self.initialize_features(**(shared_features or {}))
@@ -104,6 +105,8 @@ class FullFactorized2d(Readout):
         """
         Initializes the mean, and sigma of the Gaussian readout along with the features weights
         """
+        if mean_activity is None:
+            mean_activity = self.mean_activity
         self.spatial.data.normal_(0, self.init_noise)
         self._features.data.normal_(0, self.init_noise)
         if self._shared_features:

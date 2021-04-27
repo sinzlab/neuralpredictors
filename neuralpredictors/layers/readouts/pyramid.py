@@ -105,6 +105,7 @@ class PointPyramid2d(Readout):
         self.outdims = outdims
         self.positive = positive
         self.reg_weight = reg_weight
+        self.mean_activity = mean_activity
         self.gauss_pyramid = Pyramid(scale_n=scale_n, downsample=downsample, type=type)
         self.grid = Parameter(torch.Tensor(1, outdims, 1, 2))
         self.features = Parameter(torch.Tensor(1, c * (scale_n + 1), 1, outdims))
@@ -119,6 +120,8 @@ class PointPyramid2d(Readout):
         self.initialize(mean_activity)
 
     def initialize(self, mean_activity=None):
+        if mean_activity is None:
+            mean_activity = self.mean_activity
         self.grid.data.uniform_(-self.init_range, self.init_range)
         self.features.data.fill_(1 / self.in_shape[0])
         if self.bias is not None:

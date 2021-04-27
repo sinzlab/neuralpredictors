@@ -67,7 +67,7 @@ class Gaussian2d(Readout):
         self.mu = Parameter(torch.Tensor(*self.grid_shape))  # mean location of gaussian for each neuron
         self.sigma = Parameter(torch.Tensor(*self.grid_shape))  # standard deviation for gaussian for each neuron
         self.features = Parameter(torch.Tensor(1, c, 1, outdims))  # feature weights for each channel of the core
-
+        self.mean_activity = mean_activity
         if bias:
             bias = Parameter(torch.Tensor(outdims))
             self.register_parameter("bias", bias)
@@ -84,6 +84,8 @@ class Gaussian2d(Readout):
         """
         Initializes the mean, and sigma of the Gaussian readout along with the features weights
         """
+        if mean_activity is None:
+            mean_activity = self.mean_activity
         self.mu.data.uniform_(-self.init_mu_range, self.init_mu_range)
         if self.fixed_sigma:
             self.sigma.data.uniform_(self.init_sigma_range, self.init_sigma_range)
@@ -447,7 +449,8 @@ class FullGaussian2d(Readout):
         """
         Initializes the mean, and sigma of the Gaussian readout along with the features weights
         """
-
+        if mean_activity is None:
+            mean_activity = self.mean_activity
         if not self._predicted_grid or self._original_grid:
             self._mu.data.uniform_(-self.init_mu_range, self.init_mu_range)
 
@@ -637,8 +640,8 @@ class RemappedGaussian2d(FullGaussian2d):
     def initialize_remap_field(self):
         self.apply(self.init_conv)
 
-    def initialize(self, **kwargs):
-        super().initialize(self.mean_activity)
+    def initialize(self, mean_activity=None, **kwargs):
+        super().initialize(mean_activity)
         self.initialize_remap_field()
 
     def forward(self, x, sample=None, shift=None, out_idx=None):
@@ -724,7 +727,7 @@ class DeterministicGaussian2d(Readout):
         self.outdims = outdims
         self.positive = positive
         self.reg_weight = reg_weight
-
+        self.mean_activity = mean_activity
         if constrain_mode not in ["default", "abs", "elu"]:
             raise ValueError(
                 "Value of parameter constrain_mode = "
@@ -787,6 +790,8 @@ class DeterministicGaussian2d(Readout):
         """
         initialize function initializes the mean, sigma for the Gaussian readout and features weights
         """
+        if mean_activity is None:
+            mean_activity = self.mean_activity
         self.mu.data.uniform_(-self.init_mu_range, self.init_mu_range)
         self.log_var.data.fill_(np.log(self.init_sigma ** 2))
         self.features.data.fill_(1 / self.in_shape[0])
@@ -919,7 +924,7 @@ class Gaussian3d(Readout):
         self.mu = Parameter(torch.Tensor(*self.grid_shape))  # mean location of gaussian for each neuron
         self.sigma = Parameter(torch.Tensor(*self.grid_shape))  # standard deviation for gaussian for each neuron
         self.features = Parameter(torch.Tensor(1, 1, 1, outdims))  # saliency weights for each channel from core
-
+        self.mean_activity = mean_activity
         if bias:
             bias = Parameter(torch.Tensor(outdims))
             self.register_parameter("bias", bias)
@@ -966,6 +971,8 @@ class Gaussian3d(Readout):
         return self.sample_grid(batch_size=1, sample=False)
 
     def initialize(self, mean_activity=None):
+        if mean_activity is None:
+            mean_activity = self.mean_activity
         self.mu.data.uniform_(-self.init_mu_range, self.init_mu_range)
         if self.fixed_sigma:
             self.sigma.data.uniform_(self.init_sigma_range, self.init_sigma_range)
@@ -1100,7 +1107,7 @@ class UltraSparse(Readout):
         self.num_filters = num_filters
         self.shared_mean = shared_mean
         self.grid_shape = (1, 1, outdims * num_filters, 1, 3)
-
+        self.mean_activity = mean_activity
         if shared_mean:
 
             self.gridxy_shape = (1, 1, outdims, 1, 2)
@@ -1195,6 +1202,8 @@ class UltraSparse(Readout):
         ) * self.reg_weight
 
     def initialize(self, mean_activity=None):
+        if mean_activity is None:
+            mean_activity = self.mean_activity
         if self.shared_mean:
             # initialise mu and sigma separately for xy and channel dimension.
             self.mu_ch.data.uniform_(-1, 1)

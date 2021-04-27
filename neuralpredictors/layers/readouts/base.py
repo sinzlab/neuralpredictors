@@ -96,7 +96,7 @@ class ClonedReadout(nn.Module):
         return x
 
     def feature_l1(self, average=True):
-        """ Regularization is only applied on the scaled feature weights, not on the bias."""
+        """Regularization is only applied on the scaled feature weights, not on the bias."""
         if average:
             return (self._source.features * self.alpha).abs().mean()
         else:

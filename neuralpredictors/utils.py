@@ -47,3 +47,8 @@ def no_transforms(dat):
         yield dat
     finally:
         dat.transforms = transforms
+
+
+def anscombe(x):
+    """Compute Anscombe transform."""
+    return 2 * np.sqrt(x + 3 / 8)

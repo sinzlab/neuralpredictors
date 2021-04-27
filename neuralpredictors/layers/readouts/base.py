@@ -20,6 +20,9 @@ class Readout(nn.Module):
     def initialize(self, *args, **kwargs):
         raise NotImplementedError("initialize is not implemented for ", self.__class__.__name__)
 
+    def regularizer(self, reduction="sum", average=None):
+        raise NotImplementedError("regularizer is not implemented for ", self.__class__.__name__)
+
     def __repr__(self):
         return super().__repr__() + " [{}]\n".format(self.__class__.__name__)
 

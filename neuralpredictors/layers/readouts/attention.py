@@ -22,7 +22,7 @@ class AttentionReadout(Readout):
         self.in_shape = in_shape
         self.outdims = outdims
         self.reg_weight = reg_weight
-        self.mean_activity=mean_activity
+        self.mean_activity = mean_activity
         c, w, h = in_shape
         self.features = Parameter(torch.Tensor(self.outdims, c))
 

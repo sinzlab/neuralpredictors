@@ -1,7 +1,8 @@
 import warnings
 import numpy as np
 import h5py
-
+import torch
+from .training import eval_state
 
 def flatten_json(nested_dict, keep_nested_name=True):
     """Turns a nested dictionary into a flattened dictionary. Designed to facilitate the populating of Config.Part tables
@@ -98,3 +99,22 @@ def recursively_load_dict_contents_from_group(h5file, path="/"):
             else:
                 ans[key] = recursively_load_dict_contents_from_group(h5file, path + key + "/")
     return ans
+
+
+def get_module_output(model, input_shape):
+    """
+    Gets the output dimensions of the convolutional core
+        by passing an input image through all convolutional layers
+    :param core: convolutional core of the DNN, which final dimensions
+        need to be passed on to the readout layer
+    :param input_shape: the dimensions of the input
+    :return: output dimensions of the core
+    """
+    initial_device = "cuda" if next(iter(model.parameters())).is_cuda else "cpu"
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    with eval_state(model):
+        with torch.no_grad():
+            input = torch.zeros(1, *input_shape[1:]).to(device)
+            output = model.to(device)(input)
+    model.to(initial_device)
+    return output.shape

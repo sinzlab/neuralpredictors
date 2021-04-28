@@ -10,7 +10,7 @@ with open(path.join(here, "requirements.txt")) as f:
 
 setup(
     name="neuralpredictors",
-    version="0.0.0",
+    version="0.1.0",
     description="Sinz Lab Neural System Identification Utilities",
     author="Sinz Lab",
     author_email="software@sinzlab.net",

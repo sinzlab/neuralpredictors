@@ -6,7 +6,7 @@ from torch import nn as nn
 from torch.nn import Parameter
 from torch.nn import functional as F
 
-from nnfabrik.utility.nn_helpers import get_module_output
+from ..utils import get_module_output
 from ..constraints import positive
 from .architectures import BiasNet
 

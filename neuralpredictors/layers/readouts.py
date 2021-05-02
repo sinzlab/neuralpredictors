@@ -944,7 +944,9 @@ class FullGaussian2d(nn.Module):
         self.register_buffer("grid_sharing_index", torch.from_numpy(sharing_idx))
         self._shared_grid = True
 
-    def forward(self, x, sample=None, shift=None, out_idx=None, multiplex=False, crop_edge_px=None, collapse=True, **kwargs):
+    def forward(
+        self, x, sample=None, shift=None, out_idx=None, multiplex=False, crop_edge_px=None, collapse=True, **kwargs
+    ):
         """
         Propagates the input forwards through the readout
         Args:

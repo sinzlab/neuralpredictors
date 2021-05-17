@@ -297,12 +297,15 @@ class AdvancedTracker(Tracker):
             self._initialize_epoch(new_log, objectives)
         deep_update(self.log, new_log)
 
-    def start_epoch(self) -> None:
-        """Start a new epoch. Initialize each accumulation with its default value."""
+    def start_epoch(self, append_epoch: bool=True) -> None:
+        """ Start a new epoch. Initialize each accumulation with its default value. """
         t = time.time()
         self.time.append(t)
-        self.epoch += 1
-        self._initialize_epoch(self.log, self.objectives)
+        if append_epoch:
+            self.epoch += 1
+        else:
+            self.epoch = 0
+        self._initialize_epoch(self.log, self.objectives, append_epoch=append_epoch)
 
     def log_objective(self, value: float, key: Tuple[str, ...] = ()) -> None:
         """
@@ -438,7 +441,9 @@ class AdvancedTracker(Tracker):
                 log[key] = []
         return log
 
-    def _initialize_epoch(self, log: Union[Mapping, Sequence], objectives: Mapping[str, any]) -> None:
+    def _initialize_epoch(
+        self, log: Union[Mapping, Sequence], objectives: Mapping[str, any], append_epoch: bool = True
+    ) -> None:
         """
         For each key in `objectives`, go through log and append a new entry to its list.
         The entry reflects the default value saved in `objectives`.
@@ -450,8 +455,11 @@ class AdvancedTracker(Tracker):
             if isinstance(objective, abc.Mapping):
                 self._initialize_epoch(log[key], objective)
             elif not callable(objective):
-                while len(log[key]) <= self.epoch:
-                    log[key].append(objective)
+                if append_epoch or len(log[key]) == 0:
+                    while len(log[key]) <= self.epoch:
+                        log[key].append(objective)
+                else:
+                    log[key][0] = objective
 
     def _log_objective_value(self, value: float, log: Union[Mapping, Sequence], key: Tuple[str, ...] = ()) -> None:
         """

@@ -478,6 +478,21 @@ class SelectInputChannel(StaticTransform):
         return x.__class__(**key_vals)
 
 
+class ReshapeImages(StaticTransform):
+    """
+    Given a StaticImage object that includes "images", it will select a particular input channel.
+    """
+
+    def __init__(self, reshape_list):
+        self.reshape_list = reshape_list
+
+    def __call__(self, x):
+        key_vals = {k: v for k, v in zip(x._fields, x)}
+        img = key_vals["images"]
+        key_vals["images"] = img.transpose(self.reshape_list)
+        return x.__class__(**key_vals)
+
+
 class AddPositionAsChannels(StaticTransform):
     """
     Given a StaticImage object that includes "images", it will add two channels,

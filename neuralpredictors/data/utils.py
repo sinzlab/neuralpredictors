@@ -125,7 +125,7 @@ def convert_static_h5_dataset_to_folder(filename, outpath=None, overwrite=False,
     h5file = Path(filename)
     outpath = outpath or (h5file.parent / h5file.stem)
 
-    with h5.File(filename) as fid:
+    with h5py.File(filename) as fid:
         attributes = (
             ["images", "responses", "behavior", "pupil_center"] if not ignore_all_behaviors else ["images", "responses"]
         )

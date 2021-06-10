@@ -298,7 +298,7 @@ class AdvancedTracker(Tracker):
         deep_update(self.log, new_log)
 
     def start_epoch(self) -> None:
-        """ Start a new epoch. Initialize each accumulation with its default value. """
+        """Start a new epoch. Initialize each accumulation with its default value."""
         t = time.time()
         self.time.append(t)
         self.epoch += 1
@@ -385,7 +385,7 @@ class AdvancedTracker(Tracker):
         return True
 
     def finalize(self) -> None:
-        """ After training, normalize the log and save the total time. """
+        """After training, normalize the log and save the total time."""
         self.time = np.array(self.time)
         self.time -= self.time[0]
         self.log = self._normalize_log(self.log)

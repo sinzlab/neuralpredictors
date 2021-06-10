@@ -1,3 +1,4 @@
+import torch
 from torch import nn
 import warnings
 
@@ -100,26 +101,6 @@ class PoissonLoss3d(PoissonLoss):
     def forward(self, output, target):
         lag = target.size(1) - output.size(1)
         return super().forward(output, target[:, lag:])
-
-
-class GammaLoss(nn.Module):
-    def __init__(self, bias=1e-12, per_neuron=False):
-        super().__init__()
-        self.bias = bias
-        self.per_neuron = per_neuron
-
-    def forward(self, output, target):
-        target = (target + self.bias).detach()
-        # use output + 1/2 as shape parameter
-        shape = output + 0.5
-
-        # assert np.all(shape.detach().cpu().numpy() > 0), 'Shape parameter is smaller than zero'
-        loss = torch.lgamma(shape) - (shape - 1) * torch.log(target) + target
-
-        if not self.per_neuron:
-            return loss.mean()
-        else:
-            return loss.view(-1, loss.shape[-1]).mean(dim=0)
 
 
 class ExponentialLoss(nn.Module):

@@ -126,20 +126,3 @@ class MultiReadoutSharedParametersBase(MultiReadoutBase):
                 readout_kwargs["shared_features"] = None
             del readout_kwargs["share_features"]
         return readout_kwargs
-
-
-#### MultiReadouts for backwards compatibility
-class MultiplePointPooled2d(MultiReadoutBase):
-    _base_readout = PointPooled2d
-
-
-class MultipleSpatialXFeatureLinear(MultiReadoutBase):
-    _base_readout = SpatialXFeatureLinear
-
-
-class MultipleFullSXF(MultiReadoutSharedParametersBase):
-    _base_readout = FullSXF
-
-
-class MultipleFullGaussian2d(MultiReadoutSharedParametersBase):
-    _base_readout = FullGaussian2d

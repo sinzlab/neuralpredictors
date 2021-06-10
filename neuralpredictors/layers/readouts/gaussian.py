@@ -49,7 +49,7 @@ class Gaussian2d(Readout):
         fixed_sigma=False,
         mean_activity=None,
         feature_reg_weight=1.0,
-        gamma_readout=None, #depricated, use feature_reg_weight instead
+        gamma_readout=None,  # depricated, use feature_reg_weight instead
         **kwargs,
     ):
         warnings.warn(
@@ -272,7 +272,7 @@ class FullGaussian2d(Readout):
         source_grid=None,
         mean_activity=None,
         feature_reg_weight=1.0,
-        gamma_readout=None, #depricated, use feature_reg_weight instead
+        gamma_readout=None,  # depricated, use feature_reg_weight instead
         **kwargs,
     ):
 
@@ -717,7 +717,7 @@ class DeterministicGaussian2d(Readout):
         constrain_mode="default",
         mean_activity=None,
         feature_reg_weight=1.0,
-        gamma_readout=None, #depricated, use feature_reg_weight instead
+        gamma_readout=None,  # depricated, use feature_reg_weight instead
     ):
 
         super().__init__()
@@ -914,7 +914,7 @@ class Gaussian3d(Readout):
         fixed_sigma=False,
         mean_activity=None,
         feature_reg_weight=1.0,
-        gamma_readout=None, #depricated, use feature_reg_weight instead
+        gamma_readout=None,  # depricated, use feature_reg_weight instead
         **kwargs,
     ):
         super().__init__()
@@ -1097,7 +1097,7 @@ class UltraSparse(Readout):
         fixed_sigma=False,
         mean_activity=None,
         feature_reg_weight=1.0,
-        gamma_readout=None, #depricated, use feature_reg_weight instead
+        gamma_readout=None,  # depricated, use feature_reg_weight instead
         **kwargs,
     ):
 

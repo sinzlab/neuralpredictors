@@ -28,13 +28,7 @@ class MultiReadoutBase(torch.nn.ModuleDict):
     _base_readout = None
 
     def __init__(
-        self,
-        in_shape_dict,
-        n_neurons_dict,
-        base_readout=None,
-        mean_activity_dict=None,
-        clone_readout=False,
-        **kwargs
+        self, in_shape_dict, n_neurons_dict, base_readout=None, mean_activity_dict=None, clone_readout=False, **kwargs
     ):
 
         # The `base_readout` can be overridden only if the static property `_base_readout` is not set

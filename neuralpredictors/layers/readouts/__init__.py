@@ -10,6 +10,7 @@ from .multi_readout import *
 class MultiplePointPooled2d(MultiReadoutBase):
     _base_readout = PointPooled2d
 
+
 class MultipleFullGaussian2d(MultiReadoutSharedParametersBase):
     _base_readout = FullGaussian2d
 

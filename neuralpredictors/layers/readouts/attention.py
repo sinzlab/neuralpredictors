@@ -16,7 +16,7 @@ class AttentionReadout(Readout):
         attention_layers=1,
         mean_activity=None,
         feature_reg_weight=1.0,
-        gamma_readout=None, #depricated, use feature_reg_weight instead
+        gamma_readout=None,  # depricated, use feature_reg_weight instead
         **kwargs,
     ):
         super().__init__()

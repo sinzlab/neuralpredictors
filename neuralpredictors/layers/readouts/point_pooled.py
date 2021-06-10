@@ -20,7 +20,7 @@ class PointPooled2d(Readout):
         align_corners=True,
         mean_activity=None,
         feature_reg_weight=1.0,
-        gamma_readout=None, #depricated, use feature_reg_weight instead
+        gamma_readout=None,  # depricated, use feature_reg_weight instead
         **kwargs,
     ):
         """
@@ -191,7 +191,7 @@ class SpatialTransformerPooled3d(Readout):
         align_corners=True,
         mean_activity=None,
         feature_reg_weight=1.0,
-        gamma_readout=None, #depricated, use feature_reg_weight instead
+        gamma_readout=None,  # depricated, use feature_reg_weight instead
     ):
         super().__init__()
         self._pool_steps = pool_steps

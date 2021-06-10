@@ -22,7 +22,7 @@ class FullFactorized2d(Readout):
         shared_features=None,
         mean_activity=None,
         spatial_and_feature_reg_weight=1.0,
-        gamma_readout=None, #depricated, use feature_reg_weight instead
+        gamma_readout=None,  # depricated, use feature_reg_weight instead
         **kwargs,
     ):
 
@@ -36,7 +36,9 @@ class FullFactorized2d(Readout):
         self.init_noise = init_noise
         self.normalize = normalize
         self.mean_activity = mean_activity
-        self.spatial_and_feature_reg_weight = self.resolve_depricated_gamma_readout(spatial_and_feature_reg_weight, gamma_readout)
+        self.spatial_and_feature_reg_weight = self.resolve_depricated_gamma_readout(
+            spatial_and_feature_reg_weight, gamma_readout
+        )
 
         self._original_features = True
         self.initialize_features(**(shared_features or {}))

@@ -21,7 +21,8 @@ class FullFactorized2d(Readout):
         positive_weights=False,
         shared_features=None,
         mean_activity=None,
-        reg_weight=1.0,
+        spatial_and_feature_reg_weight=1.0,
+        gamma_readout=None, #depricated, use feature_reg_weight instead
         **kwargs,
     ):
 
@@ -34,8 +35,8 @@ class FullFactorized2d(Readout):
         self.constrain_pos = constrain_pos
         self.init_noise = init_noise
         self.normalize = normalize
-        self.reg_weight = reg_weight
         self.mean_activity = mean_activity
+        self.spatial_and_feature_reg_weight = self.resolve_depricated_gamma_readout(spatial_and_feature_reg_weight, gamma_readout)
 
         self._original_features = True
         self.initialize_features(**(shared_features or {}))
@@ -84,7 +85,7 @@ class FullFactorized2d(Readout):
         return weight
 
     def regularizer(self, reduction="sum", average=None):
-        return self.l1(reduction=reduction, average=average) * self.reg_weight
+        return self.l1(reduction=reduction, average=average) * self.spatial_and_feature_reg_weight
 
     def l1(self, reduction="sum", average=None):
         reduction = self.resolve_reduction_method(reduction=reduction, average=average)

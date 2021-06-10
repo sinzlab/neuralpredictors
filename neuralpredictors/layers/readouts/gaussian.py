@@ -48,7 +48,8 @@ class Gaussian2d(Readout):
         align_corners=True,
         fixed_sigma=False,
         mean_activity=None,
-        reg_weight=1.0,
+        feature_reg_weight=1.0,
+        gamma_readout=None, #depricated, use feature_reg_weight instead
         **kwargs,
     ):
         warnings.warn(
@@ -59,7 +60,7 @@ class Gaussian2d(Readout):
         if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma_range <= 0.0:
             raise ValueError("either init_mu_range doesn't belong to [0.0, 1.0] or init_sigma_range is non-positive")
         self.in_shape = in_shape
-        self.reg_weight = reg_weight
+        self.feature_reg_weight = self.resolve_depricated_gamma_readout(feature_reg_weight, gamma_readout)
         c, w, h = in_shape
         self.outdims = outdims
         self.batch_sample = batch_sample
@@ -141,7 +142,7 @@ class Gaussian2d(Readout):
         return self.apply_reduction(self.features.abs(), reduction=reduction, average=average)
 
     def regularizer(self, reduction="sum", average=None):
-        return self.feature_l1(reduction=reduction, average=average) * self.reg_weight
+        return self.feature_l1(reduction=reduction, average=average) * self.feature_reg_weight
 
     def forward(self, x, sample=None, shift=None, out_idx=None):
         """
@@ -270,12 +271,13 @@ class FullGaussian2d(Readout):
         shared_grid=None,
         source_grid=None,
         mean_activity=None,
-        reg_weight=1.0,
+        feature_reg_weight=1.0,
+        gamma_readout=None, #depricated, use feature_reg_weight instead
         **kwargs,
     ):
 
         super().__init__()
-        self.reg_weight = reg_weight
+        self.feature_reg_weight = self.resolve_depricated_gamma_readout(feature_reg_weight, gamma_readout)
         self.mean_activity = mean_activity
         # determines whether the Gaussian is isotropic or not
         self.gauss_type = gauss_type
@@ -375,7 +377,7 @@ class FullGaussian2d(Readout):
             return 0
 
     def regularizer(self, reduction="sum", average=None):
-        return self.feature_l1(reduction=reduction, average=average) * self.reg_weight
+        return self.feature_l1(reduction=reduction, average=average) * self.feature_reg_weight
 
     @property
     def mu(self):
@@ -714,7 +716,8 @@ class DeterministicGaussian2d(Readout):
         positive=False,
         constrain_mode="default",
         mean_activity=None,
-        reg_weight=1.0,
+        feature_reg_weight=1.0,
+        gamma_readout=None, #depricated, use feature_reg_weight instead
     ):
 
         super().__init__()
@@ -726,7 +729,7 @@ class DeterministicGaussian2d(Readout):
         c, w, h = in_shape
         self.outdims = outdims
         self.positive = positive
-        self.reg_weight = reg_weight
+        self.feature_reg_weight = self.resolve_depricated_gamma_readout(feature_reg_weight, gamma_readout)
         self.mean_activity = mean_activity
         if constrain_mode not in ["default", "abs", "elu"]:
             raise ValueError(
@@ -820,7 +823,7 @@ class DeterministicGaussian2d(Readout):
         return (
             self.feature_l1(reduction=reduction, average=average)
             + self.variance_l1(reduction=reduction, average=average)
-        ) * self.reg_weight
+        ) * self.feature_reg_weight
 
     def forward(self, x, shift=None, out_idx=None):
         N, c, w, h = x.size()
@@ -910,7 +913,8 @@ class Gaussian3d(Readout):
         align_corners=True,
         fixed_sigma=False,
         mean_activity=None,
-        reg_weight=1.0,
+        feature_reg_weight=1.0,
+        gamma_readout=None, #depricated, use feature_reg_weight instead
         **kwargs,
     ):
         super().__init__()
@@ -918,7 +922,7 @@ class Gaussian3d(Readout):
             raise ValueError("init_mu_range or init_sigma_range is not within required limit!")
         self.in_shape = in_shape
         self.outdims = outdims
-        self.reg_weight = reg_weight
+        self.feature_reg_weight = self.resolve_depricated_gamma_readout(feature_reg_weight, gamma_readout)
         self.batch_sample = batch_sample
         self.grid_shape = (1, 1, outdims, 1, 3)
         self.mu = Parameter(torch.Tensor(*self.grid_shape))  # mean location of gaussian for each neuron
@@ -1092,7 +1096,8 @@ class UltraSparse(Readout):
         align_corners=True,
         fixed_sigma=False,
         mean_activity=None,
-        reg_weight=1.0,
+        feature_reg_weight=1.0,
+        gamma_readout=None, #depricated, use feature_reg_weight instead
         **kwargs,
     ):
 
@@ -1102,7 +1107,7 @@ class UltraSparse(Readout):
         self.in_shape = in_shape
         c, w, h = in_shape
         self.outdims = outdims
-        self.reg_weight = reg_weight
+        self.feature_reg_weight = self.resolve_depricated_gamma_readout(feature_reg_weight, gamma_readout)
         self.batch_sample = batch_sample
         self.num_filters = num_filters
         self.shared_mean = shared_mean
@@ -1199,7 +1204,7 @@ class UltraSparse(Readout):
         return (
             self.feature_l1(reduction=reduction, average=average)
             + self.variance_l1(reduction=reduction, average=average)
-        ) * self.reg_weight
+        ) * self.feature_reg_weight
 
     def initialize(self, mean_activity=None):
         if mean_activity is None:

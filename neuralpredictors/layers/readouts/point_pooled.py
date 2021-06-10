@@ -19,7 +19,8 @@ class PointPooled2d(Readout):
         init_range,
         align_corners=True,
         mean_activity=None,
-        reg_weight=1.0,
+        feature_reg_weight=1.0,
+        gamma_readout=None, #depricated, use feature_reg_weight instead
         **kwargs,
     ):
         """
@@ -52,7 +53,7 @@ class PointPooled2d(Readout):
         self.in_shape = in_shape
         c, w, h = in_shape
         self.outdims = outdims
-        self.reg_weight = reg_weight
+        self.feature_reg_weight = self.resolve_depricated_gamma_readout(feature_reg_weight, gamma_readout)
         self.mean_activity = mean_activity
         self.grid = Parameter(torch.Tensor(1, outdims, 1, 2))  # x-y coordinates for each neuron
         self.features = Parameter(
@@ -108,7 +109,7 @@ class PointPooled2d(Readout):
         return self.apply_reduction(self.features.abs(), reduction=reduction, average=average)
 
     def regularizer(self, reduction="sum", average=None):
-        return self.feature_l1(reduction=reduction, average=average) * self.reg_weight
+        return self.feature_l1(reduction=reduction, average=average) * self.feature_reg_weight
 
     def forward(self, x, shift=None, out_idx=None):
         """
@@ -189,7 +190,8 @@ class SpatialTransformerPooled3d(Readout):
         stop_grad=False,
         align_corners=True,
         mean_activity=None,
-        reg_weight=1.0,
+        feature_reg_weight=1.0,
+        gamma_readout=None, #depricated, use feature_reg_weight instead
     ):
         super().__init__()
         self._pool_steps = pool_steps
@@ -197,7 +199,7 @@ class SpatialTransformerPooled3d(Readout):
         c, t, w, h = in_shape
         self.outdims = outdims
         self.positive = positive
-        self.reg_weight = reg_weight
+        self.feature_reg_weight = self.resolve_depricated_gamma_readout(feature_reg_weight, gamma_readout)
         self.mean_activity = mean_activity
         if grid is None:
             self.grid = Parameter(torch.Tensor(1, outdims, 1, 2))
@@ -249,7 +251,7 @@ class SpatialTransformerPooled3d(Readout):
         return self.apply_reduction(self.features[..., subs_idx].abs(), reduction=reduction, average=average)
 
     def regularizer(self, reduction="sum", average=None):
-        return self.feature_l1(reduction=reduction, average=average) * self.reg_weight
+        return self.feature_l1(reduction=reduction, average=average) * self.feature_reg_weight
 
     def reset_fisher_prune_scores(self):
         self._prune_n = 0
@@ -279,7 +281,7 @@ class SpatialTransformerPooled3d(Readout):
         self.features.data *= self.mask
 
         if self.positive:
-            positive(self.features)
+            self.features.data.clamp_min_(0)
         self.grid.data = torch.clamp(self.grid.data, -1, 1)
 
         N, c, t, w, h = x.size()

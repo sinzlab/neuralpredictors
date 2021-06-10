@@ -57,6 +57,12 @@ class Readout(nn.Module):
             reduction = "mean" if average else "sum"
         return reduction
 
+    def resolve_depricated_gamma_readout(self, feature_reg_weight, gamma_readout):
+        if gamma_readout is not None:
+            warnings.warn("Use of 'gamma_readout' is deprecated. Please consider using the readout's feature-regularization parameter instead")
+            feature_reg_weight = gamma_readout
+        return feature_reg_weight
+
     def initialize_bias(self, mean_activity=None):
         """
         Initialze the biases in readout.

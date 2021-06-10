@@ -34,7 +34,6 @@ class MultiReadoutBase(torch.nn.ModuleDict):
         base_readout=None,
         mean_activity_dict=None,
         clone_readout=False,
-        gamma_readout=1.0,
         **kwargs
     ):
 
@@ -59,7 +58,6 @@ class MultiReadoutBase(torch.nn.ModuleDict):
                         in_shape=in_shape_dict[data_key],
                         outdims=n_neurons_dict[data_key],
                         mean_activity=mean_activity,
-                        reg_weight=gamma_readout,
                         **readout_kwargs
                     ),
                 )

@@ -96,7 +96,8 @@ class PointPyramid2d(Readout):
         type,
         align_corners=True,
         mean_activity=None,
-        reg_weight=1.0,
+        feature_reg_weight=1.0,
+        gamma_readout=None, #depricated, use feature_reg_weight instead
         **kwargs,
     ):
         super().__init__()
@@ -104,7 +105,7 @@ class PointPyramid2d(Readout):
         c, w, h = in_shape
         self.outdims = outdims
         self.positive = positive
-        self.reg_weight = reg_weight
+        self.feature_reg_weight = self.resolve_depricated_gamma_readout(feature_reg_weight, gamma_readout)
         self.mean_activity = mean_activity
         self.gauss_pyramid = Pyramid(scale_n=scale_n, downsample=downsample, type=type)
         self.grid = Parameter(torch.Tensor(1, outdims, 1, 2))
@@ -139,7 +140,7 @@ class PointPyramid2d(Readout):
         return self.apply_reduction(self.features.abs(), reduction=reduction, average=average)
 
     def regularizer(self, reduction="sum", average=None):
-        return self.feature_l1(reduction=reduction, average=average) * self.reg_weight
+        return self.feature_l1(reduction=reduction, average=average) * self.feature_reg_weight
 
     def forward(self, x, shift=None):
         if self.positive:

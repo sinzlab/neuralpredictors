@@ -23,19 +23,6 @@ class Readout(nn.Module):
     def regularizer(self, reduction="sum", average=None):
         raise NotImplementedError("regularizer is not implemented for ", self.__class__.__name__)
 
-    def __repr__(self):
-        return super().__repr__() + " [{}]\n".format(self.__class__.__name__)
-
-    def resolve_reduction_method(self, reduction="mean", average=None):
-        """
-        Helper method which transforms the old and depricated argument 'average' in the regularizer into
-        the new argument 'reduction' (if average is not None). This is done in order to agree with the terminology in pytorch).
-        """
-        if average is not None:
-            warnings.warn("Use of 'average' is deprecated. Please consider using `reduction` instead")
-            reduction = "mean" if average else "sum"
-        return reduction
-
     def apply_reduction(self, x, reduction="mean", average=None):
         """
         Applies a reduction on the output of the regularizer.
@@ -60,6 +47,16 @@ class Readout(nn.Module):
                 f"Reduction method '{reduction}' is not recognized. Valid values are ['mean', 'sum', None]"
             )
 
+    def resolve_reduction_method(self, reduction="mean", average=None):
+        """
+        Helper method which transforms the old and depricated argument 'average' in the regularizer into
+        the new argument 'reduction' (if average is not None). This is done in order to agree with the terminology in pytorch).
+        """
+        if average is not None:
+            warnings.warn("Use of 'average' is deprecated. Please consider using `reduction` instead")
+            reduction = "mean" if average else "sum"
+        return reduction
+
     def initialize_bias(self, mean_activity=None):
         """
         Initialze the biases in readout.
@@ -75,6 +72,9 @@ class Readout(nn.Module):
             self.bias.data.fill_(0)
         else:
             self.bias.data = mean_activity
+
+    def __repr__(self):
+        return super().__repr__() + " [{}]\n".format(self.__class__.__name__)
 
 
 class ClonedReadout(nn.Module):

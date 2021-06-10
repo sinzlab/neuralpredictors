@@ -15,13 +15,14 @@ class AttentionReadout(Readout):
         attention_kernel=1,
         attention_layers=1,
         mean_activity=None,
-        reg_weight=1.0,
+        feature_reg_weight=1.0,
+        gamma_readout=None, #depricated, use feature_reg_weight instead
         **kwargs,
     ):
         super().__init__()
         self.in_shape = in_shape
         self.outdims = outdims
-        self.reg_weight = reg_weight
+        self.feature_reg_weight = self.resolve_depricated_gamma_readout(feature_reg_weight, gamma_readout)
         self.mean_activity = mean_activity
         c, w, h = in_shape
         self.features = Parameter(torch.Tensor(self.outdims, c))
@@ -71,7 +72,7 @@ class AttentionReadout(Readout):
         return self.apply_reduction(self.features.abs(), reduction=reduction, average=average)
 
     def regularizer(self, reduction="sum", average=None):
-        return self.feature_l1(reduction=reduction, average=average) * self.reg_weight
+        return self.feature_l1(reduction=reduction, average=average) * self.feature_reg_weight
 
     def forward(self, x, shift=None):
         attention = self.attention(x)

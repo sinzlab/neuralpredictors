@@ -961,9 +961,15 @@ class FullGaussian2d(nn.Module):
             multiplex (bool): if True, the neurons do not readout from their grid position,
                             but from every position, i.e. every pixel, instead. Thus, each neuron is effectively copied
                             to all positions in the image. The neuronal activity output matrix is then no longer
-                            (Batch, Neurons), but (Batch, Neurons x locations)
+                            (batch, neurons), but (batch, neurons x locations), when  the `collapse` argument is True,
+                            or (batch, neurons, height x width)
             crop_edge_px (int): When multiplex is True, the response to all pixels that are cropped. Cropping
                             will be symmetric by n pixels as specified by this argument.
+            collapse (bool): This argument can be used to modify the output shape of the readout when multiplex is
+                            set to True.
+                            By default (collapse=True), the readout returns the output in the shape of
+                            (batch, neurons x locations). When collapse=False, the returned shape will be:
+                            (batch, neurons, height x width)
 
 
         Returns:

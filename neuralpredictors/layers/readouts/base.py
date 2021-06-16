@@ -57,7 +57,7 @@ class Readout(nn.Module):
             reduction = "mean" if average else "sum"
         return reduction
 
-    def resolve_depricated_gamma_readout(self, feature_reg_weight, gamma_readout):
+    def resolve_deprecated_gamma_readout(self, feature_reg_weight, gamma_readout):
         if gamma_readout is not None:
             warnings.warn(
                 "Use of 'gamma_readout' is deprecated. Please consider using the readout's feature-regularization parameter instead"

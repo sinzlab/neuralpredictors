@@ -105,7 +105,7 @@ class PointPyramid2d(Readout):
         c, w, h = in_shape
         self.outdims = outdims
         self.positive = positive
-        self.feature_reg_weight = self.resolve_depricated_gamma_readout(feature_reg_weight, gamma_readout)
+        self.feature_reg_weight = self.resolve_deprecated_gamma_readout(feature_reg_weight, gamma_readout)
         self.mean_activity = mean_activity
         self.gauss_pyramid = Pyramid(scale_n=scale_n, downsample=downsample, type=type)
         self.grid = Parameter(torch.Tensor(1, outdims, 1, 2))

@@ -60,7 +60,7 @@ class Gaussian2d(Readout):
         if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma_range <= 0.0:
             raise ValueError("either init_mu_range doesn't belong to [0.0, 1.0] or init_sigma_range is non-positive")
         self.in_shape = in_shape
-        self.feature_reg_weight = self.resolve_depricated_gamma_readout(feature_reg_weight, gamma_readout)
+        self.feature_reg_weight = self.resolve_deprecated_gamma_readout(feature_reg_weight, gamma_readout)
         c, w, h = in_shape
         self.outdims = outdims
         self.batch_sample = batch_sample
@@ -277,7 +277,7 @@ class FullGaussian2d(Readout):
     ):
 
         super().__init__()
-        self.feature_reg_weight = self.resolve_depricated_gamma_readout(feature_reg_weight, gamma_readout)
+        self.feature_reg_weight = self.resolve_deprecated_gamma_readout(feature_reg_weight, gamma_readout)
         self.mean_activity = mean_activity
         # determines whether the Gaussian is isotropic or not
         self.gauss_type = gauss_type
@@ -729,7 +729,7 @@ class DeterministicGaussian2d(Readout):
         c, w, h = in_shape
         self.outdims = outdims
         self.positive = positive
-        self.feature_reg_weight = self.resolve_depricated_gamma_readout(feature_reg_weight, gamma_readout)
+        self.feature_reg_weight = self.resolve_deprecated_gamma_readout(feature_reg_weight, gamma_readout)
         self.mean_activity = mean_activity
         if constrain_mode not in ["default", "abs", "elu"]:
             raise ValueError(
@@ -922,7 +922,7 @@ class Gaussian3d(Readout):
             raise ValueError("init_mu_range or init_sigma_range is not within required limit!")
         self.in_shape = in_shape
         self.outdims = outdims
-        self.feature_reg_weight = self.resolve_depricated_gamma_readout(feature_reg_weight, gamma_readout)
+        self.feature_reg_weight = self.resolve_deprecated_gamma_readout(feature_reg_weight, gamma_readout)
         self.batch_sample = batch_sample
         self.grid_shape = (1, 1, outdims, 1, 3)
         self.mu = Parameter(torch.Tensor(*self.grid_shape))  # mean location of gaussian for each neuron
@@ -1107,7 +1107,7 @@ class UltraSparse(Readout):
         self.in_shape = in_shape
         c, w, h = in_shape
         self.outdims = outdims
-        self.feature_reg_weight = self.resolve_depricated_gamma_readout(feature_reg_weight, gamma_readout)
+        self.feature_reg_weight = self.resolve_deprecated_gamma_readout(feature_reg_weight, gamma_readout)
         self.batch_sample = batch_sample
         self.num_filters = num_filters
         self.shared_mean = shared_mean

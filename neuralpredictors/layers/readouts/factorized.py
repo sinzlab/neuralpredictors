@@ -36,7 +36,7 @@ class FullFactorized2d(Readout):
         self.init_noise = init_noise
         self.normalize = normalize
         self.mean_activity = mean_activity
-        self.spatial_and_feature_reg_weight = self.resolve_depricated_gamma_readout(
+        self.spatial_and_feature_reg_weight = self.resolve_deprecated_gamma_readout(
             spatial_and_feature_reg_weight, gamma_readout
         )
 

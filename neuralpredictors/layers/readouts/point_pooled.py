@@ -53,7 +53,7 @@ class PointPooled2d(Readout):
         self.in_shape = in_shape
         c, w, h = in_shape
         self.outdims = outdims
-        self.feature_reg_weight = self.resolve_depricated_gamma_readout(feature_reg_weight, gamma_readout)
+        self.feature_reg_weight = self.resolve_deprecated_gamma_readout(feature_reg_weight, gamma_readout)
         self.mean_activity = mean_activity
         self.grid = Parameter(torch.Tensor(1, outdims, 1, 2))  # x-y coordinates for each neuron
         self.features = Parameter(
@@ -199,7 +199,7 @@ class SpatialTransformerPooled3d(Readout):
         c, t, w, h = in_shape
         self.outdims = outdims
         self.positive = positive
-        self.feature_reg_weight = self.resolve_depricated_gamma_readout(feature_reg_weight, gamma_readout)
+        self.feature_reg_weight = self.resolve_deprecated_gamma_readout(feature_reg_weight, gamma_readout)
         self.mean_activity = mean_activity
         if grid is None:
             self.grid = Parameter(torch.Tensor(1, outdims, 1, 2))

@@ -22,7 +22,7 @@ class AttentionReadout(Readout):
         super().__init__()
         self.in_shape = in_shape
         self.outdims = outdims
-        self.feature_reg_weight = self.resolve_depricated_gamma_readout(feature_reg_weight, gamma_readout)
+        self.feature_reg_weight = self.resolve_deprecated_gamma_readout(feature_reg_weight, gamma_readout)
         self.mean_activity = mean_activity
         c, w, h = in_shape
         self.features = Parameter(torch.Tensor(self.outdims, c))

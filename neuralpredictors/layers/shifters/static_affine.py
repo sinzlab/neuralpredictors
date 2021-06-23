@@ -20,7 +20,7 @@ class StaticAffine2d(nn.Linear):
         """
         super().__init__(input_channels, output_channels, bias=bias)
 
-    def forward(self, x):
+    def forward(self, x, trial_idx=None):
         x = super().forward(x)
         return torch.tanh(x)
 
@@ -34,7 +34,7 @@ class StaticAffine2d(nn.Linear):
                 self.bias.data.normal_(0, 1e-6)
 
 
-class StaticAffine2dShifter(Shifter, ModuleDict):
+class StaticAffine2dShifter(ModuleDict):
     def __init__(self, data_keys, input_channels=2, output_channels=2, bias=True, gamma_shifter=0):
         """
         Args:

@@ -21,6 +21,8 @@ class StaticAffine2d(nn.Linear):
         super().__init__(input_channels, output_channels, bias=bias)
 
     def forward(self, x, trial_idx=None):
+        if trial_idx is not None:
+            raise ValueError("This shifter network does not support trial indexing. Set trial_idx to None")
         x = super().forward(x)
         return torch.tanh(x)
 

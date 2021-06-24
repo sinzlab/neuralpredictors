@@ -47,6 +47,24 @@ class Core2d(Core):
             if m.bias is not None:
                 m.bias.data.fill_(0)
 
+    def add_first_layer(self):
+        """
+        The first layer is typically different from all following layers and is initialized separetely.
+        """
+        raise NotImplementedError("initialization methods must be implemented by the inheriting class")
+
+    def add_subsequent_layers(self):
+        """
+        The laters layers are typically different from the first layers. This method initializes the later layers.
+        """
+        raise NotImplementedError("initialization methods must be implemented by the inheriting class")
+
+    def regularizer(self):
+        """
+        Regularization applied on the core. Returns a scalar value.
+        """
+        raise NotImplementedError("regularizer method must be implemented by the inheriting class")
+
     def forward(self, x):
         """
         Forward function for pytorch nn module.
@@ -56,8 +74,3 @@ class Core2d(Core):
         """
         raise NotImplementedError("forward method must be implemented by the inheriting class")
 
-    def regularizer(self):
-        """
-        Regularization applied on the core. Returns a scalar value.
-        """
-        raise NotImplementedError("regularizer method must be implemented by the inheriting class")

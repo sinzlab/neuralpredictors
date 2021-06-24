@@ -35,6 +35,9 @@ class StaticAffine2d(nn.Linear):
             else:
                 self.bias.data.normal_(0, 1e-6)
 
+    def regularizer(self):
+        return self.weight.pow(2).mean()
+
 
 class StaticAffine2dShifter(ModuleDict):
     def __init__(self, data_keys, input_channels=2, output_channels=2, bias=True, gamma_shifter=0):
@@ -58,4 +61,4 @@ class StaticAffine2dShifter(ModuleDict):
                 self[k].initialize()
 
     def regularizer(self, data_key):
-        return self[data_key].weight.pow(2).mean() * self.gamma_shifter
+        return self[data_key].regularizer() * self.gamma_shifter

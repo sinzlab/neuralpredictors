@@ -46,6 +46,7 @@ class Stacked2dCore(Core2d, nn.Module):
         bias=True,
         momentum=0.1,
         pad_input=True,
+        hidden_padding=None,
         batch_norm=True,
         batch_norm_scale=True,
         independent_bn_bias=True,
@@ -106,31 +107,48 @@ class Stacked2dCore(Core2d, nn.Module):
         )
         self._input_weights_regularizer = regularizers.__dict__[input_regularizer](**regularizer_config)
 
-        self.layers = layers
+        self.num_layers = layers
         self.gamma_input = gamma_input
         self.gamma_hidden = gamma_hidden
         self.input_channels = input_channels
         self.hidden_channels = hidden_channels
         self.skip = skip
         self.use_avg_reg = use_avg_reg
-
         if use_avg_reg:
             warnings.warn("The averaged value of regularizer will be used.", UserWarning)
 
-        self.features = nn.Sequential()
+        self.hidden_padding = hidden_padding
+        self.input_kern = input_kern
+        self.hidden_kern = hidden_kern
+        self.laplace_padding = laplace_padding
+        self.hidden_dilation = hidden_dilation
+        self.final_nonlinearity = final_nonlinearity
+        self.elu_xshift = elu_xshift
+        self.elu_yshift = elu_yshift
+        self.bias = bias
+        self.momentum = momentum
+        self.pad_input = pad_input
+        self.batch_norm = batch_norm
+        self.batch_norm_scale = batch_norm_scale
+        self.independent_bn_bias = independent_bn_bias
         if stack is None:
-            self.stack = range(self.layers)
+            self.stack = range(self.num_layers)
         else:
-            self.stack = [*range(self.layers)[stack:]] if isinstance(stack, int) else stack
+            self.stack = [*range(self.num_layers)[stack:]] if isinstance(stack, int) else stack
 
-        # --- first layer
+        self.features = nn.Sequential()
+        self.add_first_layer()
+        self.add_subsequent_layers()
+        self.initialize()
+
+    def add_first_layer(self):
         layer = OrderedDict()
         layer["conv"] = nn.Conv2d(
-            input_channels,
-            hidden_channels,
-            input_kern,
-            padding=input_kern // 2 if pad_input else 0,
-            bias=bias and not batch_norm,
+            self.input_channels,
+            self.hidden_channels,
+            self.input_kern,
+            padding=self.input_kern // 2 if self.pad_input else 0,
+            bias=self.bias and not batch_norm,
         )
         if batch_norm:
             if independent_bn_bias:
@@ -143,18 +161,18 @@ class Stacked2dCore(Core2d, nn.Module):
                 elif batch_norm_scale:
                     layer["scale"] = Scale2DLayer(hidden_channels)
 
-        if layers > 1 or final_nonlinearity:
+        if self.num_layers > 1 or final_nonlinearity:
             layer["nonlin"] = AdaptiveELU(elu_xshift, elu_yshift)
         self.features.add_module("layer0", nn.Sequential(layer))
 
-        # --- other layers
+    def add_subsequent_layers(self):
         if not isinstance(hidden_kern, Iterable):
-            hidden_kern = [hidden_kern] * (self.layers - 1)
+            hidden_kern = [hidden_kern] * (self.num_layers - 1)
 
-        for l in range(1, self.layers):
+        for l in range(1, self.num_layers):
             layer = OrderedDict()
-
-            hidden_padding = ((hidden_kern[l - 1] - 1) * hidden_dilation + 1) // 2
+            if hidden_padding is None:
+                hidden_padding = ((hidden_kern[l - 1] - 1) * hidden_dilation + 1) // 2
             layer["conv"] = nn.Conv2d(
                 hidden_channels if not skip > 1 else min(skip, l) * hidden_channels,
                 hidden_channels,
@@ -178,11 +196,9 @@ class Stacked2dCore(Core2d, nn.Module):
                     elif batch_norm_scale:
                         layer["scale"] = Scale2DLayer(hidden_channels)
 
-            if final_nonlinearity or l < self.layers - 1:
+            if final_nonlinearity or l < self.num_layers - 1:
                 layer["nonlin"] = AdaptiveELU(elu_xshift, elu_yshift)
             self.features.add_module("layer{}".format(l), nn.Sequential(layer))
-
-        self.initialize()
 
     def forward(self, input_):
         ret = []
@@ -204,9 +220,9 @@ class Stacked2dCore(Core2d, nn.Module):
         Sparsity regularization on the filters of all the conv2d layers except the first one.
         """
         ret = 0
-        for l in range(1, self.layers):
+        for l in range(1, self.num_layers):
             ret = ret + self.features[l].conv.weight.pow(2).sum(3, keepdim=True).sum(2, keepdim=True).sqrt().mean()
-        return ret / ((self.layers - 1) if self.layers > 1 else 1)
+        return ret / ((self.num_layers - 1) if self.num_layers > 1 else 1)
 
     def regularizer(self):
         return self.group_sparsity() * self.gamma_hidden + self.gamma_input * self.laplace()
@@ -216,38 +232,20 @@ class Stacked2dCore(Core2d, nn.Module):
         return len(self.features) * self.hidden_channels
 
 
-class RotationEquivariant2dCore(Core2d, nn.Module):
+class RotationEquivariant2dCore(Stacked2dCore, nn.Module):
     """
     A core built of 2d rotation-equivariant layers. For more info refer to https://openreview.net/forum?id=H1fU8iAqKX.
     """
 
     def __init__(
         self,
-        input_channels,
-        hidden_channels,
-        input_kern,
-        hidden_kern,
-        layers=3,
+        *args,
         num_rotations=8,
         stride=1,
         upsampling=2,
-        gamma_hidden=0,
-        gamma_input=0.0,
-        final_nonlinearity=True,
-        elu_xshift=0.0,
-        elu_yshift=0.0,
-        bias=True,
-        momentum=0.1,
-        pad_input=True,
-        hidden_padding=None,
-        batch_norm=True,
-        batch_norm_scale=True,
         rot_eq_batch_norm=True,
-        independent_bn_bias=True,
-        laplace_padding=0,
         input_regularizer="LaplaceL2norm",
-        stack=None,
-        use_avg_reg=False,
+        **kwargs,
     ):
         """
         Args:
@@ -292,120 +290,100 @@ class RotationEquivariant2dCore(Core2d, nn.Module):
             parameters and a BiasLayer will be added after the batch_norm layer.
         """
 
-        super().__init__()
+        super().__init__(*args, **kwargs, input_regularizer=input_regularizer)
 
-        regularizer_config = (
-            dict(padding=laplace_padding, kernel=input_kern)
-            if input_regularizer == "GaussianLaplaceL2"
-            else dict(padding=laplace_padding)
-        )
-        self._input_weights_regularizer = regularizers.__dict__[input_regularizer](**regularizer_config)
-
-        self.layers = layers
-        self.gamma_input = gamma_input
-        self.gamma_hidden = gamma_hidden
-        self.input_channels = input_channels
-        self.hidden_channels = hidden_channels
         self.num_rotations = num_rotations
         self.stride = stride
-        self.use_avg_reg = use_avg_reg
+        self.upsampling = upsampling
+        self.rot_eq_batch_norm = rot_eq_batch_norm
 
-        if rot_eq_batch_norm:
+        if not rot_eq_batch_norm:
+            self.BatchNormLayer = nn.BatchNorm2d
+            self.BiasLayer = Bias2DLayer
+            self.ScaleLayer = Scale2DLayer
 
-            def BatchNormLayer(**kwargs):
-                return RotationEquivariantBatchNorm2D(num_rotations=num_rotations, **kwargs)
+        self.add_first_layer()
+        self.add_subsequent_layers()
+        self.initialize()
 
-            def BiasLayer(**kwargs):
-                return RotationEquivariantBias2DLayer(num_rotations=num_rotations, **kwargs)
+    def BatchNormLayer(self, **kwargs):
+        return RotationEquivariantBatchNorm2D(num_rotations=self.num_rotations, **kwargs)
 
-            def ScaleLayer(**kwargs):
-                return RotationEquivariantScale2DLayer(num_rotations=num_rotations, **kwargs)
+    def BiasLayer(self, **kwargs):
+        return RotationEquivariantBias2DLayer(num_rotations=self.num_rotations, **kwargs)
 
-        else:
-            BatchNormLayer = nn.BatchNorm2d
-            BiasLayer = Bias2DLayer
-            ScaleLayer = Scale2DLayer
+    def ScaleLayer(self, **kwargs):
+        return RotationEquivariantScale2DLayer(num_rotations=self.num_rotations, **kwargs)
 
-        if use_avg_reg:
-            warnings.warn("The averaged value of regularizer will be used.", UserWarning)
-
-        self.features = nn.Sequential()
-        if stack is None:
-            self.stack = range(self.layers)
-        else:
-            self.stack = [*range(self.layers)[stack:]] if isinstance(stack, int) else stack
-
-        # --- first layer
+    def add_first_layer(self):
         layer = OrderedDict()
         layer["conv"] = HermiteConv2D(
-            input_features=input_channels,
-            output_features=hidden_channels,
-            num_rotations=num_rotations,
-            upsampling=upsampling,
-            filter_size=input_kern,
-            stride=stride,
-            padding=input_kern // 2 if pad_input else 0,
+            input_features=self.input_channels,
+            output_features=self.hidden_channels,
+            num_rotations=self.num_rotations,
+            upsampling=self.upsampling,
+            filter_size=self.input_kern,
+            stride=self.stride,
+            padding=self.input_kern // 2 if self.pad_input else 0,
             first_layer=True,
         )
-        if batch_norm:
-            if independent_bn_bias:
-                layer["norm"] = BatchNormLayer(num_features=hidden_channels, momentum=momentum)
+        if self.batch_norm:
+            if self.independent_bn_bias:
+                layer["norm"] = self.BatchNormLayer(num_features=self.hidden_channels, momentum=self.momentum)
             else:
-                layer["norm"] = BatchNormLayer(
-                    num_features=hidden_channels,
-                    momentum=momentum,
-                    affine=bias and batch_norm_scale,
+                layer["norm"] = self.BatchNormLayer(
+                    num_features=self.hidden_channels,
+                    momentum=self.momentum,
+                    affine=self.bias and self.batch_norm_scale,
                 )
-                if bias:
-                    if not batch_norm_scale:
-                        layer["bias"] = BiasLayer(channels=hidden_channels)
-                elif batch_norm_scale:
-                    layer["scale"] = ScaleLayer(channels=hidden_channels)
+                if self.bias:
+                    if not self.batch_norm_scale:
+                        layer["bias"] = self.BiasLayer(channels=self.hidden_channels)
+                elif self.batch_norm_scale:
+                    layer["scale"] = self.ScaleLayer(channels=self.hidden_channels)
 
-        if layers > 1 or final_nonlinearity:
-            layer["nonlin"] = AdaptiveELU(elu_xshift, elu_yshift)
+        if self.num_layers > 1 or self.final_nonlinearity:
+            layer["nonlin"] = AdaptiveELU(self.elu_xshift, self.elu_yshift)
         self.features.add_module("layer0", nn.Sequential(layer))
 
-        # --- other layers
-        if not isinstance(hidden_kern, Iterable):
-            hidden_kern = [hidden_kern] * (self.layers - 1)
+    def add_subsequent_layers(self):
+        if not isinstance(self.hidden_kern, Iterable):
+            hidden_kern = [self.hidden_kern] * (self.num_layers - 1)
 
-        for l in range(1, self.layers):
+        for l in range(1, self.num_layers):
             layer = OrderedDict()
 
-            if hidden_padding is None:
+            if self.hidden_padding is None:
                 hidden_padding = hidden_kern[l - 1] // 2
 
             layer["conv"] = HermiteConv2D(
-                input_features=hidden_channels * num_rotations,
-                output_features=hidden_channels,
-                num_rotations=num_rotations,
-                upsampling=upsampling,
-                filter_size=hidden_kern[l - 1],
-                stride=stride,
-                padding=hidden_padding,
+                input_features=self.hidden_channels * self.num_rotations,
+                output_features=self.hidden_channels,
+                num_rotations=self.num_rotations,
+                upsampling=self.upsampling,
+                filter_size=self.hidden_kern[l - 1],
+                stride=self.stride,
+                padding=self.hidden_padding,
                 first_layer=False,
             )
-            if batch_norm:
-                if independent_bn_bias:
-                    layer["norm"] = BatchNormLayer(num_features=hidden_channels, momentum=momentum)
+            if self.batch_norm:
+                if self.independent_bn_bias:
+                    layer["norm"] = self.BatchNormLayer(num_features=self.hidden_channels, momentum=self.momentum)
                 else:
-                    layer["norm"] = BatchNormLayer(
-                        num_features=hidden_channels,
-                        momentum=momentum,
-                        affine=bias and batch_norm_scale,
+                    layer["norm"] = self.BatchNormLayer(
+                        num_features=self.hidden_channels,
+                        momentum=self.momentum,
+                        affine=self.bias and self.batch_norm_scale,
                     )
-                    if bias:
-                        if not batch_norm_scale:
-                            layer["bias"] = BiasLayer(channels=hidden_channels)
-                    elif batch_norm_scale:
-                        layer["scale"] = ScaleLayer(channels=hidden_channels)
+                    if self.bias:
+                        if not self.batch_norm_scale:
+                            layer["bias"] = self.BiasLayer(channels=self.hidden_channels)
+                    elif self.batch_norm_scale:
+                        layer["scale"] = self.ScaleLayer(channels=self.hidden_channels)
 
-            if final_nonlinearity or l < self.layers - 1:
-                layer["nonlin"] = AdaptiveELU(elu_xshift, elu_yshift)
+            if self.final_nonlinearity or l < self.num_layers - 1:
+                layer["nonlin"] = AdaptiveELU(self.elu_xshift, self.elu_yshift)
             self.features.add_module("layer{}".format(l), nn.Sequential(layer))
-
-        self.initialize()
 
     def initialize(self):
         self.apply(self.init_conv_hermite)
@@ -428,7 +406,7 @@ class RotationEquivariant2dCore(Core2d, nn.Module):
 
     def group_sparsity(self):
         ret = 0
-        for l in range(1, self.layers):
+        for l in range(1, self.num_layers):
             ret = (
                 ret
                 + self.features[l]
@@ -438,7 +416,7 @@ class RotationEquivariant2dCore(Core2d, nn.Module):
                 .sqrt()
                 .mean()
             )
-        return ret / ((self.layers - 1) if self.layers > 1 else 1)
+        return ret / ((self.num_layers - 1) if self.num_layers > 1 else 1)
 
     def regularizer(self):
         return self.group_sparsity() * self.gamma_hidden + self.gamma_input * self.laplace()
@@ -545,7 +523,7 @@ class TransferLearningCore(Core2d, nn.Module):
         )
 
 
-class SE2dCore(Core2d, nn.Module):
+class SE2dCore(Stacked2dCore, nn.Module):
     """
     An extension of the Stacked2dCore class. The convolutional layers can be set to be either depth-separable
     (as used in the popular MobileNets) or based on self-attention (as used in Transformer networks).
@@ -586,7 +564,7 @@ class SE2dCore(Core2d, nn.Module):
             hidden_kern:    kernel size of each hidden layer's kernel
             layers:         number of layers
             gamma_input:    regularizer factor for the input weights (default: LaplaceL2, see neuralpredictors.regularizers)
-            skip:           Adds a skip connection
+            skip:           Adds a skip connection to the n penultimate layers.
             final_nonlinearity: Boolean, if true, appends an ELU layer after the last BatchNorm (if BN=True)
             elu_xshift, elu_yshift: final_nonlinearity(x) = Elu(x - elu_xshift) + elu_yshift
             bias:           Adds a bias layer.
@@ -640,11 +618,15 @@ class SE2dCore(Core2d, nn.Module):
         # --- first layer
         layer = OrderedDict()
         layer["conv"] = nn.Conv2d(
-            input_channels, hidden_channels, input_kern, padding=input_kern // 2 if pad_input else 0, bias=bias
+            input_channels,
+            hidden_channels,
+            input_kern,
+            padding=input_kern // 2 if pad_input else 0,
+            bias=bias and not batch_norm,
         )
         if batch_norm:
             layer["norm"] = nn.BatchNorm2d(hidden_channels, momentum=momentum)
-        if (layers > 1 or final_nonlinearity) and not linear:
+        if (self.num_layers > 1 or final_nonlinearity) and not linear:
             layer["nonlin"] = nn.ELU(inplace=True)
         self.features.add_module("layer0", nn.Sequential(layer))
 

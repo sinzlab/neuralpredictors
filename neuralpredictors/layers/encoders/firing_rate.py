@@ -51,10 +51,10 @@ class FiringRateEncoder(nn.Module):
         return nn.functional.elu(x + self.offset) + 1
 
     def regularizer(self, data_key=None, reduction="sum", average=None, detach_core=False):
-        core_reg = self.core.regularizer().detach() if detach_core else self.core.regularizer()
-        return (
-            core_reg
-            + self.readout.regularizer(data_key=data_key, reduction=reduction, average=average)
-            + self.shifter.regularizer(data_key=data_key)
-            + self.modulator.regularizer(data_key=data_key)
-        )
+        reg = self.core.regularizer().detach() if detach_core else self.core.regularizer()
+        reg += self.readout.regularizer(data_key=data_key, reduction=reduction, average=average)
+        if self.shifter is not None:
+            reg += self.shifter.regularizer(data_key=data_key)
+        if self.modulator is not None:
+            reg += self.modulator.regularizer(data_key=data_key)
+        return reg

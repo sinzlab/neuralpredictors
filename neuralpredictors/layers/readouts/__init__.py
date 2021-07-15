@@ -1,9 +1,10 @@
-from .point_pooled import *
-from .gaussian import *
-from .factorized import *
-from .attention import *
-from .pyramid import *
-from .multi_readout import *
+from .base import Readout, ClonedReadout
+from .point_pooled import PointPooled2d, SpatialTransformerPooled3d
+from .gaussian import Gaussian2d, FullGaussian2d, RemappedGaussian2d, DeterministicGaussian2d, Gaussian3d, UltraSparse
+from .factorized import SpatialXFeatureLinear, FullFactorized2d, FullSXF
+from .attention import AttentionReadout
+from .pyramid import PointPyramid2d
+from .multi_readout import MultiReadoutBase, MultiReadoutSharedParametersBase
 
 
 #### MultiReadouts for backwards compatibility

@@ -1,14 +1,7 @@
 import warnings
-from collections import OrderedDict
-
-import numpy as np
 import torch
 from torch import nn as nn
-from torch.nn import ModuleDict
 from torch.nn import Parameter
-from torch.nn import functional as F
-
-from ..constraints import positive
 
 
 class ConfigurationError(Exception):
@@ -19,110 +12,77 @@ class ConfigurationError(Exception):
 
 
 class Readout(nn.Module):
+    """
+    Base readout class for all individual readouts.
+    The MultiReadout will expect its readouts to inherit from this base class.
+    """
+
     def initialize(self, *args, **kwargs):
         raise NotImplementedError("initialize is not implemented for ", self.__class__.__name__)
 
-    def __repr__(self):
-        s = super().__repr__()
-        s += " [{} regularizers: ".format(self.__class__.__name__)
-        ret = []
-        for attr in filter(
-            lambda x: not x.startswith("_") and ("gamma" in x or "pool" in x or "positive" in x),
-            dir(self),
-        ):
-            ret.append("{} = {}".format(attr, getattr(self, attr)))
-        return s + "|".join(ret) + "]\n"
+    def regularizer(self, reduction="sum", average=None):
+        raise NotImplementedError("regularizer is not implemented for ", self.__class__.__name__)
 
+    def apply_reduction(self, x, reduction="mean", average=None):
+        """
+        Applies a reduction on the output of the regularizer.
+        Args:
+            x (torch.tensor): output of the regularizer
+            reduction(str/None): method of reduction for the regularizer. Currently possible are ['mean', 'sum', None].
+            average (bool): Depricated. Whether to average the output of the regularizer.
+                            If not None, it is transformed into the corresponding value of 'reduction' (see method 'resolve_reduction_method').
 
-class SpatialXFeatureLinear(nn.Module):
-    """
-    Factorized fully connected layer. Weights are a sum of outer products between a spatial filter and a feature vector.
-    """
+        Returns (torch.tensor): reduced value of the regularizer
+        """
+        reduction = self.resolve_reduction_method(reduction=reduction, average=average)
 
-    def __init__(
-        self,
-        in_shape,
-        outdims,
-        bias,
-        normalize=True,
-        init_noise=1e-3,
-        constrain_pos=False,
-        **kwargs,
-    ):
-        super().__init__()
-        self.in_shape = in_shape
-        self.outdims = outdims
-        self.normalize = normalize
-        c, w, h = in_shape
-        self.spatial = Parameter(torch.Tensor(self.outdims, w, h))
-        self.features = Parameter(torch.Tensor(self.outdims, c))
-        self.init_noise = init_noise
-        self.constrain_pos = constrain_pos
-        if bias:
-            bias = Parameter(torch.Tensor(self.outdims))
-            self.register_parameter("bias", bias)
+        if reduction == "mean":
+            return x.mean()
+        elif reduction == "sum":
+            return x.sum()
+        elif reduction is None:
+            return x
         else:
-            self.register_parameter("bias", None)
-        self.initialize()
+            raise ValueError(
+                f"Reduction method '{reduction}' is not recognized. Valid values are ['mean', 'sum', None]"
+            )
 
-    @property
-    def normalized_spatial(self):
-        if self.normalize:
-            norm = self.spatial.pow(2).sum(dim=1, keepdim=True)
-            norm = norm.sum(dim=2, keepdim=True).sqrt().expand_as(self.spatial) + 1e-6
-            weight = self.spatial / norm
-        else:
-            weight = self.spatial
-        if self.constrain_pos:
-            positive(weight)
-        return weight
+    def resolve_reduction_method(self, reduction="mean", average=None):
+        """
+        Helper method which transforms the old and depricated argument 'average' in the regularizer into
+        the new argument 'reduction' (if average is not None). This is done in order to agree with the terminology in pytorch).
+        """
+        if average is not None:
+            warnings.warn("Use of 'average' is deprecated. Please consider using `reduction` instead")
+            reduction = "mean" if average else "sum"
+        return reduction
 
-    # TODO: Fix weight property -> self.positive is not defined
-    @property
-    def weight(self):
-        if self.positive:
-            positive(self.features)
-        n = self.outdims
-        c, w, h = self.in_shape
-        return self.normalized_spatial.view(n, 1, w, h) * self.features.view(n, c, 1, 1)
+    def resolve_deprecated_gamma_readout(self, feature_reg_weight, gamma_readout):
+        if gamma_readout is not None:
+            warnings.warn(
+                "Use of 'gamma_readout' is deprecated. Please consider using the readout's feature-regularization parameter instead"
+            )
+            feature_reg_weight = gamma_readout
+        return feature_reg_weight
 
-    def l1(self, average=False):
-        n = self.outdims
-        c, w, h = self.in_shape
-        ret = (
-            self.normalized_spatial.view(self.outdims, -1).abs().sum(dim=1, keepdim=True)
-            * self.features.view(self.outdims, -1).abs().sum(dim=1)
-        ).sum()
-        if average:
-            ret = ret / (n * c * w * h)
-        return ret
+    def initialize_bias(self, mean_activity=None):
+        """
+        Initialze the biases in readout.
+        Args:
+            mean_activity (dict): Dictionary containing the mean activity of neurons for a specific dataset.
+            Should be of form {'data_key': mean_activity}
 
-    def initialize(self):
-        self.spatial.data.normal_(0, self.init_noise)
-        self.features.data.normal_(0, self.init_noise)
-        if self.bias is not None:
+        Returns:
+
+        """
+        if mean_activity is None:
+            warnings.warn("Readout is NOT initialized with mean activity but with 0!")
             self.bias.data.fill_(0)
-
-    def forward(self, x, shift=None):
-        if self.constrain_pos:
-            positive(self.features)
-
-        y = torch.einsum("ncwh,owh->nco", x, self.normalized_spatial)
-        y = torch.einsum("nco,oc->no", y, self.features)
-        if self.bias is not None:
-            y = y + self.bias
-        return y
+        else:
+            self.bias.data = mean_activity
 
     def __repr__(self):
-        return (
-            ("normalized " if self.normalize else "")
-            + self.__class__.__name__
-            + " ("
-            + "{} x {} x {}".format(*self.in_shape)
-            + " -> "
-            + str(self.outdims)
-            + ")"
-        )
+        return super().__repr__() + " [{}]\n".format(self.__class__.__name__)
 
 
 class ClonedReadout(nn.Module):
@@ -150,6 +110,6 @@ class ClonedReadout(nn.Module):
         else:
             return (self._source.features * self.alpha).abs().sum()
 
-    def initialize(self):
+    def initialize(self, **kwargs):
         self.alpha.data.fill_(1.0)
         self.beta.data.fill_(0.0)

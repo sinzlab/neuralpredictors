@@ -1,13 +1,13 @@
 import warnings
-
 import numpy as np
 import torch
 from torch import nn
 from torch.nn import Parameter
 from torch.nn import functional as F
+from .base import ConfigurationError, Readout
 
 
-class Gaussian2d(nn.Module):
+class Gaussian2d(Readout):
     """
     Instantiates an object that can used to learn a point in the core feature space for each neuron,
     sampled from a Gaussian distribution with some mean and variance at train but set to mean at test time, that best predicts its response.
@@ -47,6 +47,9 @@ class Gaussian2d(nn.Module):
         batch_sample=True,
         align_corners=True,
         fixed_sigma=False,
+        mean_activity=None,
+        feature_reg_weight=1.0,
+        gamma_readout=None,  # depricated, use feature_reg_weight instead
         **kwargs,
     ):
         warnings.warn(
@@ -57,6 +60,7 @@ class Gaussian2d(nn.Module):
         if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma_range <= 0.0:
             raise ValueError("either init_mu_range doesn't belong to [0.0, 1.0] or init_sigma_range is non-positive")
         self.in_shape = in_shape
+        self.feature_reg_weight = self.resolve_deprecated_gamma_readout(feature_reg_weight, gamma_readout)
         c, w, h = in_shape
         self.outdims = outdims
         self.batch_sample = batch_sample
@@ -64,7 +68,7 @@ class Gaussian2d(nn.Module):
         self.mu = Parameter(torch.Tensor(*self.grid_shape))  # mean location of gaussian for each neuron
         self.sigma = Parameter(torch.Tensor(*self.grid_shape))  # standard deviation for gaussian for each neuron
         self.features = Parameter(torch.Tensor(1, c, 1, outdims))  # feature weights for each channel of the core
-
+        self.mean_activity = mean_activity
         if bias:
             bias = Parameter(torch.Tensor(outdims))
             self.register_parameter("bias", bias)
@@ -75,12 +79,14 @@ class Gaussian2d(nn.Module):
         self.init_sigma_range = init_sigma_range
         self.align_corners = align_corners
         self.fixed_sigma = fixed_sigma
-        self.initialize()
+        self.initialize(mean_activity)
 
-    def initialize(self):
+    def initialize(self, mean_activity=None):
         """
         Initializes the mean, and sigma of the Gaussian readout along with the features weights
         """
+        if mean_activity is None:
+            mean_activity = self.mean_activity
         self.mu.data.uniform_(-self.init_mu_range, self.init_mu_range)
         if self.fixed_sigma:
             self.sigma.data.uniform_(self.init_sigma_range, self.init_sigma_range)
@@ -91,9 +97,8 @@ class Gaussian2d(nn.Module):
                 "fixed_sigma to True"
             )
         self.features.data.fill_(1 / self.in_shape[0])
-
         if self.bias is not None:
-            self.bias.data.fill_(0)
+            self.initialize_bias(mean_activity=mean_activity)
 
     def sample_grid(self, batch_size, sample=None):
         """
@@ -127,17 +132,17 @@ class Gaussian2d(nn.Module):
     def grid(self):
         return self.sample_grid(batch_size=1, sample=False)
 
-    def feature_l1(self, average=True):
+    def feature_l1(self, reduction="sum", average=None):
         """
-        Returns the l1 regularization term either the mean or the sum of all weights
+        Returns l1 regularization term for features.
         Args:
-            average(bool): if True, use mean of weights for regularization
-
+            average(bool): Deprecated (see reduction) if True, use mean of weights for regularization
+            reduction(str): Specifies the reduction to apply to the output: 'none' | 'mean' | 'sum'
         """
-        if average:
-            return self.features.abs().mean()
-        else:
-            return self.features.abs().sum()
+        return self.apply_reduction(self.features.abs(), reduction=reduction, average=average)
+
+    def regularizer(self, reduction="sum", average=None):
+        return self.feature_l1(reduction=reduction, average=average) * self.feature_reg_weight
 
     def forward(self, x, sample=None, shift=None, out_idx=None):
         """
@@ -200,7 +205,7 @@ class Gaussian2d(nn.Module):
         return r
 
 
-class FullGaussian2d(nn.Module):
+class FullGaussian2d(Readout):
     """
     A readout using a spatial transformer layer whose positions are sampled from one Gaussian per neuron. Mean
     and covariance of that Gaussian are learned.
@@ -265,11 +270,15 @@ class FullGaussian2d(nn.Module):
         shared_features=None,
         shared_grid=None,
         source_grid=None,
+        mean_activity=None,
+        feature_reg_weight=1.0,
+        gamma_readout=None,  # depricated, use feature_reg_weight instead
         **kwargs,
     ):
 
         super().__init__()
-
+        self.feature_reg_weight = self.resolve_deprecated_gamma_readout(feature_reg_weight, gamma_readout)
+        self.mean_activity = mean_activity
         # determines whether the Gaussian is isotropic or not
         self.gauss_type = gauss_type
 
@@ -322,7 +331,7 @@ class FullGaussian2d(nn.Module):
 
         self.init_mu_range = init_mu_range
         self.align_corners = align_corners
-        self.initialize()
+        self.initialize(mean_activity)
 
     @property
     def shared_features(self):
@@ -355,19 +364,20 @@ class FullGaussian2d(nn.Module):
 
         return self._mu.squeeze().std(0).sum()
 
-    def feature_l1(self, average=True):
+    def feature_l1(self, reduction="sum", average=None):
         """
-        Returns the l1 regularization term either the mean or the sum of all weights
+        Returns l1 regularization term for features.
         Args:
-            average(bool): if True, use mean of weights for regularization
+            average(bool): Deprecated (see reduction) if True, use mean of weights for regularization
+            reduction(str): Specifies the reduction to apply to the output: 'none' | 'mean' | 'sum'
         """
         if self._original_features:
-            if average:
-                return self._features.abs().mean()
-            else:
-                return self._features.abs().sum()
+            return self.apply_reduction(self.features.abs(), reduction=reduction, average=average)
         else:
             return 0
+
+    def regularizer(self, reduction="sum", average=None):
+        return self.feature_l1(reduction=reduction, average=average) * self.feature_reg_weight
 
     @property
     def mu(self):
@@ -437,11 +447,12 @@ class FullGaussian2d(nn.Module):
         self.register_buffer("source_grid", torch.from_numpy(source_grid.astype(np.float32)))
         self._predicted_grid = True
 
-    def initialize(self):
+    def initialize(self, mean_activity=None):
         """
         Initializes the mean, and sigma of the Gaussian readout along with the features weights
         """
-
+        if mean_activity is None:
+            mean_activity = self.mean_activity
         if not self._predicted_grid or self._original_grid:
             self._mu.data.uniform_(-self.init_mu_range, self.init_mu_range)
 
@@ -453,7 +464,7 @@ class FullGaussian2d(nn.Module):
         if self._shared_features:
             self.scales.data.fill_(1.0)
         if self.bias is not None:
-            self.bias.data.fill_(0)
+            self.initialize_bias(mean_activity=mean_activity)
 
     def initialize_features(self, match_ids=None, shared_features=None):
         """
@@ -631,6 +642,10 @@ class RemappedGaussian2d(FullGaussian2d):
     def initialize_remap_field(self):
         self.apply(self.init_conv)
 
+    def initialize(self, mean_activity=None, **kwargs):
+        super().initialize(mean_activity)
+        self.initialize_remap_field()
+
     def forward(self, x, sample=None, shift=None, out_idx=None):
         offset_field = self.remap_field(x) * self.max_remap_amplitude
 
@@ -668,7 +683,7 @@ class RemappedGaussian2d(FullGaussian2d):
         y = (y.squeeze(-1) * feat).sum(1).view(N, outdims)
 
 
-class DeterministicGaussian2d(nn.Module):
+class DeterministicGaussian2d(Readout):
     """
     'DeterministicGaussian2d' class instantiates an object that can be used to learn a
     Normal distribution in the core feature space for each neuron, this is
@@ -700,6 +715,9 @@ class DeterministicGaussian2d(nn.Module):
         init_sigma=1,
         positive=False,
         constrain_mode="default",
+        mean_activity=None,
+        feature_reg_weight=1.0,
+        gamma_readout=None,  # depricated, use feature_reg_weight instead
     ):
 
         super().__init__()
@@ -711,7 +729,8 @@ class DeterministicGaussian2d(nn.Module):
         c, w, h = in_shape
         self.outdims = outdims
         self.positive = positive
-
+        self.feature_reg_weight = self.resolve_deprecated_gamma_readout(feature_reg_weight, gamma_readout)
+        self.mean_activity = mean_activity
         if constrain_mode not in ["default", "abs", "elu"]:
             raise ValueError(
                 "Value of parameter constrain_mode = "
@@ -740,7 +759,7 @@ class DeterministicGaussian2d(nn.Module):
         self.init_mu_range = init_mu_range
         self.init_sigma = init_sigma
 
-        self.initialize()
+        self.initialize(mean_activity)
 
     def make_mask_grid(self):
         xx, yy = torch.meshgrid(
@@ -770,40 +789,41 @@ class DeterministicGaussian2d(nn.Module):
         pdf = pdf / torch.sum(pdf, dim=(1, 2), keepdim=True)
         return pdf
 
-    def initialize(self):
+    def initialize(self, mean_activity=None):
         """
         initialize function initializes the mean, sigma for the Gaussian readout and features weights
         """
+        if mean_activity is None:
+            mean_activity = self.mean_activity
         self.mu.data.uniform_(-self.init_mu_range, self.init_mu_range)
-
         self.log_var.data.fill_(np.log(self.init_sigma ** 2))
-
         self.features.data.fill_(1 / self.in_shape[0])
-
         if self.bias is not None:
-            self.bias.data.fill_(0)
+            self.initialize_bias(mean_activity=mean_activity)
 
-    def feature_l1(self, average=True):
+    def feature_l1(self, reduction="sum", average=None):
         """
-        feature_l1 function returns the l1 regularization term either the mean or just the sum of weights
+        Returns l1 regularization term for features.
         Args:
-            average(bool): if True, use mean of weights for regularization
+            average(bool): Deprecated (see reduction) if True, use mean of weights for regularization
+            reduction(str): Specifies the reduction to apply to the output: 'none' | 'mean' | 'sum'
         """
-        if average:
-            return self.features.abs().mean()
-        else:
-            return self.features.abs().sum()
+        return self.apply_reduction(self.features.abs(), reduction=reduction, average=average)
 
-    def variance_l1(self, average=True):
+    def variance_l1(self, reduction="sum", average=None):
         """
         variance_l1 function returns the l1 regularization term either the mean or just the sum of weights
         Args:
             average(bool): if True, use mean of weights for regularization
+            reduction(str): Specifies the reduction to apply to the output: 'none' | 'mean' | 'sum'
         """
-        if average:
-            return torch.exp(self.log_var).mean()
-        else:
-            return torch.exp(self.log_var).sum()
+        return self.apply_reduction(torch.exp(self.log_var), reduction=reduction, average=average)
+
+    def regularizer(self, reduction="sum", average=None):
+        return (
+            self.feature_l1(reduction=reduction, average=average)
+            + self.variance_l1(reduction=reduction, average=average)
+        ) * self.feature_reg_weight
 
     def forward(self, x, shift=None, out_idx=None):
         N, c, w, h = x.size()
@@ -827,8 +847,8 @@ class DeterministicGaussian2d(nn.Module):
 
         if self.positive:
             if self.constrain_mode == "default":
-                positive(mask)
-                positive(feat)
+                mask.data.clamp_min_(0)
+                feat.data.clamp_min_(0)
             elif self.constrain_mode == "abs":
                 mask = torch.abs(mask)
                 feat = torch.abs(feat)
@@ -852,7 +872,7 @@ class DeterministicGaussian2d(nn.Module):
         return r
 
 
-class Gaussian3d(nn.Module):
+class Gaussian3d(Readout):
     """
     This readout instantiates an object that can used to learn a point in the core feature space for each neuron,
     sampled from a Gaussian distribution with some mean and variance at train but set to mean at test time, that best predicts its response.
@@ -892,6 +912,9 @@ class Gaussian3d(nn.Module):
         batch_sample=True,
         align_corners=True,
         fixed_sigma=False,
+        mean_activity=None,
+        feature_reg_weight=1.0,
+        gamma_readout=None,  # depricated, use feature_reg_weight instead
         **kwargs,
     ):
         super().__init__()
@@ -899,12 +922,13 @@ class Gaussian3d(nn.Module):
             raise ValueError("init_mu_range or init_sigma_range is not within required limit!")
         self.in_shape = in_shape
         self.outdims = outdims
+        self.feature_reg_weight = self.resolve_deprecated_gamma_readout(feature_reg_weight, gamma_readout)
         self.batch_sample = batch_sample
         self.grid_shape = (1, 1, outdims, 1, 3)
         self.mu = Parameter(torch.Tensor(*self.grid_shape))  # mean location of gaussian for each neuron
         self.sigma = Parameter(torch.Tensor(*self.grid_shape))  # standard deviation for gaussian for each neuron
         self.features = Parameter(torch.Tensor(1, 1, 1, outdims))  # saliency weights for each channel from core
-
+        self.mean_activity = mean_activity
         if bias:
             bias = Parameter(torch.Tensor(outdims))
             self.register_parameter("bias", bias)
@@ -915,7 +939,7 @@ class Gaussian3d(nn.Module):
         self.init_sigma_range = init_sigma_range
         self.align_corners = align_corners
         self.fixed_sigma = fixed_sigma
-        self.initialize()
+        self.initialize(mean_activity)
 
     def sample_grid(self, batch_size, sample=None):
         """
@@ -950,7 +974,9 @@ class Gaussian3d(nn.Module):
     def grid(self):
         return self.sample_grid(batch_size=1, sample=False)
 
-    def initialize(self):
+    def initialize(self, mean_activity=None):
+        if mean_activity is None:
+            mean_activity = self.mean_activity
         self.mu.data.uniform_(-self.init_mu_range, self.init_mu_range)
         if self.fixed_sigma:
             self.sigma.data.uniform_(self.init_sigma_range, self.init_sigma_range)
@@ -961,9 +987,13 @@ class Gaussian3d(nn.Module):
                 "fixed_sigma to True"
             )
         self.features.data.fill_(1 / self.in_shape[0])
-
         if self.bias is not None:
-            self.bias.data.fill_(0)
+            self.initialize_bias(mean_activity=mean_activity)
+
+    def regularizer(self, reduction="sum", average=None):
+        raise NotImplementedError(
+            "The regularizer for this readout needs to be implemented! See issue https://github.com/sinzlab/neuralpredictors/issues/127"
+        )
 
     def forward(self, x, sample=None, shift=None, out_idx=None):
         """
@@ -1019,7 +1049,7 @@ class Gaussian3d(nn.Module):
         return y
 
 
-class UltraSparse(nn.Module):
+class UltraSparse(Readout):
     """
     This readout instantiates an object that can used to learn one or more features (with or without
     a shared mean in the x-y plane) in the core feature space for each neuron, sampled from a Gaussian distribution
@@ -1065,6 +1095,9 @@ class UltraSparse(nn.Module):
         shared_mean=False,
         align_corners=True,
         fixed_sigma=False,
+        mean_activity=None,
+        feature_reg_weight=1.0,
+        gamma_readout=None,  # depricated, use feature_reg_weight instead
         **kwargs,
     ):
 
@@ -1074,11 +1107,12 @@ class UltraSparse(nn.Module):
         self.in_shape = in_shape
         c, w, h = in_shape
         self.outdims = outdims
+        self.feature_reg_weight = self.resolve_deprecated_gamma_readout(feature_reg_weight, gamma_readout)
         self.batch_sample = batch_sample
         self.num_filters = num_filters
         self.shared_mean = shared_mean
         self.grid_shape = (1, 1, outdims * num_filters, 1, 3)
-
+        self.mean_activity = mean_activity
         if shared_mean:
 
             self.gridxy_shape = (1, 1, outdims, 1, 2)
@@ -1113,7 +1147,7 @@ class UltraSparse(nn.Module):
         self.init_sigma_range = init_sigma_range
         self.align_corners = align_corners
         self.fixed_sigma = fixed_sigma
-        self.initialize()
+        self.initialize(mean_activity)
 
     def sample_grid(self, batch_size, sample=None):
         """
@@ -1157,19 +1191,24 @@ class UltraSparse(nn.Module):
     def grid(self):
         return self.sample_grid(batch_size=1, sample=False)
 
-    def feature_l1(self, average=True):
+    def feature_l1(self, reduction="sum", average=None):
         """
-        Returns the l1 regularization term either the mean or the sum of all weights
+        Returns l1 regularization term for features.
         Args:
-            average(bool): if True, use mean of weights for regularization
+            average(bool): Deprecated (see reduction) if True, use mean of weights for regularization
+            reduction(str): Specifies the reduction to apply to the output: 'none' | 'mean' | 'sum'
         """
-        if average:
-            return self.features.abs().mean()
-        else:
-            return self.features.abs().sum()
+        return self.apply_reduction(self.features.abs(), reduction=reduction, average=average)
 
-    def initialize(self):
+    def regularizer(self, reduction="sum", average=None):
+        return (
+            self.feature_l1(reduction=reduction, average=average)
+            + self.variance_l1(reduction=reduction, average=average)
+        ) * self.feature_reg_weight
 
+    def initialize(self, mean_activity=None):
+        if mean_activity is None:
+            mean_activity = self.mean_activity
         if self.shared_mean:
             # initialise mu and sigma separately for xy and channel dimension.
             self.mu_ch.data.uniform_(-1, 1)
@@ -1192,9 +1231,8 @@ class UltraSparse(nn.Module):
             self.sigma.data.uniform_(0, self.init_sigma_range)
 
         self.features.data.fill_(1 / self.in_shape[0])
-
         if self.bias is not None:
-            self.bias.data.fill_(0)
+            self.initialize_bias(mean_activity=mean_activity)
 
     def forward(self, x, sample=True, shift=None, out_idx=None):
         """

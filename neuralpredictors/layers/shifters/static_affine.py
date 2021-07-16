@@ -3,7 +3,7 @@ from .base import Shifter
 import torch
 from torch import nn
 from torch.nn import ModuleDict
-
+import warnings
 import logging
 
 logger = logging.getLogger(__name__)
@@ -22,7 +22,9 @@ class StaticAffine2d(nn.Linear):
 
     def forward(self, x, trial_idx=None):
         if trial_idx is not None:
-            raise ValueError("This shifter network does not support trial indexing. Set trial_idx to None")
+            warnings.warn(
+                "Trial index was passed but is not used because this shifter network does not support trial indexing."
+            )
         x = super().forward(x)
         return torch.tanh(x)
 

@@ -36,14 +36,14 @@ class FiringRateEncoder(nn.Module):
         if detach_core:
             x = x.detach()
 
-        if self.shifter is not None:
+        if self.shifter:
             if pupil_center is None:
                 raise ValueError("pupil_center is not given")
             shift = self.shifter[data_key](pupil_center, trial_idx)
 
         x = self.readout(x, data_key=data_key, shift=shift, **kwargs)
 
-        if self.modulator is not None:
+        if self.modulator:
             if behavior is None:
                 raise ValueError("behavior is not given")
             x = self.modulator[data_key](x, behavior=behavior)
@@ -53,8 +53,8 @@ class FiringRateEncoder(nn.Module):
     def regularizer(self, data_key=None, reduction="sum", average=None, detach_core=False):
         reg = self.core.regularizer().detach() if detach_core else self.core.regularizer()
         reg += self.readout.regularizer(data_key=data_key, reduction=reduction, average=average)
-        if self.shifter is not None:
+        if self.shifter:
             reg += self.shifter.regularizer(data_key=data_key)
-        if self.modulator is not None:
+        if self.modulator:
             reg += self.modulator.regularizer(data_key=data_key)
         return reg

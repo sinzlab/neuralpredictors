@@ -39,11 +39,13 @@ class MLP(Shifter):
             xavier_normal(linear_layer.weight)
 
     def forward(self, pupil_center, trial_idx=None):
-        # Concatenate pupil center and trial index if trial index is specified
         if trial_idx is not None:
-            # check if the mlp was built for this 3D concatenated input (2D for pupil center, 1D for trial index)
-            if self.mlp[0].in_features == 3:
-                pupil_center = torch.cat((pupil_center, trial_idx), dim=1)
+            pupil_center = torch.cat((pupil_center, trial_idx), dim=1)
+        if not self.mlp[0].in_features == pupil_center.shape[1]:
+            raise ValueError(
+                "The expected input shape of the shifter and the shape of the input do not match! "
+                "(Maybe due to the appending of trial_idx to pupil_center?)"
+            )
         return self.mlp(pupil_center)
 
 

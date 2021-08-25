@@ -99,14 +99,12 @@ class Stacked2dCore(Core2d, nn.Module):
         """
 
         super().__init__()
-
         regularizer_config = (
             dict(padding=laplace_padding, kernel=input_kern)
             if input_regularizer == "GaussianLaplaceL2"
             else dict(padding=laplace_padding)
         )
         self._input_weights_regularizer = regularizers.__dict__[input_regularizer](**regularizer_config)
-
         self.num_layers = layers
         self.gamma_input = gamma_input
         self.gamma_hidden = gamma_hidden
@@ -116,7 +114,6 @@ class Stacked2dCore(Core2d, nn.Module):
         self.use_avg_reg = use_avg_reg
         if use_avg_reg:
             warnings.warn("The averaged value of regularizer will be used.", UserWarning)
-
         self.hidden_padding = hidden_padding
         self.input_kern = input_kern
         self.hidden_kern = hidden_kern
@@ -135,7 +132,6 @@ class Stacked2dCore(Core2d, nn.Module):
             self.stack = range(self.num_layers)
         else:
             self.stack = [*range(self.num_layers)[stack:]] if isinstance(stack, int) else stack
-
         self.features = nn.Sequential()
         self.add_first_layer()
         self.add_subsequent_layers()
@@ -148,56 +144,58 @@ class Stacked2dCore(Core2d, nn.Module):
             self.hidden_channels,
             self.input_kern,
             padding=self.input_kern // 2 if self.pad_input else 0,
-            bias=self.bias and not batch_norm,
+            bias=self.bias and not self.batch_norm,
         )
-        if batch_norm:
-            if independent_bn_bias:
-                layer["norm"] = nn.BatchNorm2d(hidden_channels, momentum=momentum)
+        if self.batch_norm:
+            if self.independent_bn_bias:
+                layer["norm"] = nn.BatchNorm2d(self.hidden_channels, momentum=self.momentum)
             else:
-                layer["norm"] = nn.BatchNorm2d(hidden_channels, momentum=momentum, affine=bias and batch_norm_scale)
-                if bias:
-                    if not batch_norm_scale:
-                        layer["bias"] = Bias2DLayer(hidden_channels)
-                elif batch_norm_scale:
-                    layer["scale"] = Scale2DLayer(hidden_channels)
+                layer["norm"] = nn.BatchNorm2d(
+                    self.hidden_channels, momentum=self.momentum, affine=self.bias and self.batch_norm_scale
+                )
+                if self.bias:
+                    if not self.batch_norm_scale:
+                        layer["bias"] = Bias2DLayer(self.hidden_channels)
+                elif self.batch_norm_scale:
+                    layer["scale"] = Scale2DLayer(self.hidden_channels)
 
-        if self.num_layers > 1 or final_nonlinearity:
-            layer["nonlin"] = AdaptiveELU(elu_xshift, elu_yshift)
+        if self.num_layers > 1 or self.final_nonlinearity:
+            layer["nonlin"] = AdaptiveELU(self.elu_xshift, self.elu_yshift)
         self.features.add_module("layer0", nn.Sequential(layer))
 
     def add_subsequent_layers(self):
-        if not isinstance(hidden_kern, Iterable):
-            hidden_kern = [hidden_kern] * (self.num_layers - 1)
+        if not isinstance(self.hidden_kern, Iterable):
+            hidden_kern = [self.hidden_kern] * (self.num_layers - 1)
 
         for l in range(1, self.num_layers):
             layer = OrderedDict()
-            if hidden_padding is None:
-                hidden_padding = ((hidden_kern[l - 1] - 1) * hidden_dilation + 1) // 2
+            if self.hidden_padding is None:
+                self.hidden_padding = ((self.hidden_kern[l - 1] - 1) * self.hidden_dilation + 1) // 2
             layer["conv"] = nn.Conv2d(
-                hidden_channels if not skip > 1 else min(skip, l) * hidden_channels,
-                hidden_channels,
+                self.hidden_channels if not self.skip > 1 else min(self.skip, l) * self.hidden_channels,
+                self.hidden_channels,
                 hidden_kern[l - 1],
-                padding=hidden_padding,
-                bias=bias and not batch_norm,
-                dilation=hidden_dilation,
+                padding=self.hidden_padding,
+                bias=self.bias and not self.batch_norm,
+                dilation=self.hidden_dilation,
             )
-            if batch_norm:
-                if independent_bn_bias:
-                    layer["norm"] = nn.BatchNorm2d(hidden_channels, momentum=momentum)
+            if self.batch_norm:
+                if self.independent_bn_bias:
+                    layer["norm"] = nn.BatchNorm2d(self.hidden_channels, momentum=self.momentum)
                 else:
                     layer["norm"] = nn.BatchNorm2d(
-                        hidden_channels,
-                        momentum=momentum,
-                        affine=bias and batch_norm_scale,
+                        self.hidden_channels,
+                        momentum=self.momentum,
+                        affine=self.bias and self.batch_norm_scale,
                     )
-                    if bias:
-                        if not batch_norm_scale:
-                            layer["bias"] = Bias2DLayer(hidden_channels)
-                    elif batch_norm_scale:
-                        layer["scale"] = Scale2DLayer(hidden_channels)
+                    if self.bias:
+                        if not self.batch_norm_scale:
+                            layer["bias"] = Bias2DLayer(self.hidden_channels)
+                    elif self.batch_norm_scale:
+                        layer["scale"] = Scale2DLayer(self.hidden_channels)
 
-            if final_nonlinearity or l < self.num_layers - 1:
-                layer["nonlin"] = AdaptiveELU(elu_xshift, elu_yshift)
+            if self.final_nonlinearity or l < self.num_layers - 1:
+                layer["nonlin"] = AdaptiveELU(self.elu_xshift, self.elu_yshift)
             self.features.add_module("layer{}".format(l), nn.Sequential(layer))
 
     def forward(self, input_):
@@ -443,7 +441,7 @@ class TransferLearningCore(Core2d, nn.Module):
         final_nonlinearity=True,
         momentum=0.1,
         fine_tune=False,
-        **kwargs
+        **kwargs,
     ):
         """
         Args:

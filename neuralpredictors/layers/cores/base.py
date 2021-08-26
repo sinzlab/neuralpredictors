@@ -61,4 +61,3 @@ class Core2d(Core):
             x (torch.tensor): input of shape (batch, channels, height, width)
         """
         raise NotImplementedError("forward method must be implemented by the inheriting class")
-

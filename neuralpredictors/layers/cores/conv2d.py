@@ -296,21 +296,21 @@ class RotationEquivariant2dCore(Stacked2dCore, nn.Module):
         self.rot_eq_batch_norm = rot_eq_batch_norm
 
         if not rot_eq_batch_norm:
-            self.BatchNormLayer = nn.BatchNorm2d
-            self.BiasLayer = Bias2DLayer
-            self.ScaleLayer = Scale2DLayer
+            self.batchnorm_layer = nn.BatchNorm2d
+            self.bias_layer = Bias2DLayer
+            self.scale_layer = Scale2DLayer
 
         self.add_first_layer()
         self.add_subsequent_layers()
         self.initialize()
 
-    def BatchNormLayer(self, **kwargs):
+    def batchnorm_layer(self, **kwargs):
         return RotationEquivariantBatchNorm2D(num_rotations=self.num_rotations, **kwargs)
 
-    def BiasLayer(self, **kwargs):
+    def bias_layer(self, **kwargs):
         return RotationEquivariantBias2DLayer(num_rotations=self.num_rotations, **kwargs)
 
-    def ScaleLayer(self, **kwargs):
+    def scale_layer(self, **kwargs):
         return RotationEquivariantScale2DLayer(num_rotations=self.num_rotations, **kwargs)
 
     def add_first_layer(self):
@@ -327,18 +327,18 @@ class RotationEquivariant2dCore(Stacked2dCore, nn.Module):
         )
         if self.batch_norm:
             if self.independent_bn_bias:
-                layer["norm"] = self.BatchNormLayer(num_features=self.hidden_channels, momentum=self.momentum)
+                layer["norm"] = self.batchnormlayer_cls(num_features=self.hidden_channels, momentum=self.momentum)
             else:
-                layer["norm"] = self.BatchNormLayer(
+                layer["norm"] = self.batchnormlayer_cls(
                     num_features=self.hidden_channels,
                     momentum=self.momentum,
                     affine=self.bias and self.batch_norm_scale,
                 )
                 if self.bias:
                     if not self.batch_norm_scale:
-                        layer["bias"] = self.BiasLayer(channels=self.hidden_channels)
+                        layer["bias"] = self.biaslayer_cls(channels=self.hidden_channels)
                 elif self.batch_norm_scale:
-                    layer["scale"] = self.ScaleLayer(channels=self.hidden_channels)
+                    layer["scale"] = self.scalelayer_cls(channels=self.hidden_channels)
 
         if self.num_layers > 1 or self.final_nonlinearity:
             layer["nonlin"] = AdaptiveELU(self.elu_xshift, self.elu_yshift)
@@ -366,18 +366,18 @@ class RotationEquivariant2dCore(Stacked2dCore, nn.Module):
             )
             if self.batch_norm:
                 if self.independent_bn_bias:
-                    layer["norm"] = self.BatchNormLayer(num_features=self.hidden_channels, momentum=self.momentum)
+                    layer["norm"] = self.batchnormlayer_cls(num_features=self.hidden_channels, momentum=self.momentum)
                 else:
-                    layer["norm"] = self.BatchNormLayer(
+                    layer["norm"] = self.batchnormlayer_cls(
                         num_features=self.hidden_channels,
                         momentum=self.momentum,
                         affine=self.bias and self.batch_norm_scale,
                     )
                     if self.bias:
                         if not self.batch_norm_scale:
-                            layer["bias"] = self.BiasLayer(channels=self.hidden_channels)
+                            layer["bias"] = self.biaslayer_cls(channels=self.hidden_channels)
                     elif self.batch_norm_scale:
-                        layer["scale"] = self.ScaleLayer(channels=self.hidden_channels)
+                        layer["scale"] = self.scalelayer_cls(channels=self.hidden_channels)
 
             if self.final_nonlinearity or l < self.num_layers - 1:
                 layer["nonlin"] = AdaptiveELU(self.elu_xshift, self.elu_yshift)

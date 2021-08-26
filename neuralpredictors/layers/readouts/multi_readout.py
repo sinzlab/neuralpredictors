@@ -1,107 +1,122 @@
-class MultiReadout(Readout, ModuleDict):
+import torch
+from .base import Readout, ClonedReadout
+from .point_pooled import PointPooled2d, SpatialTransformerPooled3d
+from .gaussian import Gaussian2d, FullGaussian2d, RemappedGaussian2d, DeterministicGaussian2d, Gaussian3d, UltraSparse
+from .factorized import SpatialXFeatureLinear, FullFactorized2d, FullSXF
+from .attention import AttentionReadout
+from .pyramid import PointPyramid2d
+
+
+class MultiReadoutBase(torch.nn.ModuleDict):
+    """
+    Base class for MultiReadouts. It is a dictionary of data keys and readouts to the corresponding datasets.
+    If parameter-sharing between the readouts is desired, refer to MultiReadoutSharedParametersBase.
+
+    Args:
+        in_shape_dict (dict): dictionary of data_key and the corresponding dataset's shape as an output of the core.
+        n_neurons_dict (dict): dictionary of data_key and the corresponding dataset's number of neurons
+        base_readout (torch.nn.Module): base readout class. If None, self._base_readout must be set manually in the inheriting class's definition
+        mean_activity_dict (dict): dictionary of data_key and the corresponding dataset's mean responses. Used to initialize the readout bias with.
+                                   If None, the bias is initialized with 0.
+        clone_readout (bool): whether to clone the first data_key's readout to all other readouts, only allowing for a scale and offset.
+                              This is a rather simple method to enforce parameter-sharing between readouts. For more sophisticated methods,
+                              refer to MultiReadoutSharedParametersBase
+        gamma_readout (float): regularization strength
+        **kwargs:
+    """
+
     _base_readout = None
 
-    def __init__(self, in_shape, loaders, gamma_readout, clone_readout=False, **kwargs):
+    def __init__(
+        self, in_shape_dict, n_neurons_dict, base_readout=None, mean_activity_dict=None, clone_readout=False, **kwargs
+    ):
+
+        # The `base_readout` can be overridden only if the static property `_base_readout` is not set
+        if self._base_readout is None:
+            self._base_readout = base_readout
+
         if self._base_readout is None:
             raise ValueError("Attribute _base_readout must be set")
-
         super().__init__()
 
-        self.in_shape = in_shape
-        self.neurons = OrderedDict([(k, loader.dataset.n_neurons) for k, loader in loaders.items()])
-        if "positive" in kwargs:
-            self._positive = kwargs["positive"]
+        for i, data_key in enumerate(n_neurons_dict):
+            first_data_key = data_key if i == 0 else first_data_key
+            mean_activity = mean_activity_dict[data_key] if mean_activity_dict is not None else None
 
-        self.gamma_readout = gamma_readout  # regularisation strength
+            readout_kwargs = self.prepare_readout_kwargs(i, data_key, first_data_key, **kwargs)
 
-        for i, (k, n_neurons) in enumerate(self.neurons.items()):
             if i == 0 or clone_readout is False:
                 self.add_module(
-                    k,
-                    self._base_readout(in_shape=in_shape, outdims=n_neurons, **kwargs),
+                    data_key,
+                    self._base_readout(
+                        in_shape=in_shape_dict[data_key],
+                        outdims=n_neurons_dict[data_key],
+                        mean_activity=mean_activity,
+                        **readout_kwargs
+                    ),
                 )
-                original_readout = k
+                original_readout = data_key
             elif i > 0 and clone_readout is True:
-                self.add_module(k, ClonedReadout(self[original_readout], **kwargs))
+                self.add_module(data_key, ClonedReadout(self[original_readout]))
 
-    def initialize(self, mean_activity_dict):
-        for k, mu in mean_activity_dict.items():
-            self[k].initialize()
-            if hasattr(self[k], "bias"):
-                self[k].bias.data = mu.squeeze() - 1
+        self.initialize(mean_activity_dict)
 
-    def regularizer(self, readout_key):
-        return self[readout_key].feature_l1() * self.gamma_readout
+    def prepare_readout_kwargs(self, i, data_key, first_data_key, **kwargs):
+        return kwargs
 
-    @property
-    def positive(self):
-        if hasattr(self, "_positive"):
-            return self._positive
-        else:
-            return False
+    def forward(self, *args, data_key=None, **kwargs):
+        if data_key is None and len(self) == 1:
+            data_key = list(self.keys())[0]
+        return self[data_key](*args, **kwargs)
 
-    @positive.setter
-    def positive(self, value):
-        self._positive = value
-        for k in self:
-            self[k].positive = value
+    def initialize(self, mean_activity_dict=None):
+        for data_key, readout in self.items():
+            mean_activity = mean_activity_dict[data_key] if mean_activity_dict is not None else None
+            readout.initialize(mean_activity)
+
+    def regularizer(self, data_key=None, reduction="sum", average=None):
+        if data_key is None and len(self) == 1:
+            data_key = list(self.keys())[0]
+        return self[data_key].regularizer(reduction=reduction, average=average)
 
 
-class MultiplePointPyramid2d(MultiReadout):
-    _base_readout = PointPyramid2d
-
-
-class MultipleGaussian3d(MultiReadout):
+class MultiReadoutSharedParametersBase(MultiReadoutBase):
     """
-    Instantiates multiple instances of Gaussian3d Readouts
-    usually used when dealing with different datasets or areas sharing the same core.
-    Args:
-        in_shape (list): shape of the input feature map [channels, width, height]
-        loaders (list):  a list of dataset objects
-        gamma_readout (float): regularisation term for the readout which is usally set to 0.0 for gaussian3d readout
-                               as it contains one dimensional weight
-
+    Base class for MultiReadouts that share parameters between readouts.
+    For more information on which parameters can be shared, refer for example to the FullGaussian2d readout
     """
 
-    _base_readout = Gaussian3d
+    def prepare_readout_kwargs(self, i, data_key, first_data_key, **kwargs):
+        readout_kwargs = kwargs.copy()
 
-    # Make sure this is not a bug
-    def regularizer(self, readout_key):
-        return self.gamma_readout
+        if "grid_mean_predictor" in readout_kwargs:
+            if readout_kwargs["grid_mean_predictor"] is not None:
+                if readout_kwargs["grid_mean_predictor_type"] == "cortex":
+                    readout_kwargs["source_grid"] = readout_kwargs["source_grids"][data_key]
+                else:
+                    raise KeyError(
+                        "grid mean predictor {} does not exist".format(readout_kwargs["grid_mean_predictor_type"])
+                    )
+                if readout_kwargs["share_transform"]:
+                    readout_kwargs["shared_transform"] = None if i == 0 else self[first_data_key].mu_transform
 
+            elif readout_kwargs["share_grid"]:
+                readout_kwargs["shared_grid"] = {
+                    "match_ids": readout_kwargs["shared_match_ids"][data_key],
+                    "shared_grid": None if i == 0 else self[first_data_key].shared_grid,
+                }
 
-class MultiplePointPooled2d(MultiReadout):
-    """
-    Instantiates multiple instances of PointPool2d Readouts
-    usually used when dealing with more than one dataset sharing the same core.
-    """
+            del readout_kwargs["share_transform"]
+            del readout_kwargs["share_grid"]
+            del readout_kwargs["grid_mean_predictor_type"]
 
-    _base_readout = PointPooled2d
-
-
-class MultipleFullGaussian2d(MultiReadout):
-    """
-    Instantiates multiple instances of FullGaussian2d Readouts
-    usually used when dealing with more than one dataset sharing the same core.
-
-    Args:
-        in_shape (list): shape of the input feature map [channels, width, height]
-        loaders (list):  a list of dataloaders
-        gamma_readout (float): regularizer for the readout
-    """
-
-    _base_readout = FullGaussian2d
-
-
-class MultipleUltraSparse(MultiReadout):
-    """
-    This class instantiates multiple instances of UltraSparseReadout
-    useful when dealing with multiple datasets
-    Args:
-        in_shape (list): shape of the input feature map [channels, width, height]
-        loaders (list):  a list of dataset objects
-        gamma_readout (float): regularisation term for the readout which is usally set to 0.0 for UltraSparseReadout readout
-                               as it contains one dimensional weight
-    """
-
-    _base_readout = UltraSparse
+        if "share_features" in readout_kwargs:
+            if readout_kwargs["share_features"]:
+                readout_kwargs["shared_features"] = {
+                    "match_ids": readout_kwargs["shared_match_ids"][data_key],
+                    "shared_features": None if i == 0 else self[first_data_key].shared_features,
+                }
+            else:
+                readout_kwargs["shared_features"] = None
+            del readout_kwargs["share_features"]
+        return readout_kwargs

@@ -1005,11 +1005,13 @@ class FullGaussian2d(nn.Module):
         if shift is not None:
             grid = grid + shift[:, None, None, :]
 
-        if not multiplex:
+        if multiplex:
+            # einsum dimensions: batchsize, channels, width, height * 1, channel, n_neurons
+            # -> batchsize, width, height, neurons
+            y = torch.einsum("ncwh,uco->nwho", x, feat)
+        else:
             y = F.grid_sample(x, grid, align_corners=self.align_corners)
             y = (y.squeeze(-1) * feat).sum(1).view(N, outdims)
-        else:
-            y = torch.einsum("ncwh,uco->nwho", x, feat)
 
         if self.bias is not None:
             y = y + bias

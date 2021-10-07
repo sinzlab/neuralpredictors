@@ -973,7 +973,9 @@ class FullGaussian2d(nn.Module):
 
 
         Returns:
-            y: neuronal activity
+            y: neuronal activity. shape: default (batch, neurons),
+                if multiplex=True and collapse=False (batch, neurons x locations),
+                if multiplex=True and collapse=True (batch, neurons, height x width)
         """
         N, c, w, h = x.size()
         c_in, w_in, h_in = self.in_shape

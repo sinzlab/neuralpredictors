@@ -1019,9 +1019,10 @@ class FullGaussian2d(nn.Module):
         if multiplex:
             if crop_edge_px:
                 y = y[:, crop_edge_px:-crop_edge_px, crop_edge_px:-crop_edge_px, :]
+
             if collapse:
                 y = y.reshape(N, -1)
-            if not collapse:
+            else:
                 # reshape responses into (N, Outdims, h, w)
                 y = y.permute(0, 3, 1, 2)
 

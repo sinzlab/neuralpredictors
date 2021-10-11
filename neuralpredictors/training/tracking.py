@@ -550,4 +550,4 @@ class AdvancedTracker(Tracker):
                     gathered[key + " " + k] = v
             return gathered
         else:
-            return {"": "{:03.4f}".format(log[index])}
+            return {"": "{:03.5f}".format(log[index])}

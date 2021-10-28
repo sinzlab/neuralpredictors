@@ -5,7 +5,7 @@ from torch import nn
 import torch
 import torchvision
 
-from .base import Core2d
+from .base import Core
 from ... import regularizers
 from ..conv import DepthSeparableConv2d
 from ..squeeze_excitation import SqueezeExcitationBlock
@@ -24,7 +24,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class Stacked2dCore(Core2d, nn.Module):
+class Stacked2dCore(Core, nn.Module):
     """
     An instantiation of the Core base class. A simple core that is stacked per default.
     This means that the output of all layers is concatenated at the last layer.
@@ -424,7 +424,7 @@ class RotationEquivariant2dCore(Stacked2dCore, nn.Module):
         return len(self.features) * self.hidden_channels * self.num_rotations
 
 
-class TransferLearningCore(Core2d, nn.Module):
+class TransferLearningCore(Core, nn.Module):
     """
     Core based on popular image recognition networks from torchvision such as VGG or AlexNet.
     Can be instantiated as random or pretrained. Core is frozen by default, which can be changed with the fine_tune

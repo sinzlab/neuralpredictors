@@ -41,8 +41,7 @@ class Stacked2dCore(Core, nn.Module):
         gamma_input=0.0,
         skip=0,
         final_nonlinearity=True,
-        elu_xshift=0.0,
-        elu_yshift=0.0,
+        elu_shift=(0, 0),
         bias=True,
         momentum=0.1,
         pad_input=True,
@@ -67,7 +66,7 @@ class Stacked2dCore(Core, nn.Module):
             gamma_input:    regularizer factor for the input weights (default: LaplaceL2, see neuralpredictors.regularizers)
             skip:           Adds a skip connection
             final_nonlinearity: Boolean, if true, appends an ELU layer after the last BatchNorm (if BN=True)
-            elu_xshift, elu_yshift: final_nonlinearity(x) = Elu(x - elu_xshift) + elu_yshift
+            elu_shift: a tuple to shift the elu in the following way: Elu(x - elu_xshift) + elu_yshift
             bias:           Adds a bias layer.
             momentum:       momentum in the batchnorm layer.
             pad_input:      Boolean, if True, applies zero padding to all convolutions
@@ -120,8 +119,7 @@ class Stacked2dCore(Core, nn.Module):
         self.laplace_padding = laplace_padding
         self.hidden_dilation = hidden_dilation
         self.final_nonlinearity = final_nonlinearity
-        self.elu_xshift = elu_xshift
-        self.elu_yshift = elu_yshift
+        self.elu_xshift, self.elu_yshift = elu_shift
         self.bias = bias
         self.momentum = momentum
         self.pad_input = pad_input

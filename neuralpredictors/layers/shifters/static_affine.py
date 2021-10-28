@@ -3,7 +3,7 @@ from .base import Shifter
 import torch
 from torch import nn
 from torch.nn import ModuleDict
-
+import warnings
 import logging
 
 logger = logging.getLogger(__name__)
@@ -20,7 +20,11 @@ class StaticAffine2d(nn.Linear):
         """
         super().__init__(input_channels, output_channels, bias=bias)
 
-    def forward(self, x):
+    def forward(self, x, trial_idx=None):
+        if trial_idx is not None:
+            warnings.warn(
+                "Trial index was passed but is not used because this shifter network does not support trial indexing."
+            )
         x = super().forward(x)
         return torch.tanh(x)
 
@@ -33,8 +37,11 @@ class StaticAffine2d(nn.Linear):
             else:
                 self.bias.data.normal_(0, 1e-6)
 
+    def regularizer(self):
+        return self.weight.pow(2).mean()
 
-class StaticAffine2dShifter(Shifter, ModuleDict):
+
+class StaticAffine2dShifter(ModuleDict):
     def __init__(self, data_keys, input_channels=2, output_channels=2, bias=True, gamma_shifter=0):
         """
         Args:
@@ -56,4 +63,4 @@ class StaticAffine2dShifter(Shifter, ModuleDict):
                 self[k].initialize()
 
     def regularizer(self, data_key):
-        return self[data_key].weight.pow(2).mean() * self.gamma_shifter
+        return self[data_key].regularizer() * self.gamma_shifter

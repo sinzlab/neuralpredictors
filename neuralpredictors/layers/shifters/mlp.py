@@ -1,5 +1,6 @@
 from .base import Shifter
 
+import torch
 from torch.nn.init import xavier_normal
 from torch.nn import ModuleDict
 from torch import nn
@@ -37,11 +38,18 @@ class MLP(Shifter):
         for linear_layer in [p for p in self.parameters() if isinstance(p, nn.Linear)]:
             xavier_normal(linear_layer.weight)
 
-    def forward(self, input):
-        return self.mlp(input)
+    def forward(self, pupil_center, trial_idx=None):
+        if trial_idx is not None:
+            pupil_center = torch.cat((pupil_center, trial_idx), dim=1)
+        if not self.mlp[0].in_features == pupil_center.shape[1]:
+            raise ValueError(
+                "The expected input shape of the shifter and the shape of the input do not match! "
+                "(Maybe due to the appending of trial_idx to pupil_center?)"
+            )
+        return self.mlp(pupil_center)
 
 
-class MLPShifter(Shifter, ModuleDict):
+class MLPShifter(ModuleDict):
     def __init__(
         self, data_keys, input_channels=2, hidden_channels_shifter=2, shift_layers=1, gamma_shifter=0, **kwargs
     ):

@@ -944,7 +944,9 @@ class FullGaussian2d(nn.Module):
         self.register_buffer("grid_sharing_index", torch.from_numpy(sharing_idx))
         self._shared_grid = True
 
-    def forward(self, x, sample=None, shift=None, out_idx=None):
+    def forward(
+        self, x, sample=None, shift=None, out_idx=None, multiplex=False, crop_edge_px=None, collapse=True, **kwargs
+    ):
         """
         Propagates the input forwards through the readout
         Args:
@@ -956,9 +958,24 @@ class FullGaussian2d(nn.Module):
                            if sample is True/False, overrides the model_state (i.e training or eval) and does as instructed
             shift (bool): shifts the location of the grid (from eye-tracking data)
             out_idx (bool): index of neurons to be predicted
+            multiplex (bool): if True, the neurons do not readout from their grid position,
+                            but from every position, i.e. every pixel, instead. Thus, each neuron is effectively copied
+                            to all positions in the image. The neuronal activity output matrix is then no longer
+                            (batch, neurons), but (batch, neurons x locations), when  the `collapse` argument is True,
+                            or (batch, neurons, height x width)
+            crop_edge_px (int): When multiplex is True, the response to all pixels that are cropped. Cropping
+                            will be symmetric by n pixels as specified by this argument.
+            collapse (bool): This argument can be used to modify the output shape of the readout when multiplex is
+                            set to True.
+                            By default (collapse=True), the readout returns the output in the shape of
+                            (batch, neurons x locations). When collapse=False, the returned shape will be:
+                            (batch, neurons, height x width)
+
 
         Returns:
-            y: neuronal activity
+            y: neuronal activity. shape: default (batch, neurons),
+                if multiplex=True and collapse=False (batch, neurons x locations),
+                if multiplex=True and collapse=True (batch, neurons, height x width)
         """
         N, c, w, h = x.size()
         c_in, w_in, h_in = self.in_shape
@@ -988,11 +1005,27 @@ class FullGaussian2d(nn.Module):
         if shift is not None:
             grid = grid + shift[:, None, None, :]
 
-        y = F.grid_sample(x, grid, align_corners=self.align_corners)
-        y = (y.squeeze(-1) * feat).sum(1).view(N, outdims)
+        if multiplex:
+            # einsum dimensions: batchsize, channels, width, height * 1, channel, n_neurons
+            # -> batchsize, width, height, neurons
+            y = torch.einsum("ncwh,uco->nwho", x, feat)
+        else:
+            y = F.grid_sample(x, grid, align_corners=self.align_corners)
+            y = (y.squeeze(-1) * feat).sum(1).view(N, outdims)
 
         if self.bias is not None:
             y = y + bias
+
+        if multiplex:
+            if crop_edge_px:
+                y = y[:, crop_edge_px:-crop_edge_px, crop_edge_px:-crop_edge_px, :]
+
+            if collapse:
+                y = y.reshape(N, -1)
+            else:
+                # reshape responses into (N, Outdims, h, w)
+                y = y.permute(0, 3, 1, 2)
+
         return y
 
     def __repr__(self):

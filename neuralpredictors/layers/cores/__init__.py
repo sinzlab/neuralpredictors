@@ -5,7 +5,7 @@ The core's task is to encode the input into (hidden) representations, which are 
 These representations will be passed on to the readout to calculate the desired output.
 
 Our cores are usually CNNs. The core module is using special architectures submodules from ..layers (such as
-attention_conv whichuses self attention instead a conv2d layer).
+attention_conv which uses self attention instead a conv2d layer).
 
 All core classes must have a `regularizer` and a `forward` method.
 """

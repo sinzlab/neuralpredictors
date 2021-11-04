@@ -189,6 +189,7 @@ class Stacked2dCore(Core, nn.Module):
                 padding=self.hidden_padding,
                 bias=self.bias and not self.batch_norm,
                 dilation=self.hidden_dilation,
+                bias=self.bias,
             )
             if self.batch_norm:
                 if self.independent_bn_bias:

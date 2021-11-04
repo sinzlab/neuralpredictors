@@ -140,6 +140,13 @@ class Stacked2dCore(Core, nn.Module):
         self.add_subsequent_layers()
         self.initialize()
 
+        if depth_separable:
+            self.ConvLayer = DepthSeparableConv2d
+        elif attention_conv:
+            self.ConvLayer = self.AttentionConvWrapper
+        else:
+            self.ConvLayer = nn.Conv2d
+
     def add_first_layer(self):
         layer = OrderedDict()
         layer["conv"] = nn.Conv2d(
@@ -168,16 +175,17 @@ class Stacked2dCore(Core, nn.Module):
 
     def add_subsequent_layers(self):
         if not isinstance(self.hidden_kern, Iterable):
-            hidden_kern = [self.hidden_kern] * (self.num_layers - 1)
+            self.hidden_kern = [self.hidden_kern] * (self.num_layers - 1)
 
         for l in range(1, self.num_layers):
             layer = OrderedDict()
             if self.hidden_padding is None:
                 self.hidden_padding = ((self.hidden_kern[l - 1] - 1) * self.hidden_dilation + 1) // 2
-            layer["conv"] = nn.Conv2d(
-                self.hidden_channels if not self.skip > 1 else min(self.skip, l) * self.hidden_channels,
-                self.hidden_channels,
-                hidden_kern[l - 1],
+            layer["conv"] = self.ConvLayer(
+                in_channels=self.hidden_channels if not self.skip > 1 else min(self.skip, l) * self.hidden_channels,
+                out_channels=self.hidden_channels,
+                kernel_size=self.hidden_kern[l - 1],
+                stride=self.stride,
                 padding=self.hidden_padding,
                 bias=self.bias and not self.batch_norm,
                 dilation=self.hidden_dilation,
@@ -200,6 +208,10 @@ class Stacked2dCore(Core, nn.Module):
             if self.final_nonlinearity or l < self.num_layers - 1:
                 layer["nonlin"] = AdaptiveELU(self.elu_xshift, self.elu_yshift)
             self.features.add_module("layer{}".format(l), nn.Sequential(layer))
+
+    class AttentionConvWrapper(AttentionConv):
+        def __init__(self, dilation=None, **kwargs):
+            super().__init__(**kwargs)
 
     def forward(self, input_):
         ret = []

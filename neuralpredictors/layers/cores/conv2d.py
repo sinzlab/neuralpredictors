@@ -54,6 +54,10 @@ class Stacked2dCore(Core, nn.Module):
         input_regularizer="LaplaceL2",
         stack=None,
         use_avg_reg=True,
+        depth_separable=False,
+        attention_conv=False,
+        linear=False,
+        stride=1,
     ):
         """
         Args:
@@ -110,6 +114,7 @@ class Stacked2dCore(Core, nn.Module):
         self.input_channels = input_channels
         self.hidden_channels = hidden_channels
         self.skip = skip
+        self.stride = stride
         self.use_avg_reg = use_avg_reg
         if use_avg_reg:
             warnings.warn("The averaged value of regularizer will be used.", UserWarning)

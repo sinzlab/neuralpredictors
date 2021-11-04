@@ -285,9 +285,6 @@ class RotationEquivariant2dCore(Stacked2dCore, nn.Module):
             convolutional layer. If batch_norm and bias are true, but batch_norm_scale is false, batch_norm won't have learnable
             parameters and a BiasLayer will be added after the batch_norm layer.
         """
-
-        super().__init__(*args, **kwargs, input_regularizer=input_regularizer)
-
         self.num_rotations = num_rotations
         self.stride = stride
         self.upsampling = upsampling
@@ -298,9 +295,7 @@ class RotationEquivariant2dCore(Stacked2dCore, nn.Module):
             self.bias_layer = Bias2DLayer
             self.scale_layer = Scale2DLayer
 
-        self.add_first_layer()
-        self.add_subsequent_layers()
-        self.initialize()
+        super().__init__(*args, **kwargs, input_regularizer=input_regularizer)
 
     def batchnorm_layer(self, **kwargs):
         return RotationEquivariantBatchNorm2D(num_rotations=self.num_rotations, **kwargs)

@@ -187,7 +187,6 @@ class Stacked2dCore(Core, nn.Module):
                 kernel_size=self.hidden_kern[l - 1],
                 stride=self.stride,
                 padding=self.hidden_padding,
-                bias=self.bias and not self.batch_norm,
                 dilation=self.hidden_dilation,
                 bias=self.bias,
             )
@@ -564,6 +563,7 @@ class SE2dCore(Stacked2dCore, nn.Module):
         depth_separable=False,
         attention_conv=False,
         linear=False,
+        stride=1,
     ):
         """
         Args:
@@ -624,6 +624,17 @@ class SE2dCore(Stacked2dCore, nn.Module):
         else:
             self.stack = [*range(self.num_layers)[stack:]] if isinstance(stack, int) else stack
 
+        class AttentionConvWrapper(AttentionConv):
+            def __init__(self, dilation=None, **kwargs):
+                super().__init__(**kwargs)
+
+        if depth_separable:
+            ConvLayer = DepthSeparableConv2d
+        elif attention_conv:
+            ConvLayer = AttentionConvWrapper
+        else:
+            ConvLayer = nn.Conv2d
+
         # --- first layer
         layer = OrderedDict()
         layer["conv"] = nn.Conv2d(
@@ -646,6 +657,17 @@ class SE2dCore(Stacked2dCore, nn.Module):
         for l in range(1, self.num_layers):
             layer = OrderedDict()
             hidden_padding = ((hidden_kern[l - 1] - 1) * hidden_dilation + 1) // 2
+
+            layer["conv"] = ConvLayer(
+                in_channels=hidden_channels if not skip > 1 else min(skip, l) * hidden_channels,
+                out_channels=hidden_channels,
+                kernel_size=hidden_kern[l - 1],
+                stride=stride,
+                padding=hidden_padding,
+                dilation=hidden_dilation,
+                bias=bias and not batch_norm,
+            )
+
             if depth_separable:
                 layer["ds_conv"] = DepthSeparableConv2d(
                     hidden_channels,
@@ -685,6 +707,12 @@ class SE2dCore(Stacked2dCore, nn.Module):
             self.features.add_module("layer{}".format(l), nn.Sequential(layer))
 
         self.apply(self.init_conv)
+
+    class WrapperDSconv(DepthSeparableConv2d):
+        pass
+
+    class Wrapper2:
+        pass
 
     def forward(self, input_):
         ret = []

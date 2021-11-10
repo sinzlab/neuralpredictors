@@ -213,6 +213,12 @@ class Stacked2dCore(Core, nn.Module):
 
     class AttentionConvWrapper(AttentionConv):
         def __init__(self, dilation=None, **kwargs):
+            """
+            Helper class to make an attention conv layer accept input args of a pytorch.nn.Conv2d layer.
+            Args:
+                dilation: catches this argument from the input args, and ignores it
+                **kwargs:
+            """
             super().__init__(**kwargs)
 
     def forward(self, input_):

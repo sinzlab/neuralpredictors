@@ -26,8 +26,9 @@ logger = logging.getLogger(__name__)
 
 class Stacked2dCore(Core, nn.Module):
     """
-    An instantiation of the Core base class. A simple core that is stacked per default.
-    This means that the output of all layers is concatenated at the last layer.
+    An instantiation of the Core base class. Made up of layers layers of nn.sequential modules.
+    Allows for the flexible implementations of many different architectures, such as convolutional layers,
+    or self-attention layers.
     """
 
     def __init__(
@@ -40,6 +41,7 @@ class Stacked2dCore(Core, nn.Module):
         gamma_hidden=0,
         gamma_input=0.0,
         skip=0,
+        stride=1,
         final_nonlinearity=True,
         elu_shift=(0, 0),
         bias=True,
@@ -57,7 +59,6 @@ class Stacked2dCore(Core, nn.Module):
         depth_separable=False,
         attention_conv=False,
         linear=False,
-        stride=1,
     ):
         """
         Args:
@@ -69,6 +70,7 @@ class Stacked2dCore(Core, nn.Module):
             gamma_hidden:   regularizer factor for group sparsity
             gamma_input:    regularizer factor for the input weights (default: LaplaceL2, see neuralpredictors.regularizers)
             skip:           Adds a skip connection
+            stride:         stride of the 2d conv layer.
             final_nonlinearity: Boolean, if true, appends an ELU layer after the last BatchNorm (if BN=True)
             elu_shift: a tuple to shift the elu in the following way: Elu(x - elu_xshift) + elu_yshift
             bias:           Adds a bias layer.
@@ -91,8 +93,10 @@ class Stacked2dCore(Core, nn.Module):
                                 stack = -1 will only select the last layer as the readout layer.
                                 stack of -2 will read out from the last two layers.
                                 And stack of 1 will read out from layer 1 (0 indexed) until the last layer.
-
             use_avg_reg:    bool. Whether to use the averaged value of regularizer(s) or the summed.
+            depth_separable: Boolean, if True, uses depth-separable convolutions in all layers after the first one.
+            attention_conv: Boolean, if True, uses self-attention instead of convolution for all layers after the first one.
+            linear:         Boolean, if True, removes all nonlinearities
 
             To enable learning batch_norms bias and scale independently, the arguments bias, batch_norm and batch_norm_scale
             work together: By default, all are true. In this case there won't be a bias learned in the convolutional layer, but
@@ -100,6 +104,9 @@ class Stacked2dCore(Core, nn.Module):
             convolutional layer. If batch_norm and bias are true, but batch_norm_scale is false, batch_norm won't have learnable
             parameters and a BiasLayer will be added after the batch_norm layer.
         """
+
+        if depth_separable and attention_conv:
+            raise ValueError("depth_separable and attention_conv can not both be true")
 
         super().__init__()
         regularizer_config = (

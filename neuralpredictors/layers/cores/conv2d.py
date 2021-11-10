@@ -149,15 +149,7 @@ class Stacked2dCore(Core, nn.Module):
         self.add_subsequent_layers()
         self.initialize()
 
-    def add_first_layer(self):
-        layer = OrderedDict()
-        layer["conv"] = nn.Conv2d(
-            self.input_channels,
-            self.hidden_channels,
-            self.input_kern,
-            padding=self.input_kern // 2 if self.pad_input else 0,
-            bias=self.bias and not self.batch_norm,
-        )
+    def add_bn_layer(self, layer):
         if self.batch_norm:
             if self.independent_bn_bias:
                 layer["norm"] = nn.BatchNorm2d(self.hidden_channels, momentum=self.momentum)
@@ -171,8 +163,21 @@ class Stacked2dCore(Core, nn.Module):
                 elif self.batch_norm_scale:
                     layer["scale"] = Scale2DLayer(self.hidden_channels)
 
+    def add_activation(self, layer):
         if (self.num_layers > 1 or self.final_nonlinearity) and not self.linear:
             layer["nonlin"] = AdaptiveELU(self.elu_xshift, self.elu_yshift)
+
+    def add_first_layer(self):
+        layer = OrderedDict()
+        layer["conv"] = nn.Conv2d(
+            self.input_channels,
+            self.hidden_channels,
+            self.input_kern,
+            padding=self.input_kern // 2 if self.pad_input else 0,
+            bias=self.bias and not self.batch_norm,
+        )
+        self.add_bn_layer(layer)
+        self.add_activation(layer)
         self.features.add_module("layer0", nn.Sequential(layer))
 
     def add_subsequent_layers(self):
@@ -192,23 +197,8 @@ class Stacked2dCore(Core, nn.Module):
                 dilation=self.hidden_dilation,
                 bias=self.bias,
             )
-            if self.batch_norm:
-                if self.independent_bn_bias:
-                    layer["norm"] = nn.BatchNorm2d(self.hidden_channels, momentum=self.momentum)
-                else:
-                    layer["norm"] = nn.BatchNorm2d(
-                        self.hidden_channels,
-                        momentum=self.momentum,
-                        affine=self.bias and self.batch_norm_scale,
-                    )
-                    if self.bias:
-                        if not self.batch_norm_scale:
-                            layer["bias"] = Bias2DLayer(self.hidden_channels)
-                    elif self.batch_norm_scale:
-                        layer["scale"] = Scale2DLayer(self.hidden_channels)
-
-            if (self.final_nonlinearity or l < self.num_layers - 1) and not self.linear:
-                layer["nonlin"] = AdaptiveELU(self.elu_xshift, self.elu_yshift)
+            self.add_bn_layer(layer)
+            self.add_activation(layer)
             self.features.add_module("layer{}".format(l), nn.Sequential(layer))
 
     class AttentionConvWrapper(AttentionConv):
@@ -627,26 +617,10 @@ class SE2dCore(Stacked2dCore, nn.Module):
                 dilation=self.hidden_dilation,
                 bias=self.bias,
             )
-            if self.batch_norm:
-                if self.independent_bn_bias:
-                    layer["norm"] = nn.BatchNorm2d(self.hidden_channels, momentum=self.momentum)
-                else:
-                    layer["norm"] = nn.BatchNorm2d(
-                        self.hidden_channels,
-                        momentum=self.momentum,
-                        affine=self.bias and self.batch_norm_scale,
-                    )
-                    if self.bias:
-                        if not self.batch_norm_scale:
-                            layer["bias"] = Bias2DLayer(self.hidden_channels)
-                    elif self.batch_norm_scale:
-                        layer["scale"] = Scale2DLayer(self.hidden_channels)
-
-            if (self.final_nonlinearity or l < self.num_layers - 1) and not self.linear:
-                layer["nonlin"] = AdaptiveELU(self.elu_xshift, self.elu_yshift)
+            self.add_bn_layer(layer)
+            self.add_activation(layer)
             if (self.num_layers - l) <= self.n_se_blocks:
                 layer["seg_ex_block"] = SqueezeExcitationBlock(in_ch=self.hidden_channels, reduction=self.se_reduction)
-
             self.features.add_module("layer{}".format(l), nn.Sequential(layer))
 
     def regularizer(self):

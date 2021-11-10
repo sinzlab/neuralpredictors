@@ -137,17 +137,17 @@ class Stacked2dCore(Core, nn.Module):
             self.stack = [*range(self.num_layers)[stack:]] if isinstance(stack, int) else stack
         self.linear = linear
 
-        self.features = nn.Sequential()
-        self.add_first_layer()
-        self.add_subsequent_layers()
-        self.initialize()
-
         if depth_separable:
             self.ConvLayer = DepthSeparableConv2d
         elif attention_conv:
             self.ConvLayer = self.AttentionConvWrapper
         else:
             self.ConvLayer = nn.Conv2d
+
+        self.features = nn.Sequential()
+        self.add_first_layer()
+        self.add_subsequent_layers()
+        self.initialize()
 
     def add_first_layer(self):
         layer = OrderedDict()

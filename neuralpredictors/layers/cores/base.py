@@ -44,8 +44,8 @@ class Core:
 
     def __repr__(self):
         s = super().__repr__()
-        s += " [{} regularizers: ".format(self.__class__.__name__)
+        s += f" [{self.__class__.__name__} regularizers: "
         ret = []
         for attr in filter(lambda x: "gamma" in x or "skip" in x, dir(self)):
-            ret.append("{} = {}".format(attr, getattr(self, attr)))
+            ret.append(f"{attr} = {getattr(self, attr)}")
         return s + "|".join(ret) + "]\n"

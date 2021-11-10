@@ -606,6 +606,7 @@ class SE2dCore(Stacked2dCore, nn.Module):
                          bias=bias,
                          laplace_padding=laplace_padding,
                          input_regularizer=input_regularizer,
+                         use_avg_reg=use_avg_reg,
                          )
 
     def add_subsequent_layers(self):
@@ -647,21 +648,6 @@ class SE2dCore(Stacked2dCore, nn.Module):
 
             self.features.add_module("layer{}".format(l), nn.Sequential(layer))
 
-    def forward(self, input_):
-        ret = []
-        for l, feat in enumerate(self.features):
-            do_skip = l >= 1 and self.skip > 1
-            input_ = feat(input_ if not do_skip else torch.cat(ret[-min(self.skip, l) :], dim=1))
-            if l in self.stack:
-                ret.append(input_)
-        return torch.cat(ret, dim=1)
-
-    def laplace(self):
-        return self._input_weights_regularizer(self.features[0].conv.weight)
-
     def regularizer(self):
         return self.gamma_input * self.laplace()
 
-    @property
-    def outchannels(self):
-        return len(self.features) * self.hidden_channels

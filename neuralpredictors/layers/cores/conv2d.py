@@ -559,6 +559,7 @@ class SE2dCore(Stacked2dCore, nn.Module):
         input_regularizer="LaplaceL2norm",
         n_se_blocks=0,
         se_reduction=32,
+        use_avg_reg=False,
         **kwargs,
     ):
         """

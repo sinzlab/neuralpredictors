@@ -135,7 +135,7 @@ class Stacked2dCore(Core, nn.Module):
             self.stack = range(self.num_layers)
         else:
             self.stack = [*range(self.num_layers)[stack:]] if isinstance(stack, int) else stack
-        self.linear=linear
+        self.linear = linear
 
         self.features = nn.Sequential()
         self.add_first_layer()
@@ -599,15 +599,16 @@ class SE2dCore(Stacked2dCore, nn.Module):
         self.n_se_blocks = n_se_blocks
         self.se_reduction = se_reduction
 
-        super().__init__(input_channels=input_channels,
-                         hidden_channels=hidden_channels,
-                         input_kern=input_kern,
-                         hidden_kern=hidden_kern,
-                         bias=bias,
-                         laplace_padding=laplace_padding,
-                         input_regularizer=input_regularizer,
-                         use_avg_reg=use_avg_reg,
-                         )
+        super().__init__(
+            input_channels=input_channels,
+            hidden_channels=hidden_channels,
+            input_kern=input_kern,
+            hidden_kern=hidden_kern,
+            bias=bias,
+            laplace_padding=laplace_padding,
+            input_regularizer=input_regularizer,
+            use_avg_reg=use_avg_reg,
+        )
 
     def add_subsequent_layers(self):
         if not isinstance(self.hidden_kern, Iterable):
@@ -650,4 +651,3 @@ class SE2dCore(Stacked2dCore, nn.Module):
 
     def regularizer(self):
         return self.gamma_input * self.laplace()
-

@@ -231,8 +231,8 @@ class Stacked2dCore(Core, nn.Module):
         Sparsity regularization on the filters of all the conv2d layers except the first one.
         """
         ret = 0
-        for l in range(1, self.num_layers):
-            ret = ret + self.features[l].conv.weight.pow(2).sum(3, keepdim=True).sum(2, keepdim=True).sqrt().mean()
+        for feature in self.features[1:]:
+            ret = ret + feature.conv.weight.pow(2).sum(3, keepdim=True).sum(2, keepdim=True).sqrt().mean()
         return ret / ((self.num_layers - 1) if self.num_layers > 1 else 1)
 
     def regularizer(self):

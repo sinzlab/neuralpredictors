@@ -135,6 +135,8 @@ class Stacked2dCore(Core, nn.Module):
             self.stack = range(self.num_layers)
         else:
             self.stack = [*range(self.num_layers)[stack:]] if isinstance(stack, int) else stack
+        self.linear=linear
+
         self.features = nn.Sequential()
         self.add_first_layer()
         self.add_subsequent_layers()
@@ -169,7 +171,7 @@ class Stacked2dCore(Core, nn.Module):
                 elif self.batch_norm_scale:
                     layer["scale"] = Scale2DLayer(self.hidden_channels)
 
-        if self.num_layers > 1 or self.final_nonlinearity:
+        if (self.num_layers > 1 or self.final_nonlinearity) and not self.linear:
             layer["nonlin"] = AdaptiveELU(self.elu_xshift, self.elu_yshift)
         self.features.add_module("layer0", nn.Sequential(layer))
 
@@ -205,7 +207,7 @@ class Stacked2dCore(Core, nn.Module):
                     elif self.batch_norm_scale:
                         layer["scale"] = Scale2DLayer(self.hidden_channels)
 
-            if self.final_nonlinearity or l < self.num_layers - 1:
+            if (self.final_nonlinearity or l < self.num_layers - 1) and not self.linear:
                 layer["nonlin"] = AdaptiveELU(self.elu_xshift, self.elu_yshift)
             self.features.add_module("layer{}".format(l), nn.Sequential(layer))
 

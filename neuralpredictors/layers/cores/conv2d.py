@@ -554,24 +554,12 @@ class SE2dCore(Stacked2dCore, nn.Module):
         hidden_channels,
         input_kern,
         hidden_kern,
-        layers=3,
-        gamma_input=0.0,
-        skip=0,
-        final_nonlinearity=True,
         bias=False,
-        momentum=0.1,
-        pad_input=True,
-        batch_norm=True,
-        hidden_dilation=1,
         laplace_padding=None,
         input_regularizer="LaplaceL2norm",
-        stack=None,
-        se_reduction=32,
         n_se_blocks=0,
-        depth_separable=False,
-        attention_conv=False,
-        linear=False,
-        stride=1,
+        se_reduction=32,
+        **kwargs,
     ):
         """
         Args:
@@ -607,120 +595,56 @@ class SE2dCore(Stacked2dCore, nn.Module):
             attention_conv: Boolean, if True, uses self-attention instead of convolution for all layers after the first one.
             linear:         Boolean, if True, removes all nonlinearities
         """
-
-        super().__init__()
-
-        assert not bias or not batch_norm, "bias and batch_norm should not both be true"
-        assert not depth_separable or not attention_conv, "depth_separable and attention_conv should not both be true"
-
-        regularizer_config = (
-            dict(padding=laplace_padding, kernel=input_kern)
-            if input_regularizer == "GaussianLaplaceL2"
-            else dict(padding=laplace_padding)
-        )
-        self._input_weights_regularizer = regularizers.__dict__[input_regularizer](**regularizer_config)
-
-        self.num_layers = layers
-        self.gamma_input = gamma_input
-        self.input_channels = input_channels
-        self.hidden_channels = hidden_channels
-        self.skip = skip
-        self.features = nn.Sequential()
         self.n_se_blocks = n_se_blocks
-        if stack is None:
-            self.stack = range(self.num_layers)
-        else:
-            self.stack = [*range(self.num_layers)[stack:]] if isinstance(stack, int) else stack
+        self.se_reduction = se_reduction
 
-        class AttentionConvWrapper(AttentionConv):
-            def __init__(self, dilation=None, **kwargs):
-                super().__init__(**kwargs)
+        super().__init__(input_channels=input_channels,
+                         hidden_channels=hidden_channels,
+                         input_kern=input_kern,
+                         hidden_kern=hidden_kern,
+                         bias=bias,
+                         laplace_padding=laplace_padding,
+                         input_regularizer=input_regularizer,
+                         )
 
-        if depth_separable:
-            ConvLayer = DepthSeparableConv2d
-        elif attention_conv:
-            ConvLayer = AttentionConvWrapper
-        else:
-            ConvLayer = nn.Conv2d
+    def add_subsequent_layers(self):
+        if not isinstance(self.hidden_kern, Iterable):
+            self.hidden_kern = [self.hidden_kern] * (self.num_layers - 1)
 
-        # --- first layer
-        layer = OrderedDict()
-        layer["conv"] = nn.Conv2d(
-            input_channels,
-            hidden_channels,
-            input_kern,
-            padding=input_kern // 2 if pad_input else 0,
-            bias=bias and not batch_norm,
-        )
-        if batch_norm:
-            layer["norm"] = nn.BatchNorm2d(hidden_channels, momentum=momentum)
-        if (self.num_layers > 1 or final_nonlinearity) and not linear:
-            layer["nonlin"] = nn.ELU(inplace=True)
-        self.features.add_module("layer0", nn.Sequential(layer))
-
-        if not isinstance(hidden_kern, Iterable):
-            hidden_kern = [hidden_kern] * (self.num_layers - 1)
-
-        # --- other layers
         for l in range(1, self.num_layers):
             layer = OrderedDict()
-            hidden_padding = ((hidden_kern[l - 1] - 1) * hidden_dilation + 1) // 2
-
-            layer["conv"] = ConvLayer(
-                in_channels=hidden_channels if not skip > 1 else min(skip, l) * hidden_channels,
-                out_channels=hidden_channels,
-                kernel_size=hidden_kern[l - 1],
-                stride=stride,
-                padding=hidden_padding,
-                dilation=hidden_dilation,
-                bias=bias and not batch_norm,
+            if self.hidden_padding is None:
+                self.hidden_padding = ((self.hidden_kern[l - 1] - 1) * self.hidden_dilation + 1) // 2
+            layer["conv"] = self.ConvLayer(
+                in_channels=self.hidden_channels if not self.skip > 1 else min(self.skip, l) * self.hidden_channels,
+                out_channels=self.hidden_channels,
+                kernel_size=self.hidden_kern[l - 1],
+                stride=self.stride,
+                padding=self.hidden_padding,
+                dilation=self.hidden_dilation,
+                bias=self.bias,
             )
+            if self.batch_norm:
+                if self.independent_bn_bias:
+                    layer["norm"] = nn.BatchNorm2d(self.hidden_channels, momentum=self.momentum)
+                else:
+                    layer["norm"] = nn.BatchNorm2d(
+                        self.hidden_channels,
+                        momentum=self.momentum,
+                        affine=self.bias and self.batch_norm_scale,
+                    )
+                    if self.bias:
+                        if not self.batch_norm_scale:
+                            layer["bias"] = Bias2DLayer(self.hidden_channels)
+                    elif self.batch_norm_scale:
+                        layer["scale"] = Scale2DLayer(self.hidden_channels)
 
-            if depth_separable:
-                layer["ds_conv"] = DepthSeparableConv2d(
-                    hidden_channels,
-                    hidden_channels,
-                    kernel_size=hidden_kern[l - 1],
-                    dilation=hidden_dilation,
-                    padding=hidden_padding,
-                    bias=False,
-                    stride=1,
-                )
-            elif attention_conv:
-                layer["conv"] = AttentionConv(
-                    hidden_channels if not skip > 1 else min(skip, l) * hidden_channels,
-                    hidden_channels,
-                    hidden_kern[l - 1],
-                    padding=hidden_padding,
-                    bias=bias and not batch_norm,
-                )
-            else:
-                layer["conv"] = nn.Conv2d(
-                    hidden_channels if not skip > 1 else min(skip, l) * hidden_channels,
-                    hidden_channels,
-                    hidden_kern[l - 1],
-                    padding=hidden_padding,
-                    bias=bias,
-                    dilation=hidden_dilation,
-                )
-            if batch_norm:
-                layer["norm"] = nn.BatchNorm2d(hidden_channels, momentum=momentum)
-
-            if (final_nonlinearity or l < self.num_layers - 1) and not linear:
-                layer["nonlin"] = nn.ELU(inplace=True)
-
+            if (self.final_nonlinearity or l < self.num_layers - 1) and not self.linear:
+                layer["nonlin"] = AdaptiveELU(self.elu_xshift, self.elu_yshift)
             if (self.num_layers - l) <= self.n_se_blocks:
-                layer["seg_ex_block"] = SqueezeExcitationBlock(in_ch=hidden_channels, reduction=se_reduction)
+                layer["seg_ex_block"] = SqueezeExcitationBlock(in_ch=self.hidden_channels, reduction=self.se_reduction)
 
             self.features.add_module("layer{}".format(l), nn.Sequential(layer))
-
-        self.apply(self.init_conv)
-
-    class WrapperDSconv(DepthSeparableConv2d):
-        pass
-
-    class Wrapper2:
-        pass
 
     def forward(self, input_):
         ret = []

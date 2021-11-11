@@ -319,13 +319,13 @@ class RotationEquivariant2dCore(Stacked2dCore, nn.Module):
 
         super().__init__(*args, **kwargs, input_regularizer=input_regularizer)
 
-    def batchnorm_layer(self, **kwargs):
+    def batchnormlayer_cls(self, **kwargs):
         return RotationEquivariantBatchNorm2D(num_rotations=self.num_rotations, **kwargs)
 
-    def bias_layer(self, **kwargs):
+    def bias_layer_cls(self, **kwargs):
         return RotationEquivariantBias2DLayer(num_rotations=self.num_rotations, **kwargs)
 
-    def scale_layer(self, **kwargs):
+    def scale_layer_cls(self, **kwargs):
         return RotationEquivariantScale2DLayer(num_rotations=self.num_rotations, **kwargs)
 
     def add_first_layer(self):
@@ -361,13 +361,13 @@ class RotationEquivariant2dCore(Stacked2dCore, nn.Module):
 
     def add_subsequent_layers(self):
         if not isinstance(self.hidden_kern, Iterable):
-            hidden_kern = [self.hidden_kern] * (self.num_layers - 1)
+            self.hidden_kern = [self.hidden_kern] * (self.num_layers - 1)
 
         for l in range(1, self.num_layers):
             layer = OrderedDict()
 
             if self.hidden_padding is None:
-                hidden_padding = hidden_kern[l - 1] // 2
+                self.hidden_padding = self.hidden_kern[l - 1] // 2
 
             layer["conv"] = HermiteConv2D(
                 input_features=self.hidden_channels * self.num_rotations,
@@ -605,6 +605,7 @@ class SE2dCore(Stacked2dCore, nn.Module):
             laplace_padding=laplace_padding,
             input_regularizer=input_regularizer,
             use_avg_reg=use_avg_reg,
+            **kwargs,
         )
 
     def add_subsequent_layers(self):

@@ -1,5 +1,6 @@
 import warnings
 from collections import OrderedDict, Iterable
+from functools import partial
 
 from torch import nn
 import torch
@@ -150,6 +151,9 @@ class Stacked2dCore(Core, nn.Module):
             self.ConvLayer = self.AttentionConvWrapper
         else:
             self.ConvLayer = nn.Conv2d
+        self.batchnorm_layer_cls = nn.BatchNorm2d
+        self.bias_layer_cls = Bias2DLayer
+        self.scale_layer_cls = Scale2DLayer
 
         self.features = nn.Sequential()
         self.add_first_layer()
@@ -159,16 +163,16 @@ class Stacked2dCore(Core, nn.Module):
     def add_bn_layer(self, layer):
         if self.batch_norm:
             if self.independent_bn_bias:
-                layer["norm"] = nn.BatchNorm2d(self.hidden_channels, momentum=self.momentum)
+                layer["norm"] = self.batchnorm_layer_cls(self.hidden_channels, momentum=self.momentum)
             else:
-                layer["norm"] = nn.BatchNorm2d(
+                layer["norm"] = self.batchnorm_layer_cls(
                     self.hidden_channels, momentum=self.momentum, affine=self.bias and self.batch_norm_scale
                 )
                 if self.bias:
                     if not self.batch_norm_scale:
-                        layer["bias"] = Bias2DLayer(self.hidden_channels)
+                        layer["bias"] = self.bias_layer_cls(self.hidden_channels)
                 elif self.batch_norm_scale:
-                    layer["scale"] = Scale2DLayer(self.hidden_channels)
+                    layer["scale"] = self.scale_layer_cls(self.hidden_channels)
 
     def add_activation(self, layer):
         if (self.num_layers > 1 or self.final_nonlinearity) and not self.linear:
@@ -313,40 +317,15 @@ class RotationEquivariant2dCore(Stacked2dCore, nn.Module):
         self.rot_eq_batch_norm = rot_eq_batch_norm
 
         if not rot_eq_batch_norm:
-            self.batchnorm_layer = nn.BatchNorm2d
-            self.bias_layer = Bias2DLayer
-            self.scale_layer = Scale2DLayer
+            self.batchnorm_layer_cls = nn.BatchNorm2d
+            self.bias_layer_cls = Bias2DLayer
+            self.scale_layer_cls = Scale2DLayer
+        else:
+            self.batchnorm_layer_cls = partial(RotationEquivariantBatchNorm2D, num_rotations=self.num_rotations)
+            self.bias_layer_cls = partial(RotationEquivariantBias2DLayer, num_rotations=self.num_rotations)
+            self.scale_layer_cls = partial(RotationEquivariantScale2DLayer, num_rotations=self.num_rotations)
 
         super().__init__(*args, **kwargs, input_regularizer=input_regularizer)
-
-    def batchnormlayer_cls(self, **kwargs):
-        return RotationEquivariantBatchNorm2D(num_rotations=self.num_rotations, **kwargs)
-
-    def bias_layer_cls(self, **kwargs):
-        return RotationEquivariantBias2DLayer(num_rotations=self.num_rotations, **kwargs)
-
-    def scale_layer_cls(self, **kwargs):
-        return RotationEquivariantScale2DLayer(num_rotations=self.num_rotations, **kwargs)
-
-    def add_bn_layer(self, layer):
-        if self.batch_norm:
-            if self.independent_bn_bias:
-                layer["norm"] = self.batchnormlayer_cls(num_features=self.hidden_channels, momentum=self.momentum)
-            else:
-                layer["norm"] = self.batchnormlayer_cls(
-                    num_features=self.hidden_channels,
-                    momentum=self.momentum,
-                    affine=self.bias and self.batch_norm_scale,
-                )
-                if self.bias:
-                    if not self.batch_norm_scale:
-                        layer["bias"] = self.biaslayer_cls(channels=self.hidden_channels)
-                elif self.batch_norm_scale:
-                    layer["scale"] = self.scalelayer_cls(channels=self.hidden_channels)
-
-    def add_activation(self, layer):
-        if self.num_layers > 1 or self.final_nonlinearity:
-            layer["nonlin"] = AdaptiveELU(self.elu_xshift, self.elu_yshift)
 
     def add_first_layer(self):
         layer = OrderedDict()

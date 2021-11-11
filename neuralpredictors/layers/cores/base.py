@@ -1,7 +1,8 @@
 from torch import nn
+from abc import ABC, abstractmethod
 
 
-class Core:
+class Core(ABC):
     """
     Base class for the core models, taking 2d inputs and computing nonlinear features.
     """
@@ -27,12 +28,13 @@ class Core:
             if m.bias is not None:
                 m.bias.data.fill_(0)
 
+    @abstractmethod
     def regularizer(self):
         """
         Regularization applied on the core. Returns a scalar value.
         """
-        raise NotImplementedError("regularizer method must be implemented by the inheriting class")
 
+    @abstractmethod
     def forward(self, x):
         """
         Forward function for pytorch nn module.
@@ -40,7 +42,6 @@ class Core:
         Args:
             x (torch.tensor): input of shape (batch, channels, height, width)
         """
-        raise NotImplementedError("forward method must be implemented by the inheriting class")
 
     def __repr__(self):
         s = super().__repr__()

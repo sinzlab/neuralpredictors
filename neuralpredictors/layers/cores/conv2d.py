@@ -151,9 +151,13 @@ class Stacked2dCore(Core, nn.Module):
             self.ConvLayer = self.AttentionConvWrapper
         else:
             self.ConvLayer = nn.Conv2d
-        self.batchnorm_layer_cls = nn.BatchNorm2d
-        self.bias_layer_cls = Bias2DLayer
-        self.scale_layer_cls = Scale2DLayer
+
+        if not (hasattr(self, 'batchnorm_layer_cls')):
+            self.batchnorm_layer_cls = nn.BatchNorm2d
+        if not (hasattr(self, 'bias_layer_cls')):
+            self.bias_layer_cls = Bias2DLayer
+        if not (hasattr(self, 'scale_layer_cls')):
+            self.scale_layer_cls = Scale2DLayer
 
         self.features = nn.Sequential()
         self.add_first_layer()
@@ -316,11 +320,7 @@ class RotationEquivariant2dCore(Stacked2dCore, nn.Module):
         self.upsampling = upsampling
         self.rot_eq_batch_norm = rot_eq_batch_norm
 
-        if not rot_eq_batch_norm:
-            self.batchnorm_layer_cls = nn.BatchNorm2d
-            self.bias_layer_cls = Bias2DLayer
-            self.scale_layer_cls = Scale2DLayer
-        else:
+        if rot_eq_batch_norm:
             self.batchnorm_layer_cls = partial(RotationEquivariantBatchNorm2D, num_rotations=self.num_rotations)
             self.bias_layer_cls = partial(RotationEquivariantBias2DLayer, num_rotations=self.num_rotations)
             self.scale_layer_cls = partial(RotationEquivariantScale2DLayer, num_rotations=self.num_rotations)

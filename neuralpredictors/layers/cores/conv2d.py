@@ -328,18 +328,7 @@ class RotationEquivariant2dCore(Stacked2dCore, nn.Module):
     def scale_layer_cls(self, **kwargs):
         return RotationEquivariantScale2DLayer(num_rotations=self.num_rotations, **kwargs)
 
-    def add_first_layer(self):
-        layer = OrderedDict()
-        layer["conv"] = HermiteConv2D(
-            input_features=self.input_channels,
-            output_features=self.hidden_channels,
-            num_rotations=self.num_rotations,
-            upsampling=self.upsampling,
-            filter_size=self.input_kern,
-            stride=self.stride,
-            padding=self.input_kern // 2 if self.pad_input else 0,
-            first_layer=True,
-        )
+    def add_bn_layer(self, layer):
         if self.batch_norm:
             if self.independent_bn_bias:
                 layer["norm"] = self.batchnormlayer_cls(num_features=self.hidden_channels, momentum=self.momentum)
@@ -355,8 +344,24 @@ class RotationEquivariant2dCore(Stacked2dCore, nn.Module):
                 elif self.batch_norm_scale:
                     layer["scale"] = self.scalelayer_cls(channels=self.hidden_channels)
 
+    def add_activation(self, layer):
         if self.num_layers > 1 or self.final_nonlinearity:
             layer["nonlin"] = AdaptiveELU(self.elu_xshift, self.elu_yshift)
+
+    def add_first_layer(self):
+        layer = OrderedDict()
+        layer["conv"] = HermiteConv2D(
+            input_features=self.input_channels,
+            output_features=self.hidden_channels,
+            num_rotations=self.num_rotations,
+            upsampling=self.upsampling,
+            filter_size=self.input_kern,
+            stride=self.stride,
+            padding=self.input_kern // 2 if self.pad_input else 0,
+            first_layer=True,
+        )
+        self.add_bn_layer(layer)
+        self.add_activation(layer)
         self.features.add_module("layer0", nn.Sequential(layer))
 
     def add_subsequent_layers(self):
@@ -379,23 +384,8 @@ class RotationEquivariant2dCore(Stacked2dCore, nn.Module):
                 padding=self.hidden_padding,
                 first_layer=False,
             )
-            if self.batch_norm:
-                if self.independent_bn_bias:
-                    layer["norm"] = self.batchnormlayer_cls(num_features=self.hidden_channels, momentum=self.momentum)
-                else:
-                    layer["norm"] = self.batchnormlayer_cls(
-                        num_features=self.hidden_channels,
-                        momentum=self.momentum,
-                        affine=self.bias and self.batch_norm_scale,
-                    )
-                    if self.bias:
-                        if not self.batch_norm_scale:
-                            layer["bias"] = self.biaslayer_cls(channels=self.hidden_channels)
-                    elif self.batch_norm_scale:
-                        layer["scale"] = self.scalelayer_cls(channels=self.hidden_channels)
-
-            if self.final_nonlinearity or l < self.num_layers - 1:
-                layer["nonlin"] = AdaptiveELU(self.elu_xshift, self.elu_yshift)
+            self.add_bn_layer(layer)
+            self.add_activation(layer)
             self.features.add_module("layer{}".format(l), nn.Sequential(layer))
 
     def initialize(self):

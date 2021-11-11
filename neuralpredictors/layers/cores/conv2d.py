@@ -551,37 +551,15 @@ class SE2dCore(Stacked2dCore, nn.Module):
     ):
         """
         Args:
-            input_channels:     Integer, number of input channels as in
-            hidden_channels:    Number of hidden channels (i.e feature maps) in each hidden layer
-            input_kern:     kernel size of the first layer (i.e. the input layer)
-            hidden_kern:    kernel size of each hidden layer's kernel
-            layers:         number of layers
-            gamma_input:    regularizer factor for the input weights (default: LaplaceL2, see neuralpredictors.regularizers)
-            skip:           Adds a skip connection to the n penultimate layers.
-            final_nonlinearity: Boolean, if true, appends an ELU layer after the last BatchNorm (if BN=True)
-            elu_xshift, elu_yshift: final_nonlinearity(x) = Elu(x - elu_xshift) + elu_yshift
-            bias:           Adds a bias layer.
-            momentum:       Momentum term for batch norm. Irrelevant if batch_norm=False
-            pad_input:      Boolean, if True, applies zero padding to all convolutions
-            batch_norm:     Boolean, if True appends a BN layer after each convolutional layer
-            hidden_dilation:    If set to > 1, will apply dilated convs for all hidden layers
-            laplace_padding: Padding size for the laplace convolution. If padding = None, it defaults to half of
-                the kernel size (recommended). Setting Padding to 0 is not recommended and leads to artefacts,
-                zero is the default however to recreate backwards compatibility.
-            input_regularizer:  String that must match one of the regularizers in ..regularizers
-            stack:        Int or iterable. Selects which layers of the core should be stacked for the readout.
-                            default value will stack all layers on top of each other.
-                            Implemented as layers_to_stack = layers[stack:]. thus:
-                                stack = -1 will only select the last layer as the readout layer.
-                                stack of -2 will read out from the last two layers.
-                                And stack of 1 will read out from layer 1 (0 indexed) until the last layer.
+            See Stacked2dCore for all input arguments.
+
+            This core provides the functionality to add Squeeze and Excitation Layers, which can be done through
+            these additional arguments:
+
             se_reduction:   Int, Reduction of channels for global pooling of the Squeeze and Excitation Block.
             n_se_blocks:    Int, number of squeeze and excitation blocks. Inserted from the last layer
                               Examples: layers=4, n_se_blocks=2:
                                 => layer0 -> layer1 -> layer2 -> SEblock -> layer3 -> SEblock
-            depth_separable: Boolean, if True, uses depth-separable convolutions in all layers after the first one.
-            attention_conv: Boolean, if True, uses self-attention instead of convolution for all layers after the first one.
-            linear:         Boolean, if True, removes all nonlinearities
         """
         self.n_se_blocks = n_se_blocks
         self.se_reduction = se_reduction

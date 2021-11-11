@@ -151,14 +151,17 @@ class Stacked2dCore(Core, nn.Module):
             self.ConvLayer = self.AttentionConvWrapper
         else:
             self.ConvLayer = nn.Conv2d
-        self.batchnorm_layer_cls = nn.BatchNorm2d
-        self.bias_layer_cls = Bias2DLayer
-        self.scale_layer_cls = Scale2DLayer
 
+        self.set_batchnorm_type()
         self.features = nn.Sequential()
         self.add_first_layer()
         self.add_subsequent_layers()
         self.initialize()
+
+    def set_batchnorm_type(self):
+        self.batchnorm_layer_cls = nn.BatchNorm2d
+        self.bias_layer_cls = Bias2DLayer
+        self.scale_layer_cls = Scale2DLayer
 
     def add_bn_layer(self, layer):
         if self.batch_norm:
@@ -315,8 +318,10 @@ class RotationEquivariant2dCore(Stacked2dCore, nn.Module):
         self.stride = stride
         self.upsampling = upsampling
         self.rot_eq_batch_norm = rot_eq_batch_norm
+        super().__init__(*args, **kwargs, input_regularizer=input_regularizer)
 
-        if not rot_eq_batch_norm:
+    def set_batchnorm_type(self):
+        if not self.rot_eq_batch_norm:
             self.batchnorm_layer_cls = nn.BatchNorm2d
             self.bias_layer_cls = Bias2DLayer
             self.scale_layer_cls = Scale2DLayer
@@ -324,8 +329,6 @@ class RotationEquivariant2dCore(Stacked2dCore, nn.Module):
             self.batchnorm_layer_cls = partial(RotationEquivariantBatchNorm2D, num_rotations=self.num_rotations)
             self.bias_layer_cls = partial(RotationEquivariantBias2DLayer, num_rotations=self.num_rotations)
             self.scale_layer_cls = partial(RotationEquivariantScale2DLayer, num_rotations=self.num_rotations)
-
-        super().__init__(*args, **kwargs, input_regularizer=input_regularizer)
 
     def add_first_layer(self):
         layer = OrderedDict()

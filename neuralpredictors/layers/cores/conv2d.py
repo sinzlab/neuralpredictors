@@ -149,7 +149,7 @@ class Stacked2dCore(Core, nn.Module):
             self.conv_layer_name = "ds_conv"
             self.ConvLayer = DepthSeparableConv2d
         elif attention_conv:
-            #TODO: check if name attention_conv is backwards compatible
+            # TODO: check if name attention_conv is backwards compatible
             self.conv_layer_name = "attention_conv"
             self.ConvLayer = self.AttentionConvWrapper
         else:

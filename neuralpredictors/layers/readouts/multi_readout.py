@@ -105,10 +105,7 @@ class MultiReadoutSharedParametersBase(MultiReadoutBase):
                     "match_ids": readout_kwargs["shared_match_ids"][data_key],
                     "shared_grid": None if i == 0 else self[first_data_key].shared_grid,
                 }
-
-            del readout_kwargs["share_transform"]
-            del readout_kwargs["share_grid"]
-            del readout_kwargs["grid_mean_predictor_type"]
+            [readout_kwargs.pop(kwarg, None) for kwarg in ["share_transform", "share_grid", "grid_mean_predictor_type"]]
 
         if "share_features" in readout_kwargs:
             if readout_kwargs["share_features"]:

@@ -67,7 +67,7 @@ class Readout(nn.Module):
 
     def initialize_bias(self, mean_activity=None):
         """
-        Initialze the biases in readout.
+        Initialize the biases in readout.
         Args:
             mean_activity (dict): Dictionary containing the mean activity of neurons for a specific dataset.
             Should be of form {'data_key': mean_activity}

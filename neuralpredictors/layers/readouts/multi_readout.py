@@ -91,22 +91,22 @@ class MultiReadoutSharedParametersBase(MultiReadoutBase):
         i,
         data_key,
         first_data_key,
+        grid_mean_predictor=None,
+        grid_mean_predictor_type=None,
         share_transform=None,
         share_grid=None,
-        grid_mean_predictor=None,
         share_features=None,
         **kwargs
     ):
         readout_kwargs = kwargs.copy()
 
         if grid_mean_predictor:
-            if readout_kwargs["grid_mean_predictor_type"] == "cortex":
+            if grid_mean_predictor_type == "cortex":
                 readout_kwargs["source_grid"] = readout_kwargs["source_grids"][data_key]
+                readout_kwargs["grid_mean_predictor"] = grid_mean_predictor
             else:
-                raise KeyError(
-                    "grid mean predictor {} does not exist".format(readout_kwargs["grid_mean_predictor_type"])
-                )
-            if share_transform is not None:
+                raise KeyError("grid mean predictor {} does not exist".format(grid_mean_predictor_type))
+            if share_transform:
                 readout_kwargs["shared_transform"] = None if i == 0 else self[first_data_key].mu_transform
 
         elif share_grid:

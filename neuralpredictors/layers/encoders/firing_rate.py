@@ -2,7 +2,7 @@ from torch import nn
 
 
 class FiringRateEncoder(nn.Module):
-    def __init__(self, core, readout, shifter=None, modulator=None, elu_offset=0.0):
+    def __init__(self, core, readout, *, shifter=None, modulator=None, elu_offset=0.0):
         """
         An Encoder that wraps the core, readout and optionally a shifter amd modulator into one model.
         The output is one positive value that can be interpreted as a firing rate, for example for a Poisson distribution.

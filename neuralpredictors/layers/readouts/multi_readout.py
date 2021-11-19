@@ -93,9 +93,9 @@ class MultiReadoutSharedParametersBase(MultiReadoutBase):
         first_data_key,
         grid_mean_predictor=None,
         grid_mean_predictor_type=None,
-        share_transform=None,
-        share_grid=None,
-        share_features=None,
+        share_transform=False,
+        share_grid=False,
+        share_features=False,
         **kwargs
     ):
         readout_kwargs = kwargs.copy()

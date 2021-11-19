@@ -146,10 +146,14 @@ class Stacked2dCore(Core, nn.Module):
         self.linear = linear
 
         if depth_separable:
+            self.conv_layer_name = "ds_conv"
             self.ConvLayer = DepthSeparableConv2d
         elif attention_conv:
+            # TODO: check if name attention_conv is backwards compatible
+            self.conv_layer_name = "attention_conv"
             self.ConvLayer = self.AttentionConvWrapper
         else:
+            self.conv_layer_name = "conv"
             self.ConvLayer = nn.Conv2d
 
         self.set_batchnorm_type()
@@ -202,7 +206,7 @@ class Stacked2dCore(Core, nn.Module):
             layer = OrderedDict()
             if self.hidden_padding is None:
                 self.hidden_padding = ((self.hidden_kern[l - 1] - 1) * self.hidden_dilation + 1) // 2
-            layer["conv"] = self.ConvLayer(
+            layer[self.conv_layer_name] = self.ConvLayer(
                 in_channels=self.hidden_channels if not self.skip > 1 else min(self.skip, l) * self.hidden_channels,
                 out_channels=self.hidden_channels,
                 kernel_size=self.hidden_kern[l - 1],
@@ -332,7 +336,7 @@ class RotationEquivariant2dCore(Stacked2dCore, nn.Module):
 
     def add_first_layer(self):
         layer = OrderedDict()
-        layer["conv"] = HermiteConv2D(
+        layer["hermite_conv"] = HermiteConv2D(
             input_features=self.input_channels,
             output_features=self.hidden_channels,
             num_rotations=self.num_rotations,
@@ -356,7 +360,7 @@ class RotationEquivariant2dCore(Stacked2dCore, nn.Module):
             if self.hidden_padding is None:
                 self.hidden_padding = self.hidden_kern[l - 1] // 2
 
-            layer["conv"] = HermiteConv2D(
+            layer["hermite_conv"] = HermiteConv2D(
                 input_features=self.hidden_channels * self.num_rotations,
                 output_features=self.hidden_channels,
                 num_rotations=self.num_rotations,
@@ -566,7 +570,7 @@ class SE2dCore(Stacked2dCore, nn.Module):
             layer = OrderedDict()
             if self.hidden_padding is None:
                 self.hidden_padding = ((self.hidden_kern[l - 1] - 1) * self.hidden_dilation + 1) // 2
-            layer["conv"] = self.ConvLayer(
+            layer[self.conv_layer_name] = self.ConvLayer(
                 in_channels=self.hidden_channels if not self.skip > 1 else min(self.skip, l) * self.hidden_channels,
                 out_channels=self.hidden_channels,
                 kernel_size=self.hidden_kern[l - 1],

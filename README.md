@@ -3,6 +3,7 @@
 ![Test](https://github.com/sinzlab/neuralpredictors/workflows/Test/badge.svg)
 [![codecov](https://codecov.io/gh/sinzlab/neuralpredictors/branch/main/graph/badge.svg)](https://codecov.io/gh/sinzlab/neuralpredictors)
 ![Black](https://github.com/sinzlab/neuralpredictors/workflows/Black/badge.svg)
+[![Mypy](https://github.com/sinzlab/neuralpredictors/actions/workflows/mypy.yml/badge.svg)](https://github.com/sinzlab/neuralpredictors/actions/workflows/mypy.yml)
 [![PyPI version](https://badge.fury.io/py/neuralpredictors.svg)](https://badge.fury.io/py/neuralpredictors)
 
 [Sinz Lab](https://sinzlab.org/) Neural System Identification Utilities for [PyTorch](https://pytorch.org/).

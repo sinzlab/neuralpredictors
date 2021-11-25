@@ -1,0 +1,12 @@
+name: Mypy
+
+on: [push, pull_request]
+
+jobs:
+  mypy:
+    runs-on: ubuntu-18.04
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/setup-python@v2
+    - name: Check code with mypy
+      run: touch .env && docker-compose run mypy

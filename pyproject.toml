@@ -4,3 +4,7 @@ line-length = 120
 [tool.coverage.run]
 branch = true
 source = ["neuralpredictors"]
+
+[tool.mypy]
+python_version = "3.8"
+files = "neuralpredictors/**/*.py"

@@ -1,4 +1,4 @@
-FROM sinzlab/pytorch:v3.8-torch1.7.0-cuda11.0-dj0.12.7
+FROM sinzlab/pytorch:v3.9-torch1.9.0-cuda11.1-dj0.12.7
 
 COPY . /src/neuralpredictors
 WORKDIR /src/neuralpredictors

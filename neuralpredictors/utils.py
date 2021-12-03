@@ -1,6 +1,7 @@
 from contextlib import contextmanager
+
+import numpy as np
 import torch
-from torch import nn as nn
 
 from .training import eval_state
 

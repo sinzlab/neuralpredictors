@@ -1,5 +1,10 @@
-from ...transforms import StaticTransform
 from ..base import FileTreeDatasetBase
+
+from zipfile import ZipFile
+
+from ...exceptions import DoesNotExistException
+from ...transforms import StaticTransform
+from ...utils import convert_static_h5_dataset_to_folder, zip_dir
 
 
 class FileTreeDataset(FileTreeDatasetBase):

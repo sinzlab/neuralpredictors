@@ -527,7 +527,7 @@ class FullGaussian2d(Readout):
         self.register_buffer("grid_sharing_index", torch.from_numpy(sharing_idx))
         self._shared_grid = True
 
-    def forward(self, x, sample=None, shift=None, out_idx=None):
+    def forward(self, x, sample=None, shift=None, out_idx=None, **kwargs):
         """
         Propagates the input forwards through the readout
         Args:
@@ -546,7 +546,7 @@ class FullGaussian2d(Readout):
         N, c, w, h = x.size()
         c_in, w_in, h_in = self.in_shape
         if (c_in, w_in, h_in) != (c, w, h):
-            raise ValueError("the specified feature map dimension is not the readout's expected input dimension")
+            warnings.warn("the specified feature map dimension is not the readout's expected input dimension")
         feat = self.features.view(1, c, self.outdims)
         bias = self.bias
         outdims = self.outdims

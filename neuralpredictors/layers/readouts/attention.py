@@ -61,7 +61,7 @@ class AttentionReadout(Readout):
             if m.bias is not None:
                 m.bias.data.fill_(0)
 
-    def initialize_attention(self):
+    def initialize_attention(self) -> None:
         self.apply(self.init_conv)
 
     def initialize(self, mean_activity=None):

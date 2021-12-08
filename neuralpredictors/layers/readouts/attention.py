@@ -1,7 +1,9 @@
 import torch
-from torch import nn
-from torch.nn import Parameter
 from torch.nn import functional as F
+from torch.nn import init
+from torch.nn import modules as nn_modules
+from torch.nn.parameter import Parameter
+
 from .base import Readout
 
 
@@ -27,18 +29,18 @@ class AttentionReadout(Readout):
         c, w, h = in_shape
         self.features = Parameter(torch.Tensor(self.outdims, c))
 
-        attention = nn.Sequential()
+        attention = nn_modules.Sequential()
         for i in range(attention_layers - 1):
             attention.add_module(
                 f"conv{i}",
-                nn.Conv2d(c, c, attention_kernel, padding=attention_kernel > 1),
+                nn_modules.Conv2d(c, c, attention_kernel, padding=attention_kernel > 1),
             )
-            attention.add_module(f"norm{i}", nn.BatchNorm2d(c))
-            attention.add_module(f"nonlin{i}", nn.ELU())
+            attention.add_module(f"norm{i}", nn_modules.BatchNorm2d(c))
+            attention.add_module(f"nonlin{i}", nn_modules.ELU())
         else:
             attention.add_module(
                 f"conv{attention_layers}",
-                nn.Conv2d(c, outdims, attention_kernel, padding=attention_kernel > 1),
+                nn_modules.Conv2d(c, outdims, attention_kernel, padding=attention_kernel > 1),
             )
         self.attention = attention
 
@@ -52,8 +54,8 @@ class AttentionReadout(Readout):
 
     @staticmethod
     def init_conv(m):
-        if isinstance(m, nn.Conv2d):
-            nn.init.xavier_normal_(m.weight.data)
+        if isinstance(m, nn_modules.Conv2d):
+            init.xavier_normal_(m.weight.data)
             if m.bias is not None:
                 m.bias.data.fill_(0)
 
@@ -78,8 +80,8 @@ class AttentionReadout(Readout):
         attention = self.attention(x)
         b, c, w, h = attention.shape
         attention = F.softmax(attention.view(b, c, -1), dim=-1).view(b, c, w, h)
-        y = torch.einsum("bnwh,bcwh->bcn", attention, x)
-        y = torch.einsum("bcn,nc->bn", y, self.features)
+        y = torch.einsum("bnwh,bcwh->bcn", attention, x)  # type: ignore[attr-defined]
+        y = torch.einsum("bcn,nc->bn", y, self.features)  # type: ignore[attr-defined]
         if self.bias is not None:
             y = y + self.bias
         return y

@@ -1,4 +1,4 @@
-from typing import Any, Mapping, Optional, Tuple
+from typing import Any, Literal, Mapping, Optional, Tuple
 
 import torch
 from torch.nn import functional as F
@@ -72,8 +72,10 @@ class AttentionReadout(Readout):
             self.initialize_bias(mean_activity=mean_activity)  # type: ignore[no-untyped-call]
         self.initialize_attention()
 
-    def feature_l1(self, reduction="sum", average=None):
-        return self.apply_reduction(self.features.abs(), reduction=reduction, average=average)
+    def feature_l1(
+        self, reduction: Literal["sum", "mean", None] = "sum", average: Optional[bool] = None
+    ) -> torch.Tensor:
+        return self.apply_reduction(self.features.abs(), reduction=reduction, average=average)  # type: ignore[no-untyped-call,no-any-return]
 
     def regularizer(self, reduction="sum", average=None):
         return self.feature_l1(reduction=reduction, average=average) * self.feature_reg_weight

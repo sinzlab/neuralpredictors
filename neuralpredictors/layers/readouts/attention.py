@@ -55,7 +55,7 @@ class AttentionReadout(Readout):
         self.initialize(mean_activity)
 
     @staticmethod
-    def init_conv(m):
+    def init_conv(m: nn_modules.Module) -> None:
         if isinstance(m, nn_modules.Conv2d):
             init.xavier_normal_(m.weight.data)
             if m.bias is not None:

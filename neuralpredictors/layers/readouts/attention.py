@@ -64,12 +64,12 @@ class AttentionReadout(Readout):
     def initialize_attention(self) -> None:
         self.apply(self.init_conv)
 
-    def initialize(self, mean_activity=None):
+    def initialize(self, mean_activity: Optional[Mapping[str, float]] = None) -> None:  # type: ignore[override]
         if mean_activity is None:
             mean_activity = self.mean_activity
         self.features.data.normal_(0, self.init_noise)
         if self.bias is not None:
-            self.initialize_bias(mean_activity=mean_activity)
+            self.initialize_bias(mean_activity=mean_activity)  # type: ignore[no-untyped-call]
         self.initialize_attention()
 
     def feature_l1(self, reduction="sum", average=None):

@@ -82,7 +82,7 @@ class AttentionReadout(Readout):
     ) -> torch.Tensor:
         return self.feature_l1(reduction=reduction, average=average) * self.feature_reg_weight  # type: ignore[no-any-return]
 
-    def forward(self, x, shift=None):
+    def forward(self, x: torch.Tensor, shift: Optional[Any] = None) -> torch.Tensor:
         attention = self.attention(x)
         b, c, w, h = attention.shape
         attention = F.softmax(attention.view(b, c, -1), dim=-1).view(b, c, w, h)
@@ -90,7 +90,7 @@ class AttentionReadout(Readout):
         y = torch.einsum("bcn,nc->bn", y, self.features)  # type: ignore[attr-defined]
         if self.bias is not None:
             y = y + self.bias
-        return y
+        return y  # type: ignore[no-any-return]
 
     def __repr__(self):
         return self.__class__.__name__ + " (" + "{} x {} x {}".format(*self.in_shape) + " -> " + str(self.outdims) + ")"

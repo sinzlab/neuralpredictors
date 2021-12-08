@@ -1,3 +1,5 @@
+from typing import Any, Mapping, Optional, Tuple
+
 import torch
 from torch.nn import functional as F
 from torch.nn import init
@@ -10,21 +12,21 @@ from .base import Readout
 class AttentionReadout(Readout):
     def __init__(
         self,
-        in_shape,
-        outdims,
-        bias,
-        init_noise=1e-3,
-        attention_kernel=1,
-        attention_layers=1,
-        mean_activity=None,
-        feature_reg_weight=1.0,
-        gamma_readout=None,  # depricated, use feature_reg_weight instead
-        **kwargs,
-    ):
+        in_shape: Tuple[int, int, int],
+        outdims: int,
+        bias: bool,
+        init_noise: float = 1e-3,
+        attention_kernel: int = 1,
+        attention_layers: int = 1,
+        mean_activity: Optional[Mapping[str, float]] = None,
+        feature_reg_weight: float = 1.0,
+        gamma_readout: Optional[float] = None,  # deprecated, use feature_reg_weight instead
+        **kwargs: Any,
+    ) -> None:
         super().__init__()
         self.in_shape = in_shape
         self.outdims = outdims
-        self.feature_reg_weight = self.resolve_deprecated_gamma_readout(feature_reg_weight, gamma_readout)
+        self.feature_reg_weight = self.resolve_deprecated_gamma_readout(feature_reg_weight, gamma_readout)  # type: ignore[no-untyped-call]
         self.mean_activity = mean_activity
         c, w, h = in_shape
         self.features = Parameter(torch.Tensor(self.outdims, c))
@@ -35,7 +37,7 @@ class AttentionReadout(Readout):
                 f"conv{i}",
                 nn_modules.Conv2d(c, c, attention_kernel, padding=attention_kernel > 1),
             )
-            attention.add_module(f"norm{i}", nn_modules.BatchNorm2d(c))
+            attention.add_module(f"norm{i}", nn_modules.BatchNorm2d(c))  # type: ignore[no-untyped-call]
             attention.add_module(f"nonlin{i}", nn_modules.ELU())
         else:
             attention.add_module(
@@ -46,8 +48,8 @@ class AttentionReadout(Readout):
 
         self.init_noise = init_noise
         if bias:
-            bias = Parameter(torch.Tensor(self.outdims))
-            self.register_parameter("bias", bias)
+            bias_param = Parameter(torch.Tensor(self.outdims))
+            self.register_parameter("bias", bias_param)
         else:
             self.register_parameter("bias", None)
         self.initialize(mean_activity)

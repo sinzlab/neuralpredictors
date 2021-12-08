@@ -77,8 +77,10 @@ class AttentionReadout(Readout):
     ) -> torch.Tensor:
         return self.apply_reduction(self.features.abs(), reduction=reduction, average=average)  # type: ignore[no-untyped-call,no-any-return]
 
-    def regularizer(self, reduction="sum", average=None):
-        return self.feature_l1(reduction=reduction, average=average) * self.feature_reg_weight
+    def regularizer(
+        self, reduction: Literal["sum", "mean", None] = "sum", average: Optional[bool] = None
+    ) -> torch.Tensor:
+        return self.feature_l1(reduction=reduction, average=average) * self.feature_reg_weight  # type: ignore[no-any-return]
 
     def forward(self, x, shift=None):
         attention = self.attention(x)

@@ -92,5 +92,5 @@ class AttentionReadout(Readout):
             y = y + self.bias
         return y  # type: ignore[no-any-return]
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.__class__.__name__ + " (" + "{} x {} x {}".format(*self.in_shape) + " -> " + str(self.outdims) + ")"

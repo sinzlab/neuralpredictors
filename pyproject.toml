@@ -4,3 +4,24 @@ line-length = 120
 [tool.coverage.run]
 branch = true
 source = ["neuralpredictors"]
+
+[tool.mypy]
+python_version = "3.8"
+files = "neuralpredictors"
+exclude = "old_\\w+\\.py$"
+strict = true
+disallow_untyped_calls = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_untyped_decorators = true
+
+[[tool.mypy.overrides]]
+module = [
+    "h5py",
+    "scipy.signal",
+    "scipy.special",
+    "skimage.transform",
+    "torchvision",
+    "tqdm"
+]
+ignore_missing_imports = true

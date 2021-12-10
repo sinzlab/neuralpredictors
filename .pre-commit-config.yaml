@@ -1,0 +1,10 @@
+repos:
+- repo: local
+  hooks:
+    - id: mypy
+      name: mypy
+      language: system
+      entry: docker-compose run --rm mypy
+      files: ^neuralpredictors/
+      types: [python]
+      pass_filenames: false

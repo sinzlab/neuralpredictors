@@ -3,7 +3,7 @@ from typing import Any, Literal, Mapping, Optional, Tuple
 import torch
 from torch.nn import functional as F
 from torch.nn import init
-from torch.nn import modules as nn_modules
+from torch.nn.modules import ELU, BatchNorm2d, Conv2d, Module, Sequential
 from torch.nn.parameter import Parameter
 
 from .base import Readout
@@ -31,18 +31,18 @@ class AttentionReadout(Readout):
         c, w, h = in_shape
         self.features = Parameter(torch.Tensor(self.outdims, c))
 
-        attention = nn_modules.Sequential()
+        attention = Sequential()
         for i in range(attention_layers - 1):
             attention.add_module(
                 f"conv{i}",
-                nn_modules.Conv2d(c, c, attention_kernel, padding=attention_kernel > 1),
+                Conv2d(c, c, attention_kernel, padding=attention_kernel > 1),
             )
-            attention.add_module(f"norm{i}", nn_modules.BatchNorm2d(c))  # type: ignore[no-untyped-call]
-            attention.add_module(f"nonlin{i}", nn_modules.ELU())
+            attention.add_module(f"norm{i}", BatchNorm2d(c))  # type: ignore[no-untyped-call]
+            attention.add_module(f"nonlin{i}", ELU())
         else:
             attention.add_module(
                 f"conv{attention_layers}",
-                nn_modules.Conv2d(c, outdims, attention_kernel, padding=attention_kernel > 1),
+                Conv2d(c, outdims, attention_kernel, padding=attention_kernel > 1),
             )
         self.attention = attention
 
@@ -55,8 +55,8 @@ class AttentionReadout(Readout):
         self.initialize(mean_activity)
 
     @staticmethod
-    def init_conv(m: nn_modules.Module) -> None:
-        if isinstance(m, nn_modules.Conv2d):
+    def init_conv(m: Module) -> None:
+        if isinstance(m, Conv2d):
             init.xavier_normal_(m.weight.data)
             if m.bias is not None:
                 m.bias.data.fill_(0)

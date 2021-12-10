@@ -86,11 +86,11 @@ class AttentionReadout(Readout):
         attention = self.attention(x)
         b, c, w, h = attention.shape
         attention = F.softmax(attention.view(b, c, -1), dim=-1).view(b, c, w, h)
-        y = torch.einsum("bnwh,bcwh->bcn", attention, x)  # type: ignore[attr-defined]
+        y: torch.Tensor = torch.einsum("bnwh,bcwh->bcn", attention, x)  # type: ignore[attr-defined]
         y = torch.einsum("bcn,nc->bn", y, self.features)  # type: ignore[attr-defined]
         if self.bias is not None:
             y = y + self.bias
-        return y  # type: ignore[no-any-return]
+        return y
 
     def __repr__(self) -> str:
         return self.__class__.__name__ + " (" + "{} x {} x {}".format(*self.in_shape) + " -> " + str(self.outdims) + ")"

@@ -1,3 +1,4 @@
+from zipfile import ZipFile
 from ...transforms import StaticTransform
 from ..base import FileTreeDatasetBase
 

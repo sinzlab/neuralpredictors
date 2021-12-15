@@ -1,11 +1,12 @@
-name: Black
+name: Mypy
 
 on: [push, pull_request]
 
 jobs:
-  black:
+  mypy:
     runs-on: ubuntu-18.04
     steps:
     - uses: actions/checkout@v2
     - uses: actions/setup-python@v2
-    - uses: psf/black@main
+    - name: Check code with mypy
+      run: touch .env && docker-compose run mypy

@@ -15,16 +15,15 @@ class CounterModel(nn.Module):
 
 
 class CounterClosure:
-    def __init__(self, objective_values, model):
+    def __init__(self, objective_values):
         self.objective_values = objective_values
         self.counter = 0
-        self.model = model
 
-    def __call__(self):
+    def __call__(self, model):
         print("Called", flush=True)
         ret = self.objective_values[self.counter]
         self.counter += 1
-        self.model.counter.data += 1
+        model.counter.data += 1
         return ret
 
 
@@ -42,7 +41,7 @@ class TestEarlyStopping:
         print(patience, interval, maximize, expected_epoch)
         model = CounterModel()
 
-        closure = CounterClosure(objective_vals, model)
+        closure = CounterClosure(objective_vals)
 
         for epoch, val in early_stopping(model, closure, maximize=maximize, patience=patience, interval=interval):
             pass

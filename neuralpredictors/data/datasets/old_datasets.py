@@ -10,23 +10,15 @@ from scipy.signal import convolve2d
 from torch.utils.data import Dataset
 
 from .exceptions import InconsistentDataException, DoesNotExistException
-from .transforms import (
-    DataTransform,
-    MovieTransform,
-    StaticTransform,
-    Invertible,
-    Subsequence,
-    Delay,
-)
+from .transforms import DataTransform, MovieTransform, StaticTransform, Invertible, Subsequence, Delay
 from .utils import convert_static_h5_dataset_to_folder, zip_dir
-from ..utils import recursively_load_dict_contents_from_group
+from ..utils import recursively_load_dict_contents_from_group, no_transforms
 
 
 class AttributeHandler:
     def __init__(self, name, h5_handle):
         """
         Can be used to turn a dataset within a hdf5 dataset into an attribute.
-
         Args:
             name:       name of the dataset in the hdf5 file
             h5_handle:  file handle for the hdf5 file
@@ -60,7 +52,6 @@ class AttributeTransformer(AttributeHandler):
         """
         Allows for id_transform of transforms to be applied to the
         specified attribute. Otherwise behaves like an AttributeHandler
-
         Args:
             name:       see AttributeHandler
             h5_handle:  see AttributeHandler
@@ -80,25 +71,33 @@ class AttributeTransformer(AttributeHandler):
         return ret[self.data_group]
 
 
+default_image_datapoint = namedtuple("DefaultDataPoint", ["images", "responses"])
+
+
 class TransformDataset(Dataset):
-    def __init__(self, transforms=None):
+    def __init__(self, *data_keys, transforms=None):
         """
         Abstract Class for Datasets with transformations, providing `transform` and `invert` functions
         to apply data transformation on the elements.
-
         Args:
             transforms: list of transforms to be applied to each data point
         """
         self.transforms = transforms or []
 
+        self.data_keys = data_keys
+        if set(data_keys) == {"images", "responses"}:
+            # this version IS serializable in pickle
+            self.data_point = default_image_datapoint
+        else:
+            # this version is NOT - you cannot use this with a dataloader with num_workers > 1
+            self.data_point = namedtuple("DataPoint", data_keys)
+
     def transform(self, x, exclude=None):
         """
         Apply transform on a data element from the dataset
-
         Args:
             x (tuple): a data element from the dataset
             exclude (Transform, optional): Type of data transformer to be excluded from transform list. Defaults to None.
-
         Returns:
             tuple: transformed data element
         """
@@ -121,7 +120,7 @@ class TransformDataset(Dataset):
 
     def __repr__(self):
         return (
-            "{} m={}:\n\t({})".format(self.__class__.__name__, len(self), ", ".join(self.data_groups))
+            "{} m={}:\n\t({})".format(self.__class__.__name__, len(self), ", ".join(self.data_keys))
             + "\n\t[Transforms: "
             + "->".join([repr(tr) for tr in self.transforms])
             + "]"
@@ -146,7 +145,7 @@ class H5SequenceSet(TransformDataset):
         self.data = self._fid
         self.data_loaded = False
 
-        # ensure that all elements of
+        # ensure that all elements of data_keys exist
         m = None
         for key in data_keys:
             assert key in self.data, "Could not find {} in file".format(key)
@@ -163,7 +162,12 @@ class H5SequenceSet(TransformDataset):
         self.transforms = transforms or []
 
         self.data_point = namedtuple("DataPoint", data_keys)
-        self.output_point = namedtuple("OutputPoint", [output_rename.get(k, k) for k in data_keys])
+        renamed_keys = [output_rename.get(k, k) for k in data_keys]
+        self.output_point = namedtuple("OutputPoint", renamed_keys)
+
+    def __dir__(self):
+        attrs = set(super().__dir__())
+        return attrs.union(set(self._fid.keys()))
 
     def load_content(self):
         self.data = recursively_load_dict_contents_from_group(self._fid)
@@ -187,7 +191,7 @@ class H5SequenceSet(TransformDataset):
             x = self.output_point(*x)
 
         if self.output_dict:
-            x = x._asdict
+            x = x._asdict()
         return x
 
     def __getattr__(self, item):
@@ -265,14 +269,11 @@ class MovieSet(H5SequenceSet):
         Generates a Gaussian white noise stimulus filtered with a 3x3 Gaussian filter
         for the computation of receptive fields. The mean and variance of the Gaussian
         noise are set to the mean and variance of the stimulus ensemble.
-
         The behvavior, eye movement statistics, and responses are set to their respective means.
         Args:
             m: number of noise samples
             t: length in time
-
         Returns: tuple of input, behavior, eye, and response
-
         """
         N, c, _, w, h = self.img_shape
         stat = lambda dk, what: self.statistics[dk][stats_source][what][()]
@@ -298,12 +299,8 @@ class MovieSet(H5SequenceSet):
         )
 
         return self.transform(
-            self.data_point(*[d[dk] for dk in self.data_groups.values()]),
-            exclude=(Subsequence, Delay),
+            self.data_point(*[d[dk] for dk in self.data_groups.values()]), exclude=(Subsequence, Delay)
         )
-
-
-default_datapoint = namedtuple("DefaultDataPoint", ["images", "responses"])
 
 
 class StaticSet(TransformDataset):
@@ -316,7 +313,7 @@ class StaticSet(TransformDataset):
         self.data_keys = data_keys
         if set(data_keys) == {"images", "responses"}:
             # this version IS serializable in pickle
-            self.data_point = default_datapoint
+            self.data_point = default_image_datapoint
         else:
             # this version is NOT - you cannot use this with a dataloader with num_workers > 1
             self.data_point = namedtuple("DataPoint", data_keys)
@@ -326,7 +323,6 @@ class H5ArraySet(StaticSet):
     def __init__(self, filename, *data_keys, transforms=None):
         """
         Dataset for static data stored in hdf5 files.
-
         Args:
             filename:      filename of the hdf5 file
             *data_keys:    data keys to be read from the file
@@ -391,7 +387,6 @@ class StaticImageSet(H5ArraySet):
     def __init__(self, filename, *data_keys, transforms=None, cache_raw=False, stats_source=None):
         """
         Dataset for h5 files.
-
         Args:
             filename:       filename of the hdf5 file
             *data_keys:     datasets to be extracted
@@ -441,23 +436,39 @@ class DirectoryAttributeHandler:
     def __init__(self, path, links=None):
         """
         Class that can be used to represent a subdirectory of a FileTree as a property in a FileTree dataset.
-        Caches already loaded data items.
-
         Args:
-            path: path to the subdiretory (pathlib.Path object)
+            path (pathlib.Path object): path to the subdiretory
+            links (dict, optional): rename mapping for entries within the `path`. Defaults to None, in which case
+                no name mapping is performed when fetching the attribute.
         """
         self.links = links or {}
         self.path = path
 
     def __getattr__(self, item):
-        temp_path = self.resolve_item_path(item)
-        if temp_path.exists() and temp_path.is_dir():
-            val = DirectoryAttributeHandler(temp_path, links=self.links)
+        item_path = self.resolve_item_path(item)
+
+        if item_path.exists() and item_path.is_dir():
+            val = DirectoryAttributeHandler(item_path, links=self.links)
         else:
-            val = np.load(self.path / "{}.npy".format(item))
+            data_path = item_path.with_suffix(".npy")
+            if data_path.exists() and data_path.is_file():
+                val = np.load(data_path)
+            else:
+                raise AttributeError("Attribute {} not found".format(item))
         return val
 
     def resolve_item_path(self, item):
+        """
+        Formulates a path to the `item`, taken relative to the
+        `path` attribute of this object. If the `item` has an entry in
+        `links` dictionary, then the name is mapped into that instead.
+
+        Args:
+            item (str): Name of item to obtain.
+
+        Returns:
+            pathlib.Path object: Formulated full path to the target item
+        """
         if item in self.links:
             item = self.links[item]
         return self.path / item
@@ -479,9 +490,12 @@ class DirectoryAttributeTransformer(DirectoryAttributeHandler):
         Class that can be used to represent a subdirectory of a FileTree as a property in a FileTree dataset.
         Like DirectoryAttributeHandler but allows for id_transform of transforms to be applied to the
         specified attribute.
-
         Args:
-            path: path to the subdiretory (pathlib.Path object)
+            path (pathlib.Path object): path to the subdiretory
+            transforms (list): A list of DataTransform objects, whose `id_transform` will be applied to the loaded property sequentially
+            data_group (str): Name of data_group that the transforms should be applied as
+            links (dict, optional): rename mapping for entries within the `path`. Defaults to None, in which case
+                no name mapping is performed when fetching the attribute.
         """
 
         super().__init__(path, links=links)
@@ -495,33 +509,36 @@ class DirectoryAttributeTransformer(DirectoryAttributeHandler):
         return ret[self.data_group]
 
 
-class FileTreeDataset(StaticSet):
-    def __init__(self, dirname, *data_keys, transforms=None):
+class FileTreeDatasetBase(TransformDataset):
+    _default_config = {"links": {}}
+    # specify list of transform types that are acceptable
+    _transform_types = (DataTransform,)
+
+    def __init__(self, dirname, *data_keys, transforms=None, use_cache=True, output_rename=None, output_dict=False):
         """
         Dataset stored as a file tree. The tree needs to have the subdirs data, meta, meta/neurons, meta/statistics,
-        and meta/trials. Please refer to convert_static_h5_dataset_to_folder in neuralpredictors.data.utils
-        how to export an hdf5 file into that structure.
+        and meta/trials. Please refer to convert_static_h5_dataset_to_folder in neuralpredictors.data.utils for an
+        example on how to export an hdf5 file into folder structure compatible with this dataset.
 
 
         Here is an example. Data directories with too many entries have trials as .npy files
         named 0.npy, 1.npy, ...
         The meta/trials subdirectory must have single .npy files with arrays that provide additional trial based
         meta data.
-
         static22564-2-13-preproc0
         ├── data
-        │   ├── behavior [5955 entries exceeds filelimit, not opening dir]
-        │   ├── images [5955 entries exceeds filelimit, not opening dir]
-        │   ├── pupil_center [5955 entries exceeds filelimit, not opening dir]
-        │   └── responses [5955 entries exceeds filelimit, not opening dir]
+        │   ├── behavior [directory with 5955 entries]
+        │   ├── images [directory with 5955 entries]
+        │   ├── pupil_center [5955 entries]
+        │   └── responses [5955 entries]
         └── meta
             ├── neurons
-            │   ├── animal_ids.npy
-            │   ├── area.npy
-            │   ├── layer.npy
-            │   ├── scan_idx.npy
-            │   ├── sessions.npy
-            │   └── unit_ids.npy
+            │   ├── animal_ids.npy
+            │   ├── area.npy
+            │   ├── layer.npy
+            │   ├── scan_idx.npy
+            │   ├── sessions.npy
+            │   └── unit_ids.npy
             ├── statistics
             │   ├── behavior
             │   │   ├── all
@@ -575,7 +592,7 @@ class FileTreeDataset(StaticSet):
             │           ├── median.npy
             │           ├── min.npy
             │           └── std.npy
-            └── trials [12 entries exceeds filelimit, not opening dir]
+            └── trials [12 entries]
 
         Args:
             dirname:     root directory name
@@ -586,20 +603,35 @@ class FileTreeDataset(StaticSet):
 
         number_of_files = []
 
+        self.output_dict = output_dict
+        self.use_cache = use_cache
+
+        if output_rename is None:
+            output_rename = {}
+
+        # a flag that can be changed to turn renaming on/off
+        self.rename_output = bool(output_rename)
+        self._output_rename = output_rename
+        renamed_keys = [output_rename.get(k, k) for k in data_keys]
+        self._output_point = namedtuple("OutputPoint", renamed_keys) if output_rename else self.data_point
+
+        # if dirname is a zip file, auto expand into the container folder
         if dirname.endswith(".zip"):
             if not Path(dirname[:-4]).exists():
                 self.unzip(dirname, Path(dirname).absolute().parent)
             else:
                 print("{} exists already. Not unpacking {}".format(dirname[:-4], dirname))
-
             dirname = dirname[:-4]
 
+        self.dirname = dirname
         self.basepath = Path(dirname).absolute()
         self._config_file = self.basepath / "config.json"
 
+        # if no config file, create one based on default config
         if not self._config_file.exists():
             self._save_config(self._default_config)
 
+        # verify that valid data path exists for each data_key and count number of files
         for data_key in data_keys:
             if data_key not in self.trial_info.keys():
                 datapath = self.resolve_data_path(data_key)
@@ -607,25 +639,61 @@ class FileTreeDataset(StaticSet):
             else:
                 number_of_files.append(len(self.trial_info[data_key]))
 
+        # verify that all data_keys directories contain identical number of files (= number of data points)
         if not np.all(np.diff(number_of_files) == 0):
             raise InconsistentDataException("Number of data points is not equal")
-        else:
-            self._len = number_of_files[0]
+        # keep the number of files as the number of data points
+        self._len = number_of_files[0]
 
         self._cache = {data_key: {} for data_key in data_keys}
 
-    _default_config = {"links": {}}
-
     def resolve_data_path(self, data_key):
+        """
+        Given a data_key, resolves the folder within self.basepath/data directory. If relevant "links"
+        entry exists in the config, the name mapping is performed. Finally, the resultant path is checked
+        for validness (is it a directory that exists) and raises an exception if not found. Otherwise, the
+        resultant path object is returned.
+
+        Args:
+            data_key (str): data_key to find corresponding subdirectory under `self.basepath/data`
+
+        Raises:
+            DoesNotExistException: If the target path is not a valid directory, this exception is raised.
+
+        Returns:
+            pathlib.Path object: Valid directory path to the target data_group
+        """
         if self.link_exists(data_key):
             data_key = self.config["links"][data_key]
         datapath = self.basepath / "data" / data_key
 
-        if not datapath.exists():
-            raise DoesNotExistException("Data path {} does not exist".format(datapath))
+        if not datapath.exists() or not datapath.is_dir():
+            raise DoesNotExistException("Data path {} is not a valid directory".format(datapath))
         return datapath
 
+    @staticmethod
+    def unzip(filename, path):
+        """
+        Unzips the target file with `filename` into the specified `path`
+
+        Args:
+            filename (str): Path to the zip file
+            path (str): Path to expand the zip content into
+        """
+        print("Unzipping {} into {}".format(filename, path))
+        with ZipFile(filename, "r") as zip_obj:
+            zip_obj.extractall(path)
+
     def link_exists(self, link):
+        """
+        Checks if an entry for `link` exists in the "links" config
+
+        Args:
+            link (str): data_group name to check for an entry in "links"
+
+        Returns:
+            bool: True if a relevant entry is found in "links" config
+        """
         return "links" in self.config and link in self.config["links"]
 
     @property
@@ -644,7 +712,7 @@ class FileTreeDataset(StaticSet):
         # load data from cache or disk
         ret = []
         for data_key in self.data_keys:
-            if item in self._cache[data_key]:
+            if self.use_cache and item in self._cache[data_key]:
                 ret.append(self._cache[data_key][item])
             else:
                 if data_key in self.trial_info.keys():
@@ -652,92 +720,43 @@ class FileTreeDataset(StaticSet):
                 else:
                     datapath = self.resolve_data_path(data_key)
                     val = np.load(datapath / "{}.npy".format(item))
-                self._cache[data_key][item] = val
+                if self.use_cache:
+                    self._cache[data_key][item] = val
                 ret.append(val)
 
         # create data point and transform
         x = self.data_point(*ret)
+
         for tr in self.transforms:
-            assert isinstance(tr, StaticTransform)
+            # ensure only specified types of transforms are used
+            assert isinstance(tr, self._transform_types)
             x = tr(x)
+
+        # apply output rename if necessary
+        if self.rename_output:
+            x = self._output_point(*x)
+
+        if self.output_dict:
+            x = x._asdict()
+
         return x
 
     def add_log_entry(self, msg):
+        """
+        Add a new log entry `msg` into the "change.log" file. The message will be timestamped
+
+        Args:
+            msg (str): Message to be logged
+        """
         timestamp = datetime.now().strftime("%d-%b-%Y (%H:%M:%S.%f)")
         with open(self.basepath / "change.log", "a+") as fid:
             fid.write("{}: {}\n".format(timestamp, msg))
 
-    @staticmethod
-    def match_order(target, permuted, not_exist_ok=False):
-        """
-        Matches the order or rows in permuted to by returning an index array such that.
-
-        Args:
-            not_exist_ok: if the element does not exist, don't return an index
-
-        Returns: index array `idx` such that `target == permuted[idx, :]`
-        """
-
-        order, target_idx = [], []
-        unmatched_counter = 0
-        for i, row in enumerate(target):
-            idx = np.sum(permuted - row, axis=1) == 0
-            if not not_exist_ok:
-                assert idx.sum() == 1
-            if idx.sum() == 1:
-                order.append(np.where(idx)[0][0])
-                target_idx.append(i)
-            else:
-                unmatched_counter += 1
-        if not_exist_ok:
-            print("Encountered {} unmatched elements".format(unmatched_counter))
-        return np.array(target_idx, dtype=int), np.array(order, dtype=int)
-
-    def add_neuron_meta(self, name, animal_id, session, scan_idx, unit_id, values, fill_missing=None):
-        """
-        Add new meta information about neurons.
-
-        Args:
-            name:       name of the new meta information
-            animal_id:  array with animal_ids per first dimension of values
-            session:    array with session per first dimension of values
-            scan_idx:   array with scan_idx per first dimension of values
-            unit_id:    array with unit_id per first dimension of values
-            values:     new meta information. First dimension must refer to neurons.
-            fill_missing:   fill the values of the new attribute with NaN if not provided
-        """
-        if not len(animal_id) == len(session) == len(scan_idx) == len(unit_id) == len(values):
-            raise InconsistentDataException("number of trials and identifiers not consistent")
-
-        target = np.c_[
-            (
-                self.neurons.animal_ids,
-                self.neurons.sessions,
-                self.neurons.scan_idx,
-                self.neurons.unit_ids,
-            )
-        ]
-        permuted = np.c_[(animal_id, session, scan_idx, unit_id)]
-        vals = np.ones((len(target),) + values.shape[1:], dtype=values.dtype) * (
-            np.nan if fill_missing is None else fill_missing
-        )
-        tidx, idx = self.match_order(target, permuted, not_exist_ok=fill_missing is not None)
-
-        assert np.sum(target[tidx] - permuted[idx, ...]) == 0, "Something went wrong in sorting"
-
-        vals[tidx, ...] = values[idx, ...]
-        np.save(self.basepath / "meta/neurons/{}.npy".format(name), vals)
-        self.add_log_entry("Added new neuron meta attribute {} to meta/neurons".format(name))
-
-    @staticmethod
-    def initialize_from(filename, outpath=None, overwrite=False):
-        """
-        Convenience function. See `convert_static_h5_dataset_to_folder` in `.utils`
-        """
-        convert_static_h5_dataset_to_folder(filename, outpath=outpath, overwrite=overwrite)
-
     @property
     def change_log(self):
+        """
+        Convenience property to print the content of change.log file if it exists
+        """
         if (self.basepath / "change.log").exists():
             with open(self.basepath / "change.log", "r") as fid:
                 print("".join(fid.readlines()))
@@ -753,11 +772,6 @@ class FileTreeDataset(StaticSet):
         if filename is None:
             filename = str(self.basepath) + ".zip"
         zip_dir(filename, self.basepath)
-
-    def unzip(self, filename, path):
-        print("Unzipping {} into {}".format(filename, path))
-        with ZipFile(filename, "r") as zip_obj:
-            zip_obj.extractall(path)
 
     def add_link(self, attr, new_name):
         """
@@ -782,10 +796,6 @@ class FileTreeDataset(StaticSet):
         self._save_config(config)
 
     @property
-    def n_neurons(self):
-        return len(self[0].responses)
-
-    @property
     def neurons(self):
         return DirectoryAttributeTransformer(
             self.basepath / "meta/neurons",
@@ -801,11 +811,171 @@ class FileTreeDataset(StaticSet):
     def statistics(self):
         return DirectoryAttributeHandler(self.basepath / "meta/statistics", self.config["links"])
 
-    @property
-    def img_shape(self):
-        return (1,) + self[0].images.shape
+    @staticmethod
+    def match_order(target, permuted, not_exist_ok=False):
+        """
+        Matches the order or rows in permuted to by returning an index array such that.
+        Args:
+            not_exist_ok: if the element does not exist, don't return an index
+        Returns: index array `idx` such that `target == permuted[idx, :]`
+        """
+
+        order, target_idx = [], []
+        unmatched_counter = 0
+        for i, row in enumerate(target):
+            idx = np.sum(permuted - row, axis=1) == 0
+            if not not_exist_ok:
+                assert idx.sum() == 1
+            if idx.sum() == 1:
+                order.append(np.where(idx)[0][0])
+                target_idx.append(i)
+            else:
+                unmatched_counter += 1
+        if not_exist_ok:
+            print("Encountered {} unmatched elements".format(unmatched_counter))
+        return np.array(target_idx, dtype=int), np.array(order, dtype=int)
+
+    def add_neuron_meta(self, name, animal_id, session, scan_idx, unit_id, values, fill_missing=None):
+        """
+        Add new meta information about neurons.
+        Args:
+            name:       name of the new meta information
+            animal_id:  array with animal_ids matching the size of the first dimension of values
+            session:    array with session matching the size of the first dimension of values
+            scan_idx:   array with scan_idx matching the size of the first dimension of values
+            unit_id:    array with unit_id matching the size of the first dimension of values
+            values:     new meta information. First dimension must correspond to neurons.
+            fill_missing: fill the values of the new attribute with the specified value. Defaults to None,
+                in which case missing values are filled with NaN
+        """
+
+        with no_transforms(self):
+
+            if not self.n_neurons == len(values):
+                raise InconsistentDataException(
+                    f"Number of values ({len(values)}) and neurons in the datasets ({self.n_neurons}) is not consistent."
+                )
+
+        if not len(animal_id) == len(session) == len(scan_idx) == len(unit_id) == len(values):
+            raise InconsistentDataException("number of trials and identifiers not consistent")
+
+        target = np.c_[(self.neurons.animal_ids, self.neurons.sessions, self.neurons.scan_idx, self.neurons.unit_ids)]
+        permuted = np.c_[(animal_id, session, scan_idx, unit_id)]
+
+        vals = np.ones((len(target),) + values.shape[1:], dtype=values.dtype) * (
+            np.nan if fill_missing is None else fill_missing
+        )
+        tidx, idx = self.match_order(target, permuted, not_exist_ok=fill_missing is not None)
+
+        assert np.sum(target[tidx] - permuted[idx, ...]) == 0, "Something went wrong in sorting"
+
+        vals[tidx, ...] = values[idx, ...]
+        np.save(self.basepath / "meta/neurons/{}.npy".format(name), vals)
+        self.add_log_entry("Added new neuron meta attribute {} to meta/neurons".format(name))
 
     def __repr__(self):
         return "{} {} (n={} items)\n\t{}".format(
             self.__class__.__name__, self.basepath, self._len, ", ".join(self.data_keys)
         )
+
+
+class FileTreeDataset(FileTreeDatasetBase):
+    _transform_types = (StaticTransform,)
+
+    @staticmethod
+    def initialize_from(filename, outpath=None, overwrite=False):
+        """
+        Convenience function. See `convert_static_h5_dataset_to_folder` in `.utils`
+        """
+        convert_static_h5_dataset_to_folder(filename, outpath=outpath, overwrite=overwrite)
+
+    @property
+    def img_shape(self):
+        return (1,) + self[0].images.shape
+
+    @property
+    def n_neurons(self):
+        target_group = "responses" if "responses" in self.data_keys else "targets"
+        val = self[0]
+        if hasattr(val, target_group):
+            val = getattr(val, target_group)
+        else:
+            val = val[target_group]
+        return len(val)
+
+    def change_log(self):
+        if (self.basepath / "change.log").exists():
+            with open(self.basepath / "change.log", "r") as fid:
+                print("".join(fid.readlines()))
+
+    def zip(self, filename=None):
+        """
+        Zips current dataset.
+        Args:
+            filename:  Filename for the zip. Directory name + zip by default.
+        """
+
+        if filename is None:
+            filename = str(self.basepath) + ".zip"
+        zip_dir(filename, self.basepath)
+
+    def unzip(self, filename, path):
+        print("Unzipping {} into {}".format(filename, path))
+        with ZipFile(filename, "r") as zip_obj:
+            zip_obj.extractall(path)
+
+    def add_link(self, attr, new_name):
+        """
+        Add a new dataset that links to an existing dataset.
+        For instance `targets` that links to `responses`
+        Args:
+            attr:       existing attribute such as `responses`
+            new_name:   name of the new attribute reference.
+        """
+        if not (self.basepath / "data/{}".format(attr)).exists():
+            raise DoesNotExistException("Link target does not exist")
+
+
+class MovieFileTreeDataset(FileTreeDatasetBase):
+    _transform_types = (MovieTransform,)
+
+    def __init__(self, *args, stats_source=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.stats_source = stats_source if stats_source is not None else "all"
+
+    # the followings are provided for compatibility with MovieSet
+    @property
+    def types(self):
+        return self.trial_info.types
+
+    @property
+    def tiers(self):
+        return self.trial_info.tiers
+
+    @property
+    def n_neurons(self):
+        target_group = "responses" if "responses" in self.data_keys else "targets"
+        # check if output has been renamed
+        if self.rename_output:
+            target_group = self._output_rename.get(target_group, target_group)
+
+        val = self[0]
+        if hasattr(val, target_group):
+            val = getattr(val, target_group)
+        else:
+            val = val[target_group]
+        return val.shape[-1]
+
+    @property
+    def statistics(self):
+        return DirectoryAttributeHandler(self.basepath / "meta/statistics", self.config["links"])
+
+    def transformed_mean(self, stats_source=None):
+        if stats_source is None:
+            stats_source = self.stats_source
+
+        tmp = [np.atleast_1d(self.statistics[g][stats_source]["mean"][()]) for g in self.data_keys]
+        x = self.transform(self.data_point(*tmp), exclude=(Subsequence, Delay))
+        if self.rename_output:
+            x = self._output_point(*x)
+        return x

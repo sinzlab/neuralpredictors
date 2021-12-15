@@ -99,7 +99,7 @@ class ClonedReadout(nn.Module):
         self.alpha = Parameter(torch.ones(self._source.features.shape[-1]))
         self.beta = Parameter(torch.zeros(self._source.features.shape[-1]))
 
-    def forward(self, x):
+    def forward(self, x, **kwargs):
         x = self._source(x) * self.alpha + self.beta
         return x
 

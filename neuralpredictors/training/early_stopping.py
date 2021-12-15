@@ -1,19 +1,8 @@
-from collections import OrderedDict, defaultdict
-from contextlib import contextmanager
+import copy
+from collections import OrderedDict
+
 import numpy as np
-import time
-import warnings
 import torch
-
-
-def cycle(iterable):
-    # see https://github.com/pytorch/pytorch/issues/23900
-    iterator = iter(iterable)
-    while True:
-        try:
-            yield next(iterator)
-        except StopIteration:
-            iterator = iter(iterable)
 
 
 def copy_state(model):
@@ -28,73 +17,12 @@ def copy_state(model):
     copy_dict = OrderedDict()
     state_dict = model.state_dict()
     for k, v in state_dict.items():
-        copy_dict[k] = v.cpu() if v.is_cuda else v.clone()
+        if torch.is_tensor(v):
+            copy_dict[k] = v.cpu() if v.is_cuda else v.clone()
+        else:
+            copy_dict[k] = copy.deepcopy(v)
 
     return copy_dict
-
-
-class Tracker:
-    def log_objective(self, obj):
-        raise NotImplementedError()
-
-    def finalize(self, obj):
-        pass
-
-
-class TimeObjectiveTracker(Tracker):
-    def __init__(self):
-        self.tracker = np.array([[time.time(), 0.0]])
-
-    def log_objective(self, obj):
-        new_track_point = np.array([[time.time(), obj]])
-        self.tracker = np.concatenate((self.tracker, new_track_point), axis=0)
-
-    def finalize(self):
-        self.tracker[:, 0] -= self.tracker[0, 0]
-
-
-class MultipleObjectiveTracker(Tracker):
-    def __init__(self, **objectives):
-        self.objectives = objectives
-        self.log = defaultdict(list)
-        self.time = []
-
-    def log_objective(self, obj):
-        t = time.time()
-        for name, objective in self.objectives.items():
-            self.log[name].append(objective())
-        self.time.append(t)
-
-    def finalize(self):
-        self.time = np.array(self.time)
-        self.time -= self.time[0]
-        for k, l in self.log.items():
-            self.log[k] = np.array(l)
-
-
-@contextmanager
-def eval_state(model):
-    training_status = model.training
-
-    try:
-        model.eval()
-        yield model
-    finally:
-        model.train(training_status)
-
-
-@contextmanager
-def device_state(model, device):
-    # TODO: consider reimplementation of this to simply use device property of the parameter
-    original_device = "cuda" if next(model.parameters()).is_cuda else "cpu"
-    if not (torch.cuda.is_available()) and (device == "cuda"):
-        device = "cpu"
-        warnings.warn("CUDA not found, using CPU")
-    try:
-        model.to(device)
-        yield model
-    finally:
-        model.to(original_device)
 
 
 def early_stopping(
@@ -129,7 +57,7 @@ def early_stopping(
         objective: objective function that is used for early stopping. The function must accept single positional argument `model`
             and return a single scalar quantity.
         interval:  interval at which objective is evaluated to consider early stopping
-        patience:  number of times the objective is allow to not become better before the iterator terminates
+        patience:  number of continuous epochs the objective could remain without improvement before the iterator terminates
         start:     start value for iteration (used to check against `max_iter`)
         max_iter:  maximum number of iterations before the iterator terminated
         maximize:  whether the objective is maximized of minimized
@@ -139,11 +67,10 @@ def early_stopping(
                      after the evaluation.
         restore_best: whether to restore the best scoring model state at the end of early stopping
         tracker (Tracker):
-            for tracking training time & stopping objective
-
+            Tracker to be invoked for every epoch. `log_objective` is invoked with the current value of `objective`. Note that `finalize`
+            method is NOT invoked.
         scheduler:  scheduler object, which automatically reduces decreases the LR by a specified amount.
-                    The scheduler should be defined outside of early stopping, and should take as inputs the same
-                    arguments for patience, and tolerance, as early stopping
+                    The scheduler's `step` method is invoked, passing in the current value of `objective`
         lr_decay_steps: Number of times the learning rate should be reduced before stopping the training.
 
     """
@@ -217,104 +144,3 @@ def early_stopping(
             decay_lr(model, best_state_dict)
 
     finalize(model, best_state_dict)
-
-
-def alternate(*args):
-    """
-    Given multiple iterators, returns a generator that alternatively visit one element from each iterator at a time.
-
-    Examples:
-        >>> list(alternate(['a', 'b', 'c'], [1, 2, 3], ['Mon', 'Tue', 'Wed']))
-        ['a', 1, 'Mon', 'b', 2, 'Tue', 'c', 3, 'Wed']
-
-    Args:
-        *args: one or more iterables (e.g. tuples, list, iterators) separated by commas
-
-    Returns:
-        A generator that alternatively visits one element at a time from the list of iterables
-    """
-    for row in zip(*args):
-        yield from row
-
-
-def cycle_datasets(loaders):
-    """
-    Cycles through datasets of train loaders.
-
-    Args:
-        loaders: OrderedDict with trainloaders as values
-
-    Yields:
-        data key, input, targets
-
-    """
-
-    # assert isinstance(trainloaders, OrderedDict), 'trainloaders must be an ordered dict'
-    keys = list(loaders.keys())
-    ordered_loaders = [loaders[k] for k in keys]
-    for data_key, outputs in zip(cycle(loaders.keys()), alternate(*ordered_loaders)):
-        yield data_key, outputs
-
-
-class Exhauster:
-    """
-    Cycles through loaders until they are exhausted. Needed for dataloaders that are of unequal size
-        (as in the monkey data)
-    """
-
-    def __init__(self, loaders):
-        self.loaders = loaders
-
-    def __iter__(self):
-        for data_key, loader in self.loaders.items():
-            for batch in loader:
-                yield data_key, batch
-
-    def __len__(self):
-        return sum([len(loader) for loader in self.loaders])
-
-
-class LongCycler:
-    """
-    Cycles through trainloaders until the loader with largest size is exhausted.
-        Needed for dataloaders of unequal size (as in the monkey data).
-    """
-
-    def __init__(self, loaders):
-        self.loaders = loaders
-        self.max_batches = max([len(loader) for loader in self.loaders.values()])
-
-    def __iter__(self):
-        cycles = [cycle(loader) for loader in self.loaders.values()]
-        for k, loader, _ in zip(
-            cycle(self.loaders.keys()),
-            (cycle(cycles)),
-            range(len(self.loaders) * self.max_batches),
-        ):
-            yield k, next(loader)
-
-    def __len__(self):
-        return len(self.loaders) * self.max_batches
-
-
-class ShortCycler:
-    """
-    Cycles through trainloaders until the loader with smallest size is exhausted.
-        Needed for dataloaders of unequal size (as in the monkey data).
-    """
-
-    def __init__(self, loaders):
-        self.loaders = loaders
-        self.min_batches = min([len(loader) for loader in self.loaders.values()])
-
-    def __iter__(self):
-        cycles = [cycle(loader) for loader in self.loaders.values()]
-        for k, loader, _ in zip(
-            cycle(self.loaders.keys()),
-            (cycle(cycles)),
-            range(len(self.loaders) * self.min_batches),
-        ):
-            yield k, next(loader)
-
-    def __len__(self):
-        return len(self.loaders) * self.min_batches

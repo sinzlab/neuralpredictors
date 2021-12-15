@@ -81,7 +81,12 @@ def rotation_matrix(desc, mu, angle):
     R = np.zeros((len(desc), len(desc)))
     for i, (d, m) in enumerate(zip(desc, mu)):
         if d == "r":
-            Rc = np.array([[np.cos(m * angle), np.sin(m * angle)], [-np.sin(m * angle), np.cos(m * angle)]])
+            Rc = np.array(
+                [
+                    [np.cos(m * angle), np.sin(m * angle)],
+                    [-np.sin(m * angle), np.cos(m * angle)],
+                ]
+            )
             R[i : i + 2, i : i + 2] = Rc
         elif d == "z":
             R[i, i] = 1
@@ -131,7 +136,15 @@ class RotateHermite(nn.Module):
 
 class HermiteConv2D(nn.Module):
     def __init__(
-        self, input_features, output_features, filter_size, padding, stride, num_rotations, upsampling, first_layer
+        self,
+        input_features,
+        output_features,
+        filter_size,
+        padding,
+        stride,
+        num_rotations,
+        upsampling,
+        first_layer,
     ):
 
         super().__init__()
@@ -146,7 +159,10 @@ class HermiteConv2D(nn.Module):
         self.coeffs = coeffs
 
         self.rotate_hermite = RotateHermite(
-            filter_size=filter_size, upsampling=upsampling, num_rotations=num_rotations, first_layer=first_layer
+            filter_size=filter_size,
+            upsampling=upsampling,
+            num_rotations=num_rotations,
+            first_layer=first_layer,
         )
 
         self.weights_all_rotations = None
@@ -158,12 +174,24 @@ class HermiteConv2D(nn.Module):
         self.weights_all_rotations = weights_all_rotations
 
         return nn.functional.conv2d(
-            input=input, weight=self.weights_all_rotations, bias=None, stride=self.stride, padding=self.padding
+            input=input,
+            weight=self.weights_all_rotations,
+            bias=None,
+            stride=self.stride,
+            padding=self.padding,
         )
 
 
 class RotationEquivariantBatchNorm2D(nn.Module):
-    def __init__(self, num_features, num_rotations, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True):
+    def __init__(
+        self,
+        num_features,
+        num_rotations,
+        eps=1e-05,
+        momentum=0.1,
+        affine=True,
+        track_running_stats=True,
+    ):
 
         super().__init__()
 

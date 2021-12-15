@@ -14,11 +14,11 @@ sdist:
 wheel:
 	python3 setup.py bdist_wheel >/dev/null 2>&1
 
-pypi:clean sdist wheel
+pypi: clean sdist wheel
 	twine upload dist/*
 	
-pypitest: clean sdist wheel
-	twine upload -r pypitest dist/*
+testpypi: clean sdist wheel
+	twine upload -r testpypi dist/*
 
 clean:
 	rm -rf dist && rm -rf build && rm -rf *.egg-info

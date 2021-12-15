@@ -1,0 +1,19 @@
+name: Test
+
+on:
+  push:
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  test:
+    if: github.repository_owner == 'sinzlab'
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/checkout@v2
+      - name: Run tests and generate coverage report
+        run: touch .env && docker-compose run -v "$PWD/reports:/reports" pytest --cov --cov-report=xml:/reports/coverage.xml test
+      - name: Upload coverage report to Codecov
+        run: bash <(curl -s https://codecov.io/bash)
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

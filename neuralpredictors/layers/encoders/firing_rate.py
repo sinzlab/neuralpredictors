@@ -23,6 +23,7 @@ class FiringRateEncoder(nn.Module):
     def forward(
         self,
         inputs,
+        *args,
         targets=None,
         data_key=None,
         behavior=None,

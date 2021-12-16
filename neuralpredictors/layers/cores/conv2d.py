@@ -251,7 +251,7 @@ class Stacked2dCore(Core, nn.Module):
         ret = 0
 
         # return zero for depth separable convolutions
-        if not hasattr(self.features[1], 'conv'):
+        if not hasattr(self.features[1], "conv"):
             return ret
         for feature in self.features[1:]:
             ret = ret + feature.conv.weight.pow(2).sum(3, keepdim=True).sum(2, keepdim=True).sqrt().mean()

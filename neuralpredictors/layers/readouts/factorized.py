@@ -147,7 +147,7 @@ class FullFactorized2d(Readout):
             self._features = nn.Parameter(torch.Tensor(self.outdims, c))  # feature weights for each channel of the core
             self._shared_features = False
 
-    def forward(self, x, shift=None):
+    def forward(self, x, shift=None, **kwargs):
         if shift is not None:
             raise NotImplementedError("shift is not implemented for this readout")
         if self.constrain_pos:

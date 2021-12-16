@@ -144,7 +144,7 @@ class Gaussian2d(Readout):
     def regularizer(self, reduction="sum", average=None):
         return self.feature_l1(reduction=reduction, average=average) * self.feature_reg_weight
 
-    def forward(self, x, sample=None, shift=None, out_idx=None):
+    def forward(self, x, sample=None, shift=None, out_idx=None, **kwargs):
         """
         Propagates the input forwards through the readout
         Args:
@@ -527,7 +527,7 @@ class FullGaussian2d(Readout):
         self.register_buffer("grid_sharing_index", torch.from_numpy(sharing_idx))
         self._shared_grid = True
 
-    def forward(self, x, sample=None, shift=None, out_idx=None):
+    def forward(self, x, sample=None, shift=None, out_idx=None, **kwargs):
         """
         Propagates the input forwards through the readout
         Args:
@@ -646,7 +646,7 @@ class RemappedGaussian2d(FullGaussian2d):
         super().initialize(mean_activity)
         self.initialize_remap_field()
 
-    def forward(self, x, sample=None, shift=None, out_idx=None):
+    def forward(self, x, sample=None, shift=None, out_idx=None, **kwargs):
         offset_field = self.remap_field(x) * self.max_remap_amplitude
 
         N, c, w, h = x.size()
@@ -825,7 +825,7 @@ class DeterministicGaussian2d(Readout):
             + self.variance_l1(reduction=reduction, average=average)
         ) * self.feature_reg_weight
 
-    def forward(self, x, shift=None, out_idx=None):
+    def forward(self, x, shift=None, out_idx=None, **kwargs):
         N, c, w, h = x.size()
         feat = self.features
 
@@ -995,7 +995,7 @@ class Gaussian3d(Readout):
             "The regularizer for this readout needs to be implemented! See issue https://github.com/sinzlab/neuralpredictors/issues/127"
         )
 
-    def forward(self, x, sample=None, shift=None, out_idx=None):
+    def forward(self, x, sample=None, shift=None, out_idx=None, **kwargs):
         """
         Propagates the input forwards through the readout
         Args:
@@ -1234,7 +1234,7 @@ class UltraSparse(Readout):
         if self.bias is not None:
             self.initialize_bias(mean_activity=mean_activity)
 
-    def forward(self, x, sample=True, shift=None, out_idx=None):
+    def forward(self, x, sample=True, shift=None, out_idx=None, **kwargs):
         """
         Propagates the input forwards through the readout
         Args:

@@ -69,7 +69,7 @@ class Pyramid(nn.Module):
 
         return lo, hi
 
-    def forward(self, img):
+    def forward(self, img, **kwargs):
         levels = []
         for i in range(self.scale_n):
             img, hi = self.lap_split(img)
@@ -142,7 +142,7 @@ class PointPyramid2d(Readout):
     def regularizer(self, reduction="sum", average=None):
         return self.feature_l1(reduction=reduction, average=average) * self.feature_reg_weight
 
-    def forward(self, x, shift=None):
+    def forward(self, x, shift=None, **kwargs):
         if self.positive:
             self.features.data.clamp_min_(0)
         self.grid.data = torch.clamp(self.grid.data, -1, 1)

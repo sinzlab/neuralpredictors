@@ -487,20 +487,21 @@ class ScaleInputs(StaticTransform, Invertible):
         self,
         scale,
         mode="reflect",
-        multichannel=False,
         anti_aliasing=False,
         preserve_range=True,
         clip=True,
         in_name="images",
+        channel_axis=0,
     ):
 
         self.scale = scale
         self.mode = mode
-        self.multichannel = multichannel
         self.anti_aliasing = anti_aliasing
         self.preserve_range = preserve_range
         self.clip = clip
         self.in_name = in_name
+        self.channel_axis = channel_axis
+
 
     def __call__(self, x):
         key_vals = {k: v for k, v in zip(x._fields, x)}
@@ -509,9 +510,9 @@ class ScaleInputs(StaticTransform, Invertible):
             img,
             scale=self.scale,
             mode=self.mode,
-            multichannel=self.multichannel,
             anti_aliasing=self.anti_aliasing,
             clip=self.clip,
             preserve_range=self.preserve_range,
+            channel_axis=self.channel_axis,
         )
         return x.__class__(**key_vals)

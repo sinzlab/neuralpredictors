@@ -160,7 +160,9 @@ class Stacked2dCore(Core, nn.Module):
             self.ignore_group_sparsity = False
 
         if self.ignore_group_sparsity:
-            warnings.warn("group sparsity can not be calculated for the requested conv type. Hidden channels will not be regularized and gamma_hidden is ignored.")
+            warnings.warn(
+                "group sparsity can not be calculated for the requested conv type. Hidden channels will not be regularized and gamma_hidden is ignored."
+            )
         self.set_batchnorm_type()
         self.features = nn.Sequential()
         self.add_first_layer()

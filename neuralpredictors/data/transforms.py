@@ -502,7 +502,6 @@ class ScaleInputs(StaticTransform, Invertible):
         self.in_name = in_name
         self.channel_axis = channel_axis
 
-
     def __call__(self, x):
         key_vals = {k: v for k, v in zip(x._fields, x)}
         img = key_vals[self.in_name]

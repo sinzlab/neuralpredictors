@@ -22,7 +22,6 @@ class FiringRateEncoder(nn.Module):
 
     def forward(
         self,
-        inputs,
         *args,
         targets=None,
         data_key=None,
@@ -33,7 +32,7 @@ class FiringRateEncoder(nn.Module):
         detach_core=False,
         **kwargs
     ):
-        x = self.core(inputs)
+        x = self.core(args[0])
         if detach_core:
             x = x.detach()
 

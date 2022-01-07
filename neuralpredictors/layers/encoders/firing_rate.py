@@ -36,16 +36,12 @@ class FiringRateEncoder(nn.Module):
         if detach_core:
             x = x.detach()
 
-        if self.shifter:
-            if pupil_center is None:
-                raise ValueError("pupil_center is not given")
+        if self.shifter and pupil_center is not None:
             shift = self.shifter[data_key](pupil_center, trial_idx)
 
         x = self.readout(x, data_key=data_key, shift=shift, **kwargs)
 
-        if self.modulator:
-            if behavior is None:
-                raise ValueError("behavior is not given")
+        if self.modulator and behavior is not None:
             x = self.modulator[data_key](x, behavior=behavior)
 
         return nn.functional.elu(x + self.offset) + 1

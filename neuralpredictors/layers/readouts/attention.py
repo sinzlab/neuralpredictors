@@ -1,4 +1,4 @@
-from typing import Any, Literal, Mapping, Optional, Tuple
+from typing import Any, Mapping, Optional, Tuple
 
 import torch
 from torch.nn import functional as F
@@ -6,7 +6,7 @@ from torch.nn import init
 from torch.nn.modules import ELU, BatchNorm2d, Conv2d, Module, Sequential
 from torch.nn.parameter import Parameter
 
-from .base import Readout
+from .base import Readout, Reduction
 
 
 class AttentionReadout(Readout):
@@ -18,15 +18,15 @@ class AttentionReadout(Readout):
         init_noise: float = 1e-3,
         attention_kernel: int = 1,
         attention_layers: int = 1,
-        mean_activity: Optional[Mapping[str, float]] = None,
+        mean_activity: Optional[torch.Tensor] = None,
         feature_reg_weight: float = 1.0,
         gamma_readout: Optional[float] = None,  # deprecated, use feature_reg_weight instead
         **kwargs: Any,
     ) -> None:
-        super().__init__()
+        super().__init__()  # type: ignore[no-untyped-call]
         self.in_shape = in_shape
         self.outdims = outdims
-        self.feature_reg_weight = self.resolve_deprecated_gamma_readout(feature_reg_weight, gamma_readout)  # type: ignore[no-untyped-call]
+        self.feature_reg_weight = self.resolve_deprecated_gamma_readout(feature_reg_weight, gamma_readout)
         self.mean_activity = mean_activity
         c, w, h = in_shape
         self.features = Parameter(torch.Tensor(self.outdims, c))
@@ -64,23 +64,19 @@ class AttentionReadout(Readout):
     def initialize_attention(self) -> None:
         self.apply(self.init_conv)
 
-    def initialize(self, mean_activity: Optional[Mapping[str, float]] = None) -> None:  # type: ignore[override]
+    def initialize(self, mean_activity: Optional[torch.Tensor] = None) -> None:  # type: ignore[override]
         if mean_activity is None:
             mean_activity = self.mean_activity
         self.features.data.normal_(0, self.init_noise)
         if self.bias is not None:
-            self.initialize_bias(mean_activity=mean_activity)  # type: ignore[no-untyped-call]
+            self.initialize_bias(mean_activity=mean_activity)
         self.initialize_attention()
 
-    def feature_l1(
-        self, reduction: Literal["sum", "mean", None] = "sum", average: Optional[bool] = None
-    ) -> torch.Tensor:
-        return self.apply_reduction(self.features.abs(), reduction=reduction, average=average)  # type: ignore[no-untyped-call,no-any-return]
+    def feature_l1(self, reduction: Reduction = "sum", average: Optional[bool] = None) -> torch.Tensor:
+        return self.apply_reduction(self.features.abs(), reduction=reduction, average=average)
 
-    def regularizer(
-        self, reduction: Literal["sum", "mean", None] = "sum", average: Optional[bool] = None
-    ) -> torch.Tensor:
-        return self.feature_l1(reduction=reduction, average=average) * self.feature_reg_weight  # type: ignore[no-any-return]
+    def regularizer(self, reduction: Reduction = "sum", average: Optional[bool] = None) -> torch.Tensor:
+        return self.feature_l1(reduction=reduction, average=average) * self.feature_reg_weight
 
     def forward(self, x: torch.Tensor, shift: Optional[Any] = None) -> torch.Tensor:
         attention = self.attention(x)

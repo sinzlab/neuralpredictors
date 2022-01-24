@@ -5,7 +5,7 @@ WORKDIR /src/neuralpredictors
 
 RUN python3 -m pip install --upgrade pip &&\
     python3 -m pip install mypy==$(cat mypy_version.txt) &&\
-    python3 -m pip install -e /src/neuralpredictors
+    python3 -m pip install --no-use-pep517 -e /src/neuralpredictors
 
 
 ENTRYPOINT ["python3"]

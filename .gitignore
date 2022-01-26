@@ -111,3 +111,5 @@ fabee.yml*
 # misc
 .history.*
 .vscode
+
+reports/

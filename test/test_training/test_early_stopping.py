@@ -1,4 +1,5 @@
 from itertools import product
+import logging
 
 import numpy as np
 import pytest
@@ -6,6 +7,9 @@ import torch
 from torch import nn
 
 from neuralpredictors.training import early_stopping
+
+
+logger = logging.getLogger(__name__)
 
 
 class CounterModel(nn.Module):
@@ -20,7 +24,7 @@ class CounterClosure:
         self.counter = 0
 
     def __call__(self, model):
-        print("Called", flush=True)
+        logger.info("Called")
         ret = self.objective_values[self.counter]
         self.counter += 1
         model.counter.data += 1
@@ -38,7 +42,7 @@ test_data = [
 class TestEarlyStopping:
     @pytest.mark.parametrize("patience,interval,maximize,expected_epoch", test_data)
     def test_stop_minimize(self, patience, interval, maximize, expected_epoch):
-        print(patience, interval, maximize, expected_epoch)
+        logger.info(patience, interval, maximize, expected_epoch)
         model = CounterModel()
 
         closure = CounterClosure(objective_vals)

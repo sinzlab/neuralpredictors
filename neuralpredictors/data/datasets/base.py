@@ -1,4 +1,5 @@
 import json
+import logging
 from collections import namedtuple
 from datetime import datetime
 from pathlib import Path
@@ -12,6 +13,9 @@ from ..exceptions import InconsistentDataException, DoesNotExistException
 from ..transforms import DataTransform, MovieTransform, StaticTransform, Invertible, Subsequence, Delay
 from ..utils import convert_static_h5_dataset_to_folder, zip_dir, recursively_load_dict_contents_from_group
 from ...utils import no_transforms
+
+
+logger = logging.getLogger(__name__)
 
 
 class AttributeHandler:
@@ -314,7 +318,7 @@ class FileTreeDatasetBase(TransformDataset):
             if not Path(dirname[:-4]).exists():
                 self.unzip(dirname, Path(dirname).absolute().parent)
             else:
-                print("{} exists already. Not unpacking {}".format(dirname[:-4], dirname))
+                logger.info(f"{dirname[:-4]} exists already. Not unpacking {dirname}")
             dirname = dirname[:-4]
 
         self.dirname = dirname
@@ -374,7 +378,7 @@ class FileTreeDatasetBase(TransformDataset):
             filename (str): Path to the zip file
             path (str): Path to expand the zip content into
         """
-        print("Unzipping {} into {}".format(filename, path))
+        logger.info(f"Unzipping {filename} into {path}")
         with ZipFile(filename, "r") as zip_obj:
             zip_obj.extractall(path)
 
@@ -453,7 +457,7 @@ class FileTreeDatasetBase(TransformDataset):
         """
         if (self.basepath / "change.log").exists():
             with open(self.basepath / "change.log", "r") as fid:
-                print("".join(fid.readlines()))
+                logger.info("".join(fid.readlines()))
 
     def zip(self, filename=None):
         """
@@ -526,7 +530,7 @@ class FileTreeDatasetBase(TransformDataset):
             else:
                 unmatched_counter += 1
         if not_exist_ok:
-            print("Encountered {} unmatched elements".format(unmatched_counter))
+            logger.warning(f"Encountered {unmatched_counter} unmatched elements")
         return np.array(target_idx, dtype=int), np.array(order, dtype=int)
 
     def add_neuron_meta(self, name, animal_id, session, scan_idx, unit_id, values, fill_missing=None):

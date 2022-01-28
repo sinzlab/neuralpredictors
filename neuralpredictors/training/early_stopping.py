@@ -1,8 +1,12 @@
 import copy
+import logging
 from collections import OrderedDict
 
 import numpy as np
 import torch
+
+
+logger = logging.getLogger(__name__)
 
 
 def copy_state(model):
@@ -88,15 +92,15 @@ def early_stopping(
         old_objective = _objective()
         if restore_best:
             model.load_state_dict(best_state_dict)
-            print("Restoring best model after lr decay! {:.6f} ---> {:.6f}".format(old_objective, _objective()))
+            logger.info(f"Restoring best model after lr decay! {old_objective:.6f} ---> {_objective():.6f}")
 
     def finalize(model, best_state_dict):
         old_objective = _objective()
         if restore_best:
             model.load_state_dict(best_state_dict)
-            print("Restoring best model! {:.6f} ---> {:.6f}".format(old_objective, _objective()))
+            logger.info(f"Restoring best model! {old_objective:.6f} ---> {_objective():.6f}")
         else:
-            print("Final best model! objective {:.6f}".format(_objective()))
+            logger.info(f"Final best model! objective {_objective():.6f}")
 
     epoch = start
     # turn into a sign
@@ -114,7 +118,7 @@ def early_stopping(
                 if tracker is not None:
                     tracker.log_objective(current_objective)
                 if (~np.isfinite(current_objective)).any():
-                    print("Objective is not Finite. Stopping training")
+                    logger.warning("Objective is not Finite. Stopping training")
                     finalize(model, best_state_dict)
                     return
                 yield epoch, current_objective
@@ -126,19 +130,13 @@ def early_stopping(
                 scheduler.step(current_objective)
 
             if current_objective * maximize < best_objective * maximize - tolerance:
-                print(
-                    "[{:03d}|{:02d}/{:02d}] ---> {}".format(epoch, patience_counter, patience, current_objective),
-                    flush=True,
-                )
+                logger.info(f"[{epoch:03d}|{patience_counter:02d}/{patience:02d}] ---> {current_objective}")
                 best_state_dict = copy_state(model)
                 best_objective = current_objective
                 patience_counter = 0
             else:
                 patience_counter += 1
-                print(
-                    "[{:03d}|{:02d}/{:02d}] -/-> {}".format(epoch, patience_counter, patience, current_objective),
-                    flush=True,
-                )
+                logger.info(f"[{epoch:03d}|{patience_counter:02d}/{patience:02d}] ---> {current_objective}")
 
         if (epoch < max_iter) & (lr_decay_steps > 1) & (repeat < lr_decay_steps):
             decay_lr(model, best_state_dict)

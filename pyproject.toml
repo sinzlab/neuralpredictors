@@ -7,7 +7,7 @@ source = ["neuralpredictors"]
 
 [tool.mypy]
 python_version = "3.8"
-files = "neuralpredictors"
+files = ["neuralpredictors", "test"]
 exclude = "old_\\w+\\.py$"
 strict = true
 disallow_untyped_calls = true

@@ -14,6 +14,11 @@ services:
     volumes:
       - .:/src/neuralpredictors
     entrypoint: ["pytest"]
+  coverage:
+    build: .
+    volumes:
+      - .:/src/neuralpredictors
+    entrypoint: ["pytest", "--cov", "--cov-report=html:/src/neuralpredictors/reports/coverage.html", "test"]
   python:
     build: .
     volumes:

@@ -6,24 +6,12 @@ from .attention import AttentionReadout
 from .pyramid import PointPyramid2d
 from .multi_readout import MultiReadoutBase, MultiReadoutSharedParametersBase
 
+### Userguide ###
 
-#### MultiReadouts for backwards compatibility
-class MultiplePointPooled2d(MultiReadoutBase):
-    _base_readout = PointPooled2d
+# In order to build your multi-readout, pass the respective readout to your multi-readout base class
+# together with your readout kwargs. Use the MultiReadoutSharedParametersBase if you want to share parameters
+# between the readouts, otherwise use the MultiReadoutBase. Note that not all readouts support parameter sharing.
 
-
-class MultipleFullGaussian2d(MultiReadoutSharedParametersBase):
-    _base_readout = FullGaussian2d
-
-
-### "SpatialXFeatureLinear" and "FullSXF" are now combined in the new "FullFactorized2d" but their respective MultiReadouts are defined here individually for backwards compatibility
-class MultipleSpatialXFeatureLinear(MultiReadoutBase):
-    _base_readout = FullFactorized2d
-
-
-class MultipleFullSXF(MultiReadoutSharedParametersBase):
-    _base_readout = FullFactorized2d
-
-
-class MultipleFullFactorized2d(MultiReadoutSharedParametersBase):
-    _base_readout = FullFactorized2d
+# Example:
+# standard_multi_pointpooled_readout = MultiReadoutBase(PointPooled2d, **readout_kwargs)
+# parameter_sharing_multi_gaussian_readout = MultiReadoutSharedParametersBase(FullGaussian2d, **readout_kwargs)

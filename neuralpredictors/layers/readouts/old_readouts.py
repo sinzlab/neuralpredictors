@@ -1192,7 +1192,7 @@ class DeterministicGaussian2d(nn.Module):
             mu = self.mu + shift[None, ...]
         mean = mu.view(self.outdims, 1, 1, -1)
         pdf = self.grid - mean
-        pdf = torch.sum(pdf ** 2, dim=-1) / variances
+        pdf = torch.sum(pdf**2, dim=-1) / variances
         pdf = torch.exp(-0.5 * pdf)
         # normalize to sum=1
         pdf = pdf / torch.sum(pdf, dim=(1, 2), keepdim=True)
@@ -1204,7 +1204,7 @@ class DeterministicGaussian2d(nn.Module):
         """
         self.mu.data.uniform_(-self.init_mu_range, self.init_mu_range)
 
-        self.log_var.data.fill_(np.log(self.init_sigma ** 2))
+        self.log_var.data.fill_(np.log(self.init_sigma**2))
 
         self.features.data.fill_(1 / self.in_shape[0])
 

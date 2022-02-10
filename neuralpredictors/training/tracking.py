@@ -297,8 +297,8 @@ class AdvancedTracker(Tracker):
             self._initialize_epoch(new_log, objectives)
         deep_update(self.log, new_log)
 
-    def start_epoch(self, append_epoch: bool=True) -> None:
-        """ Start a new epoch. Initialize each accumulation with its default value. """
+    def start_epoch(self, append_epoch: bool = True) -> None:
+        """Start a new epoch. Initialize each accumulation with its default value."""
         t = time.time()
         self.time.append(t)
         if append_epoch:

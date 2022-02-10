@@ -184,9 +184,8 @@ class Stacked2dCore(Core, nn.Module):
     def add_activation(self, layer):
         if self.linear:
             return
-        if len(self.features) == self.num_layers - 1 and not self.final_nonlinearity:
-            return
-        layer["nonlin"] = AdaptiveELU(self.elu_xshift, self.elu_yshift)
+        if len(self.features) < self.num_layers - 1 or self.final_nonlinearity:
+            layer["nonlin"] = AdaptiveELU(self.elu_xshift, self.elu_yshift)
 
     def add_first_layer(self):
         layer = OrderedDict()

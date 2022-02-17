@@ -189,7 +189,9 @@ class Stacked2dCore(Core, nn.Module):
                     layer["scale"] = self.scale_layer_cls(self.hidden_channels)
 
     def add_activation(self, layer):
-        if (self.num_layers > 1 or self.final_nonlinearity) and not self.linear:
+        if self.linear:
+            return
+        if len(self.features) < self.num_layers - 1 or self.final_nonlinearity:
             layer["nonlin"] = AdaptiveELU(self.elu_xshift, self.elu_yshift)
 
     def add_first_layer(self):

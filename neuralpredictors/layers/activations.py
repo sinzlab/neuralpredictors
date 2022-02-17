@@ -1,7 +1,12 @@
+import logging
+
 from torch import nn as nn
 from torch.nn import functional as F
 import torch
 import numpy as np
+
+
+logger = logging.getLogger(__name__)
 
 
 def elu1(x):
@@ -96,10 +101,10 @@ class PiecewiseLinearExpNonlinearity(nn.Module):
         w = torch.reshape(self.a, (-1, 1, self.num_bins))  # shape: neurons, 1, bins
         for k in range(self.smoothnes_reg_order):
             w = F.conv1d(w, kernel)
-            penalty += torch.sum(torch.mean(w ** 2, 1))
+            penalty += torch.sum(torch.mean(w**2, 1))
         penalty = torch.sum(self.smooth_reg_weight * penalty)
         if verbose:
-            print("PieceWiseLinearExpNonLin, Smoothness penalty:", penalty)
+            logger.info(f"PieceWiseLinearExpNonLin, Smoothness penalty: {penalty}")
         return penalty
 
     def forward(self, x):

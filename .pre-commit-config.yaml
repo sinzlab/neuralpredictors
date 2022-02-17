@@ -5,6 +5,15 @@ repos:
       name: mypy
       language: system
       entry: docker-compose run --rm mypy
-      files: ^neuralpredictors/
+      files: ^neuralpredictors/|^test/
+      types: [python]
+      pass_filenames: false
+- repo: local
+  hooks:
+    - id: pytest
+      name: pytest
+      language: system
+      entry: docker-compose run --rm pytest
+      files: ^neuralpredictors/|^test/
       types: [python]
       pass_filenames: false

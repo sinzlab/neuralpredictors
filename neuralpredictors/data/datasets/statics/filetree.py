@@ -1,10 +1,12 @@
-from ..base import FileTreeDatasetBase
-
+import logging
 from zipfile import ZipFile
 
+from ..base import FileTreeDatasetBase
 from ...exceptions import DoesNotExistException
 from ...transforms import StaticTransform
 from ...utils import convert_static_h5_dataset_to_folder, zip_dir
+
+logger = logging.getLogger(__name__)
 
 
 class FileTreeDataset(FileTreeDatasetBase):
@@ -34,7 +36,7 @@ class FileTreeDataset(FileTreeDatasetBase):
     def change_log(self):
         if (self.basepath / "change.log").exists():
             with open(self.basepath / "change.log", "r") as fid:
-                print("".join(fid.readlines()))
+                logger.info("".join(fid.readlines()))
 
     def zip(self, filename=None):
         """
@@ -48,7 +50,7 @@ class FileTreeDataset(FileTreeDatasetBase):
         zip_dir(filename, self.basepath)
 
     def unzip(self, filename, path):
-        print("Unzipping {} into {}".format(filename, path))
+        logger.info(f"Unzipping {filename} into {path}")
         with ZipFile(filename, "r") as zip_obj:
             zip_obj.extractall(path)
 

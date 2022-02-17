@@ -43,7 +43,7 @@ def hermite_2d(N, npts, xvalmax=None):
     xvalmax *= 1 - 1 / npts
     xvals = np.linspace(-xvalmax, xvalmax, npts, endpoint=True)[..., None]
 
-    gxv = np.exp(-(xvals ** 2) / 4)
+    gxv = np.exp(-(xvals**2) / 4)
     gaussian = np.dot(gxv, gxv.T)
 
     # Hermite polynomials
@@ -59,7 +59,7 @@ def hermite_2d(N, npts, xvalmax=None):
         desc += ["r", "i"] * int(np.floor((rank + 1) / 2))
 
     theta = np.arctan2(xvals, xvals.T)
-    radsq = xvals ** 2 + xvals.T ** 2
+    radsq = xvals**2 + xvals.T**2
     nbases = mu.size
     H = np.zeros([nbases, npts, npts])
     for i, (mui, nui, desci) in enumerate(zip(mu, nu, desc)):
@@ -74,7 +74,7 @@ def hermite_2d(N, npts, xvalmax=None):
             H[i] = basis.imag
 
     # normalize
-    return H / np.sqrt(np.sum(H ** 2, axis=(1, 2), keepdims=True)), desc, mu
+    return H / np.sqrt(np.sum(H**2, axis=(1, 2), keepdims=True)), desc, mu
 
 
 def rotation_matrix(desc, mu, angle):

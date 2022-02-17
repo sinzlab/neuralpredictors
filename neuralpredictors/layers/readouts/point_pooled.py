@@ -1,4 +1,5 @@
 import warnings
+import logging
 import torch
 from torch import nn
 from torch.nn import Parameter
@@ -6,6 +7,9 @@ from torch.nn import functional as F
 import numpy as np
 
 from .base import Readout
+
+
+logger = logging.getLogger(__name__)
 
 
 class PointPooled2d(Readout):
@@ -82,7 +86,7 @@ class PointPooled2d(Readout):
     def pool_steps(self, value):
         assert value >= 0 and int(value) - value == 0, "new pool steps must be a non-negative integer"
         if value != self._pool_steps:
-            print("Resizing readout features")
+            logger.info("Resizing readout features")
             c, w, h = self.in_shape
             self._pool_steps = int(value)
             self.features = Parameter(torch.Tensor(1, c * (self._pool_steps + 1), 1, self.outdims))
@@ -228,7 +232,7 @@ class SpatialTransformerPooled3d(Readout):
     def pool_steps(self, value):
         assert value >= 0 and int(value) - value == 0, "new pool steps must be a non-negative integer"
         if value != self._pool_steps:
-            print("Resizing readout features")
+            logger.info("Resizing readout features")
             c, t, w, h = self.in_shape
             outdims = self.outdims
             self._pool_steps = int(value)

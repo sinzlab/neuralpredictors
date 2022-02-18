@@ -148,14 +148,21 @@ class Stacked2dCore(Core, nn.Module):
         if depth_separable:
             self.conv_layer_name = "ds_conv"
             self.ConvLayer = DepthSeparableConv2d
+            self.ignore_group_sparsity = True
         elif attention_conv:
             # TODO: check if name attention_conv is backwards compatible
             self.conv_layer_name = "attention_conv"
             self.ConvLayer = self.AttentionConvWrapper
+            self.ignore_group_sparsity = True
         else:
             self.conv_layer_name = "conv"
             self.ConvLayer = nn.Conv2d
+            self.ignore_group_sparsity = False
 
+        if (self.ignore_group_sparsity) and (gamma_hidden > 0):
+            warnings.warn(
+                "group sparsity can not be calculated for the requested conv type. Hidden channels will not be regularized and gamma_hidden is ignored."
+            )
         self.set_batchnorm_type()
         self.features = nn.Sequential()
         self.add_first_layer()
@@ -251,6 +258,9 @@ class Stacked2dCore(Core, nn.Module):
         Sparsity regularization on the filters of all the conv2d layers except the first one.
         """
         ret = 0
+        if self.ignore_group_sparsity:
+            return ret
+
         for feature in self.features[1:]:
             ret = ret + feature.conv.weight.pow(2).sum(3, keepdim=True).sum(2, keepdim=True).sqrt().mean()
         return ret / ((self.num_layers - 1) if self.num_layers > 1 else 1)

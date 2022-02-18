@@ -5,13 +5,12 @@ from datetime import datetime
 from pathlib import Path
 from zipfile import ZipFile
 
-import h5py
 import numpy as np
 from torch.utils.data import Dataset
 
 from ..exceptions import InconsistentDataException, DoesNotExistException
-from ..transforms import DataTransform, MovieTransform, StaticTransform, Invertible, Subsequence, Delay
-from ..utils import convert_static_h5_dataset_to_folder, zip_dir, recursively_load_dict_contents_from_group
+from ..transforms import DataTransform, Invertible
+from ..utils import zip_dir
 from ...utils import no_transforms
 
 

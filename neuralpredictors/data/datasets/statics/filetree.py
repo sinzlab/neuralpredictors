@@ -1,7 +1,10 @@
 import logging
+from zipfile import ZipFile
 
-from ...transforms import StaticTransform
 from ..base import FileTreeDatasetBase
+from ...exceptions import DoesNotExistException
+from ...transforms import StaticTransform
+from ...utils import convert_static_h5_dataset_to_folder, zip_dir
 
 logger = logging.getLogger(__name__)
 

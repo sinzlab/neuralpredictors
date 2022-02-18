@@ -115,7 +115,7 @@ class PointPooled2d(Readout):
     def regularizer(self, reduction="sum", average=None):
         return self.feature_l1(reduction=reduction, average=average) * self.feature_reg_weight
 
-    def forward(self, x, shift=None, out_idx=None):
+    def forward(self, x, shift=None, out_idx=None, **kwargs):
         """
         Propagates the input forwards through the readout
         Args:
@@ -278,7 +278,7 @@ class SpatialTransformerPooled3d(Readout):
         self.mask[:, idx, :, seq] = 0
         self.features.data[:, idx, :, seq] = 0
 
-    def forward(self, x, shift=None, subs_idx=None):
+    def forward(self, x, shift=None, subs_idx=None, **kwargs):
         if self.stop_grad:
             x = x.detach()
 

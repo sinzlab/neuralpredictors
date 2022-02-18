@@ -10,4 +10,9 @@ attention_conv which uses self attention instead a conv2d layer).
 All core classes must have a `regularizer` and a `forward` method.
 """
 
-from .conv2d import Stacked2dCore, RotationEquivariant2dCore, TransferLearningCore, SE2dCore
+from .conv2d import (
+    RotationEquivariant2dCore,
+    SE2dCore,
+    Stacked2dCore,
+    TransferLearningCore,
+)

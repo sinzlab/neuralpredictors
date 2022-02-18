@@ -1,6 +1,6 @@
+import warnings
 from contextlib import contextmanager
 
-import warnings
 import torch
 
 

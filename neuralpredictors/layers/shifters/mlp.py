@@ -1,11 +1,11 @@
-from .base import Shifter
+import logging
 
 import torch
-from torch.nn.init import xavier_normal
-from torch.nn import ModuleDict
 from torch import nn
+from torch.nn import ModuleDict
+from torch.nn.init import xavier_normal
 
-import logging
+from .base import Shifter
 
 logger = logging.getLogger(__name__)
 

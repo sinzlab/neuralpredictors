@@ -1,9 +1,9 @@
 import warnings
+
 import numpy as np
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
-
 
 # def laplace():
 #     return np.array([[0.25, 0.5, 0.25], [0.5, -3.0, 0.5], [0.25, 0.5, 0.25]]).astype(np.float32)[None, None, ...]

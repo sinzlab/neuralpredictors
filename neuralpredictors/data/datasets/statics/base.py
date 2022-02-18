@@ -1,7 +1,8 @@
 from collections import namedtuple
-from ..base import TransformDataset, default_image_datapoint
-from ...utils import recursively_load_dict_contents_from_group
+
 from ...transforms import StaticTransform
+from ...utils import recursively_load_dict_contents_from_group
+from ..base import TransformDataset, default_image_datapoint
 
 
 class StaticSet(TransformDataset):

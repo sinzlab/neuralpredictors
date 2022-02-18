@@ -1,26 +1,25 @@
+import logging
 import warnings
-from collections import OrderedDict, Iterable
+from collections import Iterable, OrderedDict
 from functools import partial
 
-from torch import nn
 import torch
 import torchvision
+from torch import nn
 
-from .base import Core
 from ... import regularizers
-from ..conv import DepthSeparableConv2d
-from ..squeeze_excitation import SqueezeExcitationBlock
-from ..attention import AttentionConv
-from ..affine import Bias2DLayer, Scale2DLayer
 from ..activations import AdaptiveELU
+from ..affine import Bias2DLayer, Scale2DLayer
+from ..attention import AttentionConv
+from ..conv import DepthSeparableConv2d
 from ..hermite import (
     HermiteConv2D,
     RotationEquivariantBatchNorm2D,
     RotationEquivariantBias2DLayer,
     RotationEquivariantScale2DLayer,
 )
-
-import logging
+from ..squeeze_excitation import SqueezeExcitationBlock
+from .base import Core
 
 logger = logging.getLogger(__name__)
 

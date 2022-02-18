@@ -1,10 +1,9 @@
 import logging
 
+import numpy as np
+import torch
 from torch import nn as nn
 from torch.nn import functional as F
-import torch
-import numpy as np
-
 
 logger = logging.getLogger(__name__)
 

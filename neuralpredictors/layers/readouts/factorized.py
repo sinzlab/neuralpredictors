@@ -1,6 +1,6 @@
+import numpy as np
 import torch
 from torch import nn as nn
-import numpy as np
 
 from .base import Readout
 

@@ -108,7 +108,7 @@ class ClonedReadout(Module):
         self.alpha = Parameter(torch.ones(self._source.features.shape[-1]))  # type: ignore[attr-defined]
         self.beta = Parameter(torch.zeros(self._source.features.shape[-1]))  # type: ignore[attr-defined]
 
-    def forward(self, x: torch.Tensor, **kwarg) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, **kwarg: Any) -> torch.Tensor:
         x = self._source(x) * self.alpha + self.beta
         return x
 

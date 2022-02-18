@@ -35,6 +35,12 @@ services:
       - .:/src/neuralpredictors
     entrypoint: ["black"]
     command: ["--check", "--diff", "."]
+  isort:
+    build: .
+    volumes:
+      - .:/src/neuralpredictors
+    entrypoint: ["isort"]
+    command: ["--check-only", "--diff", "."]
 
 volumes:
   mypy-cache:

@@ -4,7 +4,7 @@ COPY . /src/neuralpredictors
 WORKDIR /src/neuralpredictors
 
 RUN python3 -m pip install --upgrade pip &&\
-    python3 -m pip install mypy==$(cat mypy_version.txt) &&\
+    python3 -m pip install --requirement /src/neuralpredictors/requirements-dev.txt  &&\
     python3 -m pip install --no-use-pep517 -e /src/neuralpredictors
 
 

@@ -1,0 +1,12 @@
+name: Isort
+
+on: [push, pull_request]
+
+jobs:
+  black:
+    runs-on: ubuntu-18.04
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/setup-python@v2
+    - name: Check code with isort
+      run: touch .env && docker-compose run isort

@@ -3,7 +3,7 @@ name: Isort
 on: [push, pull_request]
 
 jobs:
-  black:
+  isort:
     runs-on: ubuntu-18.04
     steps:
     - uses: actions/checkout@v2

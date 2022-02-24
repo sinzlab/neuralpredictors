@@ -1,10 +1,10 @@
 import logging
-import numpy as np
 import warnings
+from typing import Tuple, Union
 
 import numpy as np
 from numpy.typing import ArrayLike
-from typing import Tuple, Union
+
 from ..utils import anscombe
 
 logger = logging.getLogger(__name__)

@@ -1,9 +1,11 @@
 import warnings
+
 import numpy as np
 import torch
 from torch import nn
 from torch.nn import Parameter
 from torch.nn import functional as F
+
 from .base import ConfigurationError, Readout
 
 

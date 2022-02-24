@@ -1,6 +1,7 @@
+from collections import Iterable, namedtuple
+
 import numpy as np
 import torch
-from collections import namedtuple, Iterable
 from skimage.transform import rescale
 
 

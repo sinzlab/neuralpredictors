@@ -1,10 +1,11 @@
-from .base import Shifter
+import logging
+import warnings
 
 import torch
 from torch import nn
 from torch.nn import ModuleDict
-import warnings
-import logging
+
+from .base import Shifter
 
 logger = logging.getLogger(__name__)
 

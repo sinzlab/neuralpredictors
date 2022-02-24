@@ -4,6 +4,7 @@
 [![codecov](https://codecov.io/gh/sinzlab/neuralpredictors/branch/main/graph/badge.svg)](https://codecov.io/gh/sinzlab/neuralpredictors)
 ![Black](https://github.com/sinzlab/neuralpredictors/workflows/Black/badge.svg)
 [![Mypy](https://github.com/sinzlab/neuralpredictors/actions/workflows/mypy.yml/badge.svg)](https://github.com/sinzlab/neuralpredictors/actions/workflows/mypy.yml)
+![Isort](https://github.com/sinzlab/neuralpredictors/workflows/ISort/badge.svg)
 [![PyPI version](https://badge.fury.io/py/neuralpredictors.svg)](https://badge.fury.io/py/neuralpredictors)
 
 [Sinz Lab](https://sinzlab.org/) Neural System Identification Utilities for [PyTorch](https://pytorch.org/).
@@ -29,6 +30,8 @@ for new code is not mandatory but encouraged.
 
 ### Code Style
 
+#### black
+
 This project uses the [black](https://github.com/psf/black) code formatter. You
 can check whether your changes comply with its style by running the following
 command:
@@ -39,6 +42,16 @@ docker-compose run black
 
 Furthermore you can pass a path to the service to have black fix any errors in
 the Python modules it finds in the given path.
+
+#### isort
+
+[isort](https://github.com/PyCQA/isort) is used to sort Python imports. You can check the order of imports by running the following command:
+
+```bash
+docker-compose run isort
+```
+
+The imports can be sorted by passing a path to the service.
 
 ### Type Hints
 

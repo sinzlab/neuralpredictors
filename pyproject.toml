@@ -25,3 +25,6 @@ module = [
     "tqdm"
 ]
 ignore_missing_imports = true
+
+[tool.isort]
+profile = "black"

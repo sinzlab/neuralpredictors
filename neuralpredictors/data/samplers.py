@@ -1,8 +1,9 @@
-from collections import Counter
-import numpy as np
-from torch.utils.data import Sampler
-import torch
 import logging
+from collections import Counter
+
+import numpy as np
+import torch
+from torch.utils.data import Sampler
 
 logger = logging.getLogger(__name__)
 

@@ -1,10 +1,17 @@
-from .base import TransformDataset, FileTreeDatasetBase, AttributeTransformer, DirectoryAttributeHandler
-import h5py
-from ..transforms import DataTransform, MovieTransform, Subsequence, Delay
 from collections import namedtuple
-from ..utils import recursively_load_dict_contents_from_group
+
+import h5py
 import numpy as np
 from scipy.signal import convolve2d
+
+from ..transforms import DataTransform, Delay, MovieTransform, Subsequence
+from ..utils import recursively_load_dict_contents_from_group
+from .base import (
+    AttributeTransformer,
+    DirectoryAttributeHandler,
+    FileTreeDatasetBase,
+    TransformDataset,
+)
 
 
 class H5SequenceSet(TransformDataset):

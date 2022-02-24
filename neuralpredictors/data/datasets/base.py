@@ -8,11 +8,10 @@ from zipfile import ZipFile
 import numpy as np
 from torch.utils.data import Dataset
 
-from ..exceptions import InconsistentDataException, DoesNotExistException
+from ...utils import no_transforms
+from ..exceptions import DoesNotExistException, InconsistentDataException
 from ..transforms import DataTransform, Invertible
 from ..utils import zip_dir
-from ...utils import no_transforms
-
 
 logger = logging.getLogger(__name__)
 

@@ -1,9 +1,11 @@
+from functools import partial
+
 import torch
 import torch.nn.functional as F
 from torch.autograd import Variable
-from functools import partial
-from neuralpredictors.layers.cores import TransferLearningCore
 from utils_for_tests import compare_vars
+
+from neuralpredictors.layers.cores import TransferLearningCore
 
 
 def test_detached_mode():

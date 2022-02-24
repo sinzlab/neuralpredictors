@@ -6,10 +6,11 @@ of statistics that are generated throughout training.
 from __future__ import annotations
 
 import copy
-import time
 import logging
-from collections import defaultdict, abc
-from typing import Dict, Tuple, List, Mapping, Union, Optional, Sequence
+import time
+from collections import abc, defaultdict
+from typing import Dict, List, Mapping, Optional, Sequence, Tuple, Union
+
 import numpy as np
 from tqdm import tqdm
 

@@ -1,12 +1,11 @@
+import logging
+from collections import Mapping
 from pathlib import Path
+from zipfile import ZIP_DEFLATED, ZipFile
+
 import h5py
 import numpy as np
 from tqdm import tqdm
-from collections import Mapping
-
-from pathlib import Path
-from zipfile import ZIP_DEFLATED, ZipFile
-import logging
 
 logger = logging.getLogger(__name__)
 

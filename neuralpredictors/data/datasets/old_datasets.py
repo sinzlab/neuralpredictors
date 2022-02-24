@@ -9,10 +9,17 @@ import numpy as np
 from scipy.signal import convolve2d
 from torch.utils.data import Dataset
 
-from .exceptions import InconsistentDataException, DoesNotExistException
-from .transforms import DataTransform, MovieTransform, StaticTransform, Invertible, Subsequence, Delay
+from ..utils import no_transforms, recursively_load_dict_contents_from_group
+from .exceptions import DoesNotExistException, InconsistentDataException
+from .transforms import (
+    DataTransform,
+    Delay,
+    Invertible,
+    MovieTransform,
+    StaticTransform,
+    Subsequence,
+)
 from .utils import convert_static_h5_dataset_to_folder, zip_dir
-from ..utils import recursively_load_dict_contents_from_group, no_transforms
 
 
 class AttributeHandler:

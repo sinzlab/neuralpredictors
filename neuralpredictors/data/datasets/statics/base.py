@@ -1,6 +1,5 @@
 from collections import namedtuple
 import h5py
-
 from ...transforms import StaticTransform
 from ...utils import recursively_load_dict_contents_from_group
 from ..base import TransformDataset, default_image_datapoint

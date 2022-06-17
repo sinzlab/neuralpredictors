@@ -1,6 +1,0 @@
-numpy>=1.20
-torch
-tqdm
-pandas
-h5py
-scipy

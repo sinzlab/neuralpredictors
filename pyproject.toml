@@ -20,7 +20,7 @@ name = "Sinz Lab"
 email = "software@sinzlab.net"
 
 [project.urls]
-"GitHub" = "https://github.com/sinzlab/neuralpredictors"
+GitHub = "https://github.com/sinzlab/neuralpredictors"
 
 [tool.setuptools]
 packages = ["neuralpredictors"]

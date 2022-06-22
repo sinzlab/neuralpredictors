@@ -1,3 +1,30 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "neuralpredictors"
+version = "0.3.0"
+description = "Sinz Lab Neural System Identification Utilities"
+dependencies = [
+    "numpy>=1.20",
+    "torch",
+    "tqdm",
+    "pandas",
+    "h5py",
+    "scipy",
+]
+
+[[project.authors]]
+name = "Sinz Lab"
+email = "software@sinzlab.net"
+
+[project.urls]
+GitHub = "https://github.com/sinzlab/neuralpredictors"
+
+[tool.setuptools]
+packages = ["neuralpredictors"]
+
 [tool.black]
 line-length = 120
 

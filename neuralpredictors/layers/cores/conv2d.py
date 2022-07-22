@@ -8,6 +8,7 @@ import torchvision
 from torch import nn
 
 from ... import regularizers
+from .. import activations
 from ..activations import AdaptiveELU
 from ..affine import Bias2DLayer, Scale2DLayer
 from ..attention import AttentionConv
@@ -20,7 +21,6 @@ from ..hermite import (
 )
 from ..squeeze_excitation import SqueezeExcitationBlock
 from .base import Core
-from .. import activations
 
 logger = logging.getLogger(__name__)
 

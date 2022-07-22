@@ -226,7 +226,7 @@ class Stacked2dCore(Core, nn.Module):
         if self.linear:
             return
         if not self.pre_final_layer_built() or self.final_nonlinearity:
-            if type(self.activation_fn) == AdaptiveELU:
+            if self.activation_fn == AdaptiveELU:
                 layer["nonlin"] = AdaptiveELU(self.elu_xshift, self.elu_yshift)
             else:
                 layer["nonlin"] = self.activation_fn(**self.activation_config)

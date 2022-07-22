@@ -2,7 +2,7 @@ from torch import nn
 
 
 class FiringRateEncoder(nn.Module):
-    def __init__(self, core, readout, *, shifter=None, modulator=None, elu_offset=0.0):
+    def __init__(self, core, readout, *, shifter=None, modulator=None, elu_offset=0.0, nonlinearity=True):
         """
         An Encoder that wraps the core, readout and optionally a shifter amd modulator into one model.
         The output is one positive value that can be interpreted as a firing rate, for example for a Poisson distribution.
@@ -12,6 +12,7 @@ class FiringRateEncoder(nn.Module):
             elu_offset (float): Offset value in the final elu non-linearity. Defaults to 0.
             shifter (optional[nn.ModuleDict]): Shifter network. Refer to neuralpredictors.layers.shifters. Defaults to None.
             modulator (optional[nn.ModuleDict]): Modulator network. Modulator networks are not implemented atm (24/06/2021). Defaults to None.
+            nonlinearity (optional[bool]): if False, do not apply elu non-linearity. Defaults to True.
         """
         super().__init__()
         self.core = core
@@ -19,6 +20,7 @@ class FiringRateEncoder(nn.Module):
         self.shifter = shifter
         self.modulator = modulator
         self.offset = elu_offset
+        self.nonlinearity = nonlinearity
 
     def forward(
         self,
@@ -49,11 +51,14 @@ class FiringRateEncoder(nn.Module):
                 raise ValueError("behavior is not given")
             x = self.modulator[data_key](x, behavior=behavior)
 
-        return nn.functional.elu(x + self.offset) + 1
+        if self.nonlinearity:
+            return nn.functional.elu(x + self.offset) + 1
+        else:
+            return x
 
     def regularizer(self, data_key=None, reduction="sum", average=None, detach_core=False):
         reg = self.core.regularizer().detach() if detach_core else self.core.regularizer()
-        reg += self.readout.regularizer(data_key=data_key, reduction=reduction, average=average)
+        reg = reg + self.readout.regularizer(data_key=data_key, reduction=reduction, average=average)
         if self.shifter:
             reg += self.shifter.regularizer(data_key=data_key)
         if self.modulator:

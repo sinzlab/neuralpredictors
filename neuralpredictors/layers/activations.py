@@ -100,7 +100,7 @@ class PiecewiseLinearExpNonlinearity(nn.Module):
         w = torch.reshape(self.a, (-1, 1, self.num_bins))  # shape: neurons, 1, bins
         for k in range(self.smoothnes_reg_order):
             w = F.conv1d(w, kernel)
-            penalty += torch.sum(torch.mean(w ** 2, 1))
+            penalty += torch.sum(torch.mean(w**2, 1))
         penalty = torch.sum(self.smooth_reg_weight * penalty)
         if verbose:
             logger.info(f"PieceWiseLinearExpNonLin, Smoothness penalty: {penalty}")

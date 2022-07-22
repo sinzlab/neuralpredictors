@@ -100,7 +100,7 @@ class PiecewiseLinearExpNonlinearity(nn.Module):
         w = torch.reshape(self.a, (-1, 1, self.num_bins))  # shape: neurons, 1, bins
         for k in range(self.smoothnes_reg_order):
             w = F.conv1d(w, kernel)
-            penalty += torch.sum(torch.mean(w**2, 1))
+            penalty += torch.sum(torch.mean(w ** 2, 1))
         penalty = torch.sum(self.smooth_reg_weight * penalty)
         if verbose:
             logger.info(f"PieceWiseLinearExpNonLin, Smoothness penalty: {penalty}")
@@ -186,3 +186,12 @@ class MultiplePiecewiseLinearExpNonlinearity(nn.ModuleDict):
 
     def regularizer(self, data_key):
         return self[data_key].smoothness_regularizer()
+
+
+class SoftThreshold(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.zero = torch.nn.parameter.Parameter(torch.tensor(0, dtype=torch.float32), requires_grad=False)
+
+    def forward(self, x):
+        return torch.logaddexp(x, self.zero)

@@ -13,7 +13,7 @@ services:
     build: .
     volumes:
       - .:/src/neuralpredictors
-    entrypoint: ["pytest"]
+    entrypoint: ["python", "-m", "pytest"]
   coverage:
     build: .
     volumes:

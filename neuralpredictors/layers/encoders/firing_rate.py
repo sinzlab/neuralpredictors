@@ -12,7 +12,7 @@ class FiringRateEncoder(nn.Module):
             elu_offset (float): Offset value in the final elu non-linearity. Defaults to 0.
             shifter (optional[nn.ModuleDict]): Shifter network. Refer to neuralpredictors.layers.shifters. Defaults to None.
             modulator (optional[nn.ModuleDict]): Modulator network. Modulator networks are not implemented atm (24/06/2021). Defaults to None.
-            nonlinearity (optional[bool]): if False, do not apply elu non-linearity. Still applies elu_offset, which 
+            nonlinearity (optional[bool]): if False, do not apply elu non-linearity. Still applies elu_offset, which
                 can be switched off by passing its default argument 0. Defaults to True.
         """
         super().__init__()

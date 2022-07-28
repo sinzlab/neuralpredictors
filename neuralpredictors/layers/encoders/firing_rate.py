@@ -12,7 +12,8 @@ class FiringRateEncoder(nn.Module):
             elu_offset (float): Offset value in the final elu non-linearity. Defaults to 0.
             shifter (optional[nn.ModuleDict]): Shifter network. Refer to neuralpredictors.layers.shifters. Defaults to None.
             modulator (optional[nn.ModuleDict]): Modulator network. Modulator networks are not implemented atm (24/06/2021). Defaults to None.
-            nonlinearity (optional[bool]): if False, do not apply elu non-linearity. Defaults to True.
+            nonlinearity (optional[bool]): if False, do not apply elu non-linearity. Still applies elu_offset, which 
+                can be switched off by passing its default argument 0. Defaults to True.
         """
         super().__init__()
         self.core = core
@@ -54,7 +55,7 @@ class FiringRateEncoder(nn.Module):
         if self.nonlinearity:
             return nn.functional.elu(x + self.offset) + 1
         else:
-            return x
+            return x + self.offset
 
     def regularizer(self, data_key=None, reduction="sum", average=None, detach_core=False):
         reg = self.core.regularizer().detach() if detach_core else self.core.regularizer()

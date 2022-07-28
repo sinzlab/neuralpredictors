@@ -192,7 +192,7 @@ class MultiplePiecewiseLinearExpNonlinearity(nn.ModuleDict):
 class SoftThreshold(nn.Module):
     def __init__(self) -> None:
         super().__init__()
-        self.zero = torch.nn.parameter.Parameter(torch.tensor(0, dtype=torch.float32), requires_grad=False)
+        self.register_buffer("zero", torch.tensor(0, dtype=torch.float32))
 
     def forward(self, x):
         return torch.logaddexp(x, self.zero)

@@ -216,8 +216,7 @@ class Stacked2dCore(Core, nn.Module):
                     and self.batch_norm_scale
                     and (not self.pre_final_layer_built() or self.final_batchnorm_scale),
                 )
-                if self.bias:
-                    if not self.batch_norm_scale or (self.pre_final_layer_built() and not self.final_batchnorm_scale):
+                if self.bias and (not self.batch_norm_scale or (self.pre_final_layer_built() and not self.final_batchnorm_scale)):
                         layer["bias"] = self.bias_layer_cls(hidden_channels)
                 elif self.batch_norm_scale and not (self.pre_final_layer_built() and not self.final_batchnorm_scale):
                     layer["scale"] = self.scale_layer_cls(hidden_channels)

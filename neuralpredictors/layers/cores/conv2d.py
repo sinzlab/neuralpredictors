@@ -201,7 +201,8 @@ class Stacked2dCore(Core, nn.Module):
         self.bias_layer_cls = Bias2DLayer
         self.scale_layer_cls = Scale2DLayer
 
-    def pre_final_layer_built(self):
+    def penultimate_layer_built(self):
+        """ Returns True if the penultimate layer has been built. """
         return len(self.features) == self.num_layers - 1
 
     def add_bn_layer(self, layer, hidden_channels):
@@ -214,19 +215,19 @@ class Stacked2dCore(Core, nn.Module):
                     momentum=self.momentum,
                     affine=self.bias
                     and self.batch_norm_scale
-                    and (not self.pre_final_layer_built() or self.final_batchnorm_scale),
+                    and (not self.penultimate_layer_built() or self.final_batchnorm_scale),
                 )
                 if self.bias and (
-                    not self.batch_norm_scale or (self.pre_final_layer_built() and not self.final_batchnorm_scale)
+                    not self.batch_norm_scale or (self.penultimate_layer_built() and not self.final_batchnorm_scale)
                 ):
                     layer["bias"] = self.bias_layer_cls(hidden_channels)
-                elif self.batch_norm_scale and not (self.pre_final_layer_built() and not self.final_batchnorm_scale):
+                elif self.batch_norm_scale and not (self.penultimate_layer_built() and not self.final_batchnorm_scale):
                     layer["scale"] = self.scale_layer_cls(hidden_channels)
 
     def add_activation(self, layer):
         if self.linear:
             return
-        if not self.pre_final_layer_built() or self.final_nonlinearity:
+        if not self.penultimate_layer_built() or self.final_nonlinearity:
             if self.activation_fn == AdaptiveELU:
                 layer["nonlin"] = AdaptiveELU(self.elu_xshift, self.elu_yshift)
             else:

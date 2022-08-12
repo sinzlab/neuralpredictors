@@ -1,5 +1,6 @@
 import logging
 
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from torch import nn as nn
@@ -186,3 +187,12 @@ class MultiplePiecewiseLinearExpNonlinearity(nn.ModuleDict):
 
     def regularizer(self, data_key):
         return self[data_key].smoothness_regularizer()
+
+
+class SoftThreshold(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.register_buffer("zero", torch.tensor(0, dtype=torch.float32))
+
+    def forward(self, x):
+        return torch.logaddexp(x, self.zero)

@@ -68,7 +68,7 @@ class FullFactorized2d(Readout):
         if self.positive_weights:
             self.features.data.clamp_min_(0)
         n = self.outdims
-        c, w, h = self.in_shape
+        c, h, w = self.in_shape
         return self.normalized_spatial.view(n, 1, w, h) * self.features.view(n, c, 1, 1)
 
     @property
@@ -95,7 +95,7 @@ class FullFactorized2d(Readout):
             raise ValueError("Reduction of None is not supported in this regularizer")
 
         n = self.outdims
-        c, w, h = self.in_shape
+        c, h, w = self.in_shape
         ret = (
             self.normalized_spatial.view(self.outdims, -1).abs().sum(dim=1, keepdim=True)
             * self.features.view(self.outdims, -1).abs().sum(dim=1)
@@ -154,7 +154,7 @@ class FullFactorized2d(Readout):
             self.features.data.clamp_min_(0)
 
         c, w, h = x.size()[1:]
-        c_in, w_in, h_in = self.in_shape
+        c_in, h_in, w_in = self.in_shape
         if (c_in, w_in, h_in) != (c, w, h):
             raise ValueError("the specified feature map dimension is not the readout's expected input dimension")
 
@@ -165,7 +165,7 @@ class FullFactorized2d(Readout):
         return y
 
     def __repr__(self):
-        c, w, h = self.in_shape
+        c, h, w = self.in_shape
         r = self.__class__.__name__ + " (" + "{} x {} x {}".format(c, w, h) + " -> " + str(self.outdims) + ")"
         if self.bias is not None:
             r += " with bias"

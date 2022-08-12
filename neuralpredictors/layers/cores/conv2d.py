@@ -202,7 +202,7 @@ class Stacked2dCore(Core, nn.Module):
         self.scale_layer_cls = Scale2DLayer
 
     def penultimate_layer_built(self):
-        """ Returns True if the penultimate layer has been built. """
+        """Returns True if the penultimate layer has been built."""
         return len(self.features) == self.num_layers - 1
 
     def add_bn_layer(self, layer, hidden_channels):

@@ -153,7 +153,7 @@ class FullFactorized2d(Readout):
         if self.constrain_pos:
             self.features.data.clamp_min_(0)
 
-        c, w, h = x.size()[1:]
+        c, h, w = x.size()[1:]
         c_in, h_in, w_in = self.in_shape
         if (c_in, w_in, h_in) != (c, w, h):
             raise ValueError("the specified feature map dimension is not the readout's expected input dimension")

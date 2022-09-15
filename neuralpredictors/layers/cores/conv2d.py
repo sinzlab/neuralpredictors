@@ -239,6 +239,7 @@ class Stacked2dCore(Core, nn.Module):
             self.input_channels,
             self.hidden_channels[0],
             self.input_kern,
+            stride=self.stride,
             padding=self.input_kern // 2 if self.pad_input else 0,
             bias=self.bias and not self.batch_norm,
         )
@@ -323,7 +324,6 @@ class RotationEquivariant2dCore(Stacked2dCore, nn.Module):
         self,
         *args,
         num_rotations=8,
-        stride=1,
         upsampling=2,
         rot_eq_batch_norm=True,
         input_regularizer="LaplaceL2norm",
@@ -374,7 +374,7 @@ class RotationEquivariant2dCore(Stacked2dCore, nn.Module):
         self.upsampling = upsampling
         self.rot_eq_batch_norm = rot_eq_batch_norm
         self.init_std = init_std
-        super().__init__(*args, **kwargs, input_regularizer=input_regularizer, stride=stride)
+        super().__init__(*args, **kwargs, input_regularizer=input_regularizer)
 
     def set_batchnorm_type(self):
         if not self.rot_eq_batch_norm:

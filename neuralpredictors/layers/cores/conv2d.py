@@ -371,11 +371,10 @@ class RotationEquivariant2dCore(Stacked2dCore, nn.Module):
             parameters and a BiasLayer will be added after the batch_norm layer.
         """
         self.num_rotations = num_rotations
-        self.stride = stride
         self.upsampling = upsampling
         self.rot_eq_batch_norm = rot_eq_batch_norm
         self.init_std = init_std
-        super().__init__(*args, **kwargs, input_regularizer=input_regularizer)
+        super().__init__(*args, **kwargs, input_regularizer=input_regularizer, stride=stride)
 
     def set_batchnorm_type(self):
         if not self.rot_eq_batch_norm:

@@ -332,9 +332,14 @@ class RotationEquivariant2dCore(Stacked2dCore, nn.Module):
     ):
         """
         Args:
-            *args and **kwargs are passed the superclass
-            num_rotations is a multiplier for the number of hidden channels
-            upsampling and init_std are used to initialize Hermite functions
+            num_rotations:      number of computed rotations for every feature
+            upsampling:         upsampling scale of Hermite filters
+            rot_eq_batch_norm:  boolean, if True uses rotation equivariant layers for normalization, 
+                                otherwise, usual normalization are used
+            input_regularizer:  String that must match one of the regularizers in ..regularizers. It is passed to a parent class
+            init_std:           standard deviation used to normal distribution to initialize HermiteConv2D layers
+
+            Additional args and kwargs are passed to the parent class.
         """
         self.num_rotations = num_rotations
         self.upsampling = upsampling

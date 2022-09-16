@@ -473,8 +473,7 @@ class TransferLearningCore(Core, nn.Module):
         """
         if kwargs:
             warnings.warn(
-                "Ignoring input {} when creating {}".format(repr(kwargs), self.__class__.__name__),
-                UserWarning,
+                "Ignoring input {} when creating {}".format(repr(kwargs), self.__class__.__name__), UserWarning,
             )
         super().__init__()
 
@@ -486,8 +485,7 @@ class TransferLearningCore(Core, nn.Module):
         TL_model_clipped = nn.Sequential(*list(TL_model.features.children())[:layers])
         if not isinstance(TL_model_clipped[-1], nn.Conv2d):
             warnings.warn(
-                "Final layer is of type {}, not nn.Conv2d".format(type(TL_model_clipped[-1])),
-                UserWarning,
+                "Final layer is of type {}, not nn.Conv2d".format(type(TL_model_clipped[-1])), UserWarning,
             )
 
         # Fix pretrained parameters during training

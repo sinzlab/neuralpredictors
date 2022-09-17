@@ -334,7 +334,7 @@ class RotationEquivariant2dCore(Stacked2dCore, nn.Module):
         Args:
             num_rotations:      number of computed rotations for every feature
             upsampling:         upsampling scale of Hermite filters
-            rot_eq_batch_norm:  boolean, if True uses rotation equivariant layers for normalization, 
+            rot_eq_batch_norm:  boolean, if True uses rotation equivariant layers for normalization,
                                 otherwise, usual normalization are used
             input_regularizer:  String that must match one of the regularizers in ..regularizers. It is passed to a parent class
             init_std:           standard deviation used to normal distribution to initialize HermiteConv2D layers
@@ -473,7 +473,8 @@ class TransferLearningCore(Core, nn.Module):
         """
         if kwargs:
             warnings.warn(
-                "Ignoring input {} when creating {}".format(repr(kwargs), self.__class__.__name__), UserWarning,
+                "Ignoring input {} when creating {}".format(repr(kwargs), self.__class__.__name__),
+                UserWarning,
             )
         super().__init__()
 
@@ -485,7 +486,8 @@ class TransferLearningCore(Core, nn.Module):
         TL_model_clipped = nn.Sequential(*list(TL_model.features.children())[:layers])
         if not isinstance(TL_model_clipped[-1], nn.Conv2d):
             warnings.warn(
-                "Final layer is of type {}, not nn.Conv2d".format(type(TL_model_clipped[-1])), UserWarning,
+                "Final layer is of type {}, not nn.Conv2d".format(type(TL_model_clipped[-1])),
+                UserWarning,
             )
 
         # Fix pretrained parameters during training

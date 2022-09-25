@@ -43,6 +43,7 @@ class Stacked2dCore(Core, nn.Module):
         gamma_input=0.0,
         skip=0,
         stride=1,
+        input_stride=1,
         final_nonlinearity=True,
         elu_shift=(0, 0),
         bias=True,
@@ -154,6 +155,7 @@ class Stacked2dCore(Core, nn.Module):
         self.activation_config = nonlinearity_config if nonlinearity_config is not None else {}
 
         self.stride = stride
+        self.input_stride = input_stride
         self.use_avg_reg = use_avg_reg
         if use_avg_reg:
             warnings.warn("The averaged value of regularizer will be used.", UserWarning)
@@ -239,7 +241,7 @@ class Stacked2dCore(Core, nn.Module):
             self.input_channels,
             self.hidden_channels[0],
             self.input_kern,
-            stride=self.stride,
+            stride=self.input_stride,
             padding=self.input_kern // 2 if self.pad_input else 0,
             bias=self.bias and not self.batch_norm,
         )

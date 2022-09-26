@@ -43,6 +43,7 @@ class Stacked2dCore(Core, nn.Module):
         gamma_input=0.0,
         skip=0,
         stride=1,
+        input_stride=1,
         final_nonlinearity=True,
         elu_shift=(0, 0),
         bias=True,
@@ -154,6 +155,7 @@ class Stacked2dCore(Core, nn.Module):
         self.activation_config = nonlinearity_config if nonlinearity_config is not None else {}
 
         self.stride = stride
+        self.input_stride = input_stride
         self.use_avg_reg = use_avg_reg
         if use_avg_reg:
             warnings.warn("The averaged value of regularizer will be used.", UserWarning)
@@ -239,6 +241,7 @@ class Stacked2dCore(Core, nn.Module):
             self.input_channels,
             self.hidden_channels[0],
             self.input_kern,
+            stride=self.input_stride,
             padding=self.input_kern // 2 if self.pad_input else 0,
             bias=self.bias and not self.batch_norm,
         )
@@ -323,7 +326,6 @@ class RotationEquivariant2dCore(Stacked2dCore, nn.Module):
         self,
         *args,
         num_rotations=8,
-        stride=1,
         upsampling=2,
         rot_eq_batch_norm=True,
         input_regularizer="LaplaceL2norm",
@@ -332,46 +334,16 @@ class RotationEquivariant2dCore(Stacked2dCore, nn.Module):
     ):
         """
         Args:
-            input_channels:     Integer, number of input channels as in
-            hidden_channels:    Number of hidden channels (i.e feature maps) in each hidden layer
-            input_kern:     kernel size of the first layer (i.e. the input layer)
-            hidden_kern:    kernel size of each hidden layer's kernel
-            layers:         number of layers
-            num_rotations:  number of computed rotations for every feature
-            stride:         stride in convolutional layers
-            upsampling:     upsampling scale of Hermite filters
-            gamma_hidden:   regularizer factor for group sparsity
-            gamma_input:    regularizer factor for the input weights (default: LaplaceL2, see neuralpredictors.regularizers)
-            final_nonlinearity: Boolean, if true, appends an ELU layer after the last BatchNorm (if BN=True)
-            elu_xshift, elu_yshift: final_nonlinearity(x) = Elu(x - elu_xshift) + elu_yshift
-            bias:           Adds a bias layer.
-            momentum:        momentum in the batchnorm layer.
-            pad_input:      Boolean, if True, applies zero padding to all convolutions
-            hidden_padding: int or list of int. Padding for hidden layers. Note that this will apply to all the layers
-                            except the first (input) layer.
-            batch_norm:     Boolean, if True appends a BN layer after each convolutional layer
-            batch_norm_scale: If True, a scaling factor after BN will be learned.
-            independent_bn_bias:    If False, will allow for scaling the batch norm, so that batchnorm
-                                    and bias can both be true. Defaults to True.
-            laplace_padding: Padding size for the laplace convolution. If padding = None, it defaults to half of
-                the kernel size (recommended). Setting Padding to 0 is not recommended and leads to artefacts,
-                zero is the default however to recreate backwards compatibility.
-            input_regularizer:  String that must match one of the regularizers in ..regularizers
-            stack:        Int or iterable. Selects which layers of the core should be stacked for the readout.
-                            default value will stack all layers on top of each other.
-                            Implemented as layers_to_stack = layers[stack:]. thus:
-                                stack = -1 will only select the last layer as the readout layer.
-                                stack of -2 will read out from the last two layers.
-                                And stack of 1 will read out from layer 1 (0 indexed) until the last layer.
-            use_avg_reg:    bool. Whether to use the averaged value of regularizer(s) or the summed.
-            To enable learning batch_norms bias and scale independently, the arguments bias, batch_norm and batch_norm_scale
-            work together: By default, all are true. In this case there won't be a bias learned in the convolutional layer, but
-            batch_norm will learn both its bias and scale. If batch_norm is false, but bias true, a bias will be learned in the
-            convolutional layer. If batch_norm and bias are true, but batch_norm_scale is false, batch_norm won't have learnable
-            parameters and a BiasLayer will be added after the batch_norm layer.
+            num_rotations:      number of computed rotations for every feature
+            upsampling:         upsampling scale of Hermite filters
+            rot_eq_batch_norm:  boolean, if True uses rotation equivariant layers for normalization,
+                                otherwise, usual normalization are used
+            input_regularizer:  String that must match one of the regularizers in ..regularizers. It is passed to a parent class
+            init_std:           standard deviation used to normal distribution to initialize HermiteConv2D layers
+
+            Additional args and kwargs are passed to the parent class.
         """
         self.num_rotations = num_rotations
-        self.stride = stride
         self.upsampling = upsampling
         self.rot_eq_batch_norm = rot_eq_batch_norm
         self.init_std = init_std

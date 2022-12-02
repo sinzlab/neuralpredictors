@@ -67,12 +67,21 @@ class Readout(Module):
             reduction = "mean" if average else "sum"
         return reduction
 
-    def resolve_deprecated_gamma_readout(self, feature_reg_weight: float, gamma_readout: Optional[float]) -> float:
-        if gamma_readout is not None:
+    def resolve_deprecated_gamma_readout(
+        self, feature_reg_weight: Optional[float], gamma_readout: Optional[float], default: [float] = 1.0
+    ) -> float:
+        if feature_reg_weight is not None:
+            if gamma_readout is not None:
+                warnings.warn(
+                    "Use of 'gamma_readout' is deprecated. As 'feature_reg_weight' is defined, 'gamma_readout' is ignored."
+                )
+        elif gamma_readout is not None:
             warnings.warn(
                 "Use of 'gamma_readout' is deprecated. Please consider using the readout's feature-regularization parameter instead"
             )
             feature_reg_weight = gamma_readout
+        else:
+            feature_reg_weight = default
         return feature_reg_weight
 
     def initialize_bias(self, mean_activity: Optional[torch.Tensor] = None) -> None:

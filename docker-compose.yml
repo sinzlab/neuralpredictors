@@ -28,7 +28,7 @@ services:
     volumes:
       - .:/src/neuralpredictors
       - mypy-cache:/src/neuralpredictors/.mypy_cache
-    entrypoint: ["/src/neuralpredictors/run_mypy.sh"]
+    entrypoint: ["mypy"]
   black:
     build: .
     volumes:

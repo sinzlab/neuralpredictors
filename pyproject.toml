@@ -41,6 +41,7 @@ disallow_untyped_calls = true
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
 disallow_untyped_decorators = true
+ignore_errors = true
 
 [[tool.mypy.overrides]]
 module = [
@@ -49,9 +50,17 @@ module = [
     "scipy.special",
     "skimage.transform",
     "torchvision",
-    "tqdm"
+    "tqdm",
 ]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+    "neuralpredictors.layers.readouts.attention",
+    "neuralpredictors.layers.readouts.base",
+    "test.layers.cores.test_conv2d",
+]
+ignore_errors = false
 
 [tool.isort]
 profile = "black"

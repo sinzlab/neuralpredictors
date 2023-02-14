@@ -90,7 +90,8 @@ class TransformDataset(Dataset):
             # this version IS serializable in pickle
             self.data_point = default_image_datapoint
         else:
-            # this version is NOT - you cannot use this with a dataloader with num_workers > 1
+            # DataPoint needs to be available for pickle in the global context to be serializable
+            global DataPoint
             self.data_point = namedtuple("DataPoint", data_keys)
 
     def transform(self, x, exclude=None):
@@ -309,6 +310,9 @@ class FileTreeDatasetBase(TransformDataset):
         self.rename_output = bool(output_rename)
         self._output_rename = output_rename
         renamed_keys = [output_rename.get(k, k) for k in data_keys]
+        if output_rename:
+            # Output Point needs to be available for pickle in the global context 
+            global OutputPoint
         self._output_point = namedtuple("OutputPoint", renamed_keys) if output_rename else self.data_point
 
         # if dirname is a zip file, auto expand into the container folder

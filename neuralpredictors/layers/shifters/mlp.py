@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 class MLP(Shifter):
-    def __init__(self, input_features=2, hidden_channels=10, shift_layers=1, **kwargs):
+    def __init__(self, input_features=2, hidden_channels=10, shift_layers=1, bias=True, **kwargs):
         """
         Multi-layer perceptron shifter
         Args:
@@ -25,10 +25,10 @@ class MLP(Shifter):
         prev_output = input_features
         feat = []
         for _ in range(shift_layers - 1):
-            feat.extend([nn.Linear(prev_output, hidden_channels), nn.Tanh()])
+            feat.extend([nn.Linear(prev_output, hidden_channels, bias=bias), nn.Tanh()])
             prev_output = hidden_channels
 
-        feat.extend([nn.Linear(prev_output, 2), nn.Tanh()])
+        feat.extend([nn.Linear(prev_output, 2, bias=bias), nn.Tanh()])
         self.mlp = nn.Sequential(*feat)
 
     def regularizer(self):
@@ -51,7 +51,14 @@ class MLP(Shifter):
 
 class MLPShifter(ModuleDict):
     def __init__(
-        self, data_keys, input_channels=2, hidden_channels_shifter=2, shift_layers=1, gamma_shifter=0, **kwargs
+        self,
+        data_keys,
+        input_channels=2,
+        hidden_channels_shifter=2,
+        shift_layers=1,
+        gamma_shifter=0,
+        bias=True,
+        **kwargs
     ):
         """
         Args:
@@ -63,7 +70,7 @@ class MLPShifter(ModuleDict):
         super().__init__()
         self.gamma_shifter = gamma_shifter
         for k in data_keys:
-            self.add_module(k, MLP(input_channels, hidden_channels_shifter, shift_layers))
+            self.add_module(k, MLP(input_channels, hidden_channels_shifter, shift_layers, bias))
 
     def initialize(self, **kwargs):
         logger.info("Ignoring input {} when initializing {}".format(repr(kwargs), self.__class__.__name__))

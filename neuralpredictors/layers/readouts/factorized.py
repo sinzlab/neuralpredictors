@@ -12,7 +12,7 @@ class FullFactorized2d(Readout):
 
     def __init__(
         self,
-        in_shape,
+        in_shape,  # channels, height, width
         outdims,
         bias,
         normalize=True,
@@ -28,7 +28,7 @@ class FullFactorized2d(Readout):
 
         super().__init__()
 
-        c, w, h = in_shape
+        h, w = in_shape[1:]  # channels, height, width
         self.in_shape = in_shape
         self.outdims = outdims
         self.positive_weights = positive_weights
@@ -42,7 +42,7 @@ class FullFactorized2d(Readout):
 
         self._original_features = True
         self.initialize_features(**(shared_features or {}))
-        self.spatial = nn.Parameter(torch.Tensor(self.outdims, w, h))
+        self.spatial = nn.Parameter(torch.Tensor(self.outdims, h, w))
 
         if bias:
             bias = nn.Parameter(torch.Tensor(outdims))
@@ -68,7 +68,7 @@ class FullFactorized2d(Readout):
         if self.positive_weights:
             self.features.data.clamp_min_(0)
         n = self.outdims
-        c, w, h = self.in_shape
+        c, h, w = self.in_shape
         return self.normalized_spatial.view(n, 1, w, h) * self.features.view(n, c, 1, 1)
 
     @property
@@ -95,7 +95,7 @@ class FullFactorized2d(Readout):
             raise ValueError("Reduction of None is not supported in this regularizer")
 
         n = self.outdims
-        c, w, h = self.in_shape
+        c, h, w = self.in_shape
         ret = (
             self.normalized_spatial.view(self.outdims, -1).abs().sum(dim=1, keepdim=True)
             * self.features.view(self.outdims, -1).abs().sum(dim=1)
@@ -123,7 +123,7 @@ class FullFactorized2d(Readout):
         learns the original features (True) or if it uses a copy of the features from another instance of FullGaussian2d
         via the `shared_features` (False). If it uses a copy, the feature_l1 regularizer for this copy will return 0
         """
-        c, w, h = self.in_shape
+        c = self.in_shape[0]
         if match_ids is not None:
             assert self.outdims == len(match_ids)
 
@@ -153,8 +153,8 @@ class FullFactorized2d(Readout):
         if self.constrain_pos:
             self.features.data.clamp_min_(0)
 
-        N, c, w, h = x.size()
-        c_in, w_in, h_in = self.in_shape
+        c, h, w = x.size()[1:]
+        c_in, h_in, w_in = self.in_shape
         if (c_in, w_in, h_in) != (c, w, h):
             raise ValueError("the specified feature map dimension is not the readout's expected input dimension")
 
@@ -165,7 +165,7 @@ class FullFactorized2d(Readout):
         return y
 
     def __repr__(self):
-        c, w, h = self.in_shape
+        c, h, w = self.in_shape
         r = self.__class__.__name__ + " (" + "{} x {} x {}".format(c, w, h) + " -> " + str(self.outdims) + ")"
         if self.bias is not None:
             r += " with bias"

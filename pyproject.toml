@@ -1,3 +1,30 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "neuralpredictors"
+version = "0.3.0"
+description = "Sinz Lab Neural System Identification Utilities"
+dependencies = [
+    "numpy>=1.20",
+    "torch",
+    "tqdm",
+    "pandas",
+    "h5py",
+    "scipy",
+]
+
+[[project.authors]]
+name = "Sinz Lab"
+email = "software@sinzlab.net"
+
+[project.urls]
+GitHub = "https://github.com/sinzlab/neuralpredictors"
+
+[tool.setuptools]
+packages = ["neuralpredictors"]
+
 [tool.black]
 line-length = 120
 
@@ -14,6 +41,7 @@ disallow_untyped_calls = true
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
 disallow_untyped_decorators = true
+ignore_errors = true
 
 [[tool.mypy.overrides]]
 module = [
@@ -22,9 +50,17 @@ module = [
     "scipy.special",
     "skimage.transform",
     "torchvision",
-    "tqdm"
+    "tqdm",
 ]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+    "neuralpredictors.layers.readouts.attention",
+    "neuralpredictors.layers.readouts.base",
+    "test.layers.cores.test_conv2d",
+]
+ignore_errors = false
 
 [tool.isort]
 profile = "black"

@@ -316,7 +316,9 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
             1% of the mean std (to avoid division by 0)
     """
 
-    def __init__(self, data, stats_source="all", exclude=None, inputs_mean=None, inputs_std=None):
+    def __init__(
+        self, data, stats_source="all", exclude=None, inputs_mean=None, inputs_std=None, subtract_behavior_mean=False
+    ):
 
         self.exclude = exclude or []
 
@@ -362,10 +364,13 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
         if "behavior" in data.data_keys:
             s = np.array(data.statistics["behavior"][stats_source]["std"])
 
+            self.behavior_mean = (
+                0 if not subtract_behavior_mean else np.array(data.statistics["behavior"][stats_source]["mean"])
+            )
             self._behavior_precision = 1 / s
             # -- behavior
-            transforms["behavior"] = lambda x: x * self._behavior_precision
-            itransforms["behavior"] = lambda x: x / self._behavior_precision
+            transforms["behavior"] = lambda x: (x - self.behavior_mean) * self._behavior_precision
+            itransforms["behavior"] = lambda x: x / self._behavior_precision + self.behavior_mean
 
         self._transforms = transforms
         self._itransforms = itransforms

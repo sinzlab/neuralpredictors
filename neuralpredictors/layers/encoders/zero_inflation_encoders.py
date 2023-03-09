@@ -1,9 +1,13 @@
 from warnings import warn
+import numpy as np
 import torch
 import torch.nn as nn
-import numpy as np
 
-from .mean_variance_functions import fitted_zig_mean, fitted_zig_variance, fitted_zil_mean, fitted_zil_variance
+from .mean_variance_functions import (
+    fitted_zig_mean,
+    fitted_zig_variance,
+    fitted_zil_mean,
+    fitted_zil_variance)
 
 
 class ZeroInflationEncoderBase(nn.Module):

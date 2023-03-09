@@ -41,7 +41,7 @@ class ZeroInflationLossBase(nn.Module):
                 loc,
                 [0.0] * neurons_n,
                 self.find_nonzero_min(target * nonzero_mask) * 0.999,
-                )
+            )
 
         # slab loss
         slab_logl, logdet = self.get_slab_logl(
@@ -94,11 +94,11 @@ class ZIGLoss(ZeroInflationLossBase):
         theta, k = slab_params
         logdet = 0
         slab_logl = (
-                torch.log(q)
-                + (k - 1) * torch.log(target * nonzero_mask - loc * nonzero_mask + 1.0 * zero_mask)
-                - (target * nonzero_mask - loc * nonzero_mask) / theta
-                - k * torch.log(theta)
-                - torch.lgamma(k)
+            torch.log(q)
+            + (k - 1) * torch.log(target * nonzero_mask - loc * nonzero_mask + 1.0 * zero_mask)
+            - (target * nonzero_mask - loc * nonzero_mask) / theta
+            - k * torch.log(theta)
+            - torch.lgamma(k)
         )
         return slab_logl, logdet
 
@@ -108,9 +108,9 @@ class ZILLoss(ZeroInflationLossBase):
         mean, variance = slab_params
         logdet = -torch.log((target - loc) * nonzero_mask + 1.0 * zero_mask)
         slab_logl = (
-                torch.log(q)
-                + Normal(mean, torch.sqrt(variance)).log_prob(torch.log((target - loc) * nonzero_mask + 1.0 * zero_mask))
-                + logdet
+            torch.log(q)
+            + Normal(mean, torch.sqrt(variance)).log_prob(torch.log((target - loc) * nonzero_mask + 1.0 * zero_mask))
+            + logdet
         )
         return slab_logl, logdet
 
@@ -120,11 +120,11 @@ class ZILogStudentTLoss(ZeroInflationLossBase):
         df, location, scale = slab_params
         logdet = -torch.log((target - loc) * nonzero_mask + 1.0 * zero_mask)
         slab_logl = (
-                torch.log(q)
-                + StudentT(df=df, loc=location, scale=scale).log_prob(
-            torch.log((target - loc) * nonzero_mask + 1.0 * zero_mask)
-        )
-                + logdet
+            torch.log(q)
+            + StudentT(df=df, loc=location, scale=scale).log_prob(
+                torch.log((target - loc) * nonzero_mask + 1.0 * zero_mask)
+            )
+            + logdet
         )
         return slab_logl, logdet
 

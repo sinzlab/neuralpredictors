@@ -1,5 +1,5 @@
-import torch
 import numpy as np
+import torch
 
 
 def fitted_zig_mean(theta, k, loc, q, approximate=False):

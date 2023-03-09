@@ -91,3 +91,9 @@ class FiringRateEncoder(nn.Module):
         if self.modulator:
             reg += self.modulator.regularizer(data_key=data_key)
         return reg
+
+    def predict_mean(self, x, data_key, *args, **kwargs):
+        return self.forward(x, *args, data_key=data_key, **kwargs)
+
+    def predict_variance(self, x, data_key, *args, **kwargs):
+        return self.forward(x, *args, data_key=data_key, **kwargs)

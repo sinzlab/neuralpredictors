@@ -26,7 +26,11 @@ class MLP(nn.Module):
             self.modulator_networks.append(nn.Sequential(*feat))
 
     def regularizer(self):
-        return self.linear.weight.abs().mean()
+        reg = 0
+        for mod in self.modulator_networks:
+            # regularize the weights of the last linear layer
+            reg += mod[-2].weight.abs().mean()
+        return reg
 
     def initialize(self):
         for linear_layer in [p for p in self.parameters() if isinstance(p, nn.Linear)]:

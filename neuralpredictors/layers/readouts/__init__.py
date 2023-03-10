@@ -4,9 +4,9 @@ from .factorized import FullFactorized2d, FullSXF, SpatialXFeatureLinear
 from .gaussian import (
     DeterministicGaussian2d,
     FullGaussian2d,
-    GeneralizedFullGaussianReadout2d,
     Gaussian2d,
     Gaussian3d,
+    GeneralizedFullGaussianReadout2d,
     RemappedGaussian2d,
     UltraSparse,
 )

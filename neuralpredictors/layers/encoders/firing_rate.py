@@ -3,8 +3,8 @@ import warnings
 import numpy as np
 from torch import nn
 
-from .base import Encoder
 from .. import activations
+from .base import Encoder
 
 
 class FiringRateEncoder(Encoder):

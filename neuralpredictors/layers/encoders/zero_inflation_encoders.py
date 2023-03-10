@@ -4,6 +4,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+from .base import Encoder
 from .mean_variance_functions import (
     fitted_zig_mean,
     fitted_zig_variance,
@@ -12,7 +13,7 @@ from .mean_variance_functions import (
 )
 
 
-class ZeroInflationEncoderBase(nn.Module):
+class ZeroInflationEncoderBase(Encoder):
     def __init__(
         self,
         core,
@@ -119,9 +120,6 @@ class ZeroInflationEncoderBase(nn.Module):
             readout_out_idx += 1
 
         return x, q, logloc, readout_out_idx
-
-    def regularizer(self, data_key):
-        return 0.0
 
 
 class ZIGEncoder(ZeroInflationEncoderBase):

@@ -3,10 +3,11 @@ import warnings
 import numpy as np
 from torch import nn
 
+from .base import Encoder
 from .. import activations
 
 
-class FiringRateEncoder(nn.Module):
+class FiringRateEncoder(Encoder):
     def __init__(
         self,
         core,
@@ -82,15 +83,6 @@ class FiringRateEncoder(nn.Module):
             return self.nonlinearity_fn(x + self.offset) + 1
         else:
             return self.nonlinearity_fn(x)
-
-    def regularizer(self, data_key=None, reduction="sum", average=None, detach_core=False):
-        reg = self.core.regularizer().detach() if detach_core else self.core.regularizer()
-        reg = reg + self.readout.regularizer(data_key=data_key, reduction=reduction, average=average)
-        if self.shifter:
-            reg += self.shifter.regularizer(data_key=data_key)
-        if self.modulator:
-            reg += self.modulator.regularizer(data_key=data_key)
-        return reg
 
     def predict_mean(self, x, data_key, *args, **kwargs):
         return self.forward(x, *args, data_key=data_key, **kwargs)

@@ -116,10 +116,10 @@ class Stacked2dCore(Core, nn.Module):
             raise ValueError("depth_separable and attention_conv can not both be true")
 
         if independent_bn_bias:
-            if bias or batch_norm_scale or final_batchnorm_scale:
+            if not bias or not batch_norm_scale or not final_batchnorm_scale:
                 warnings.warn(
-                    "Setting `independent_bn_bias=True` leads to `bias` or `batch_norm_scale` or "
-                    "`final_batchnorm_scale` being ignored."
+                    "The default of `independent_bn_bias=True` will ignore the kwargs `bias`, `batch_norm_scale`, and "
+                    "`final_batchnorm_scale`. If you want to use these arguments, please set `independent_bn_bias=False`."
                 )
         self.batch_norm = batch_norm
         self.final_batchnorm_scale = final_batchnorm_scale

@@ -119,7 +119,7 @@ class Stacked2dCore(Core, nn.Module):
             if not bias or not batch_norm_scale or not final_batchnorm_scale:
                 warnings.warn(
                     "The default of `independent_bn_bias=True` will ignore the kwargs `bias`, `batch_norm_scale`, and "
-                    "`final_batchnorm_scale`. If you want to use these arguments, please set `independent_bn_bias=False`."
+                    "`final_batchnorm_scale` when initializing the batchnorm. If you want to use these arguments, please set `independent_bn_bias=False`."
                 )
         self.batch_norm = batch_norm
         self.final_batchnorm_scale = final_batchnorm_scale

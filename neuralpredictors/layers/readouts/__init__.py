@@ -6,6 +6,7 @@ from .gaussian import (
     FullGaussian2d,
     Gaussian2d,
     Gaussian3d,
+    GeneralizedFullGaussianReadout2d,
     RemappedGaussian2d,
     UltraSparse,
 )

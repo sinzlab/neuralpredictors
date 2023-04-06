@@ -170,7 +170,7 @@ class GammaLoss(nn.Module):
     def forward(self, output, target):
         target = target.detach()
         concentration, rate = output
-        loss = d.Gamma(concentration=concentration, rate=rate).log_prob(target)
+        loss = -d.Gamma(concentration=concentration, rate=rate).log_prob(target)
 
         if not self.per_neuron:
             return loss.mean() if self.avg else loss.sum()
@@ -198,7 +198,7 @@ class GaussianLoss(nn.Module):
     def forward(self, output, target):
         target = target.detach()
         mean, variance = output
-        loss = d.Normal(loc=mean, scale=torch.sqrt(variance)).log_prob(target)
+        loss = -d.Normal(loc=mean, scale=torch.sqrt(variance)).log_prob(target)
         if not self.per_neuron:
             return loss.mean() if self.avg else loss.sum()
         else:

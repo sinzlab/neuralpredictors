@@ -82,16 +82,18 @@ class PoissonLoss(nn.Module):
             warnings.warn("Poissonloss is averaged per batch. It's recommended to use `sum` instead")
 
     def forward(self, output, target):
-        tarqget = target.detach()
+        target = target.detach()
         loss = output - target * torch.log(output + self.bias)
         loss = (
             loss + target * torch.log(target) - target + 0.5 * torch.log(2 * np.pi * target) if self.full_loss else loss
         )
         if not self.per_neuron:
-            return loss.mean() if self.avg else loss.sum()
+            loss = loss.mean() if self.avg else loss.sum()
         else:
             loss = loss.view(-1, loss.shape[-1])
-            return loss.mean(dim=0) if self.avg else loss.sum(dim=0)
+            loss = loss.mean(dim=0) if self.avg else loss.sum(dim=0)
+        assert not (torch.isnan(loss).any() or torch.isinf(loss).any()), "None or inf value encountered!"
+        return loss
 
 
 class PoissonLoss3d(PoissonLoss):
@@ -173,10 +175,12 @@ class GammaLoss(nn.Module):
         loss = -d.Gamma(concentration=concentration, rate=rate).log_prob(target)
 
         if not self.per_neuron:
-            return loss.mean() if self.avg else loss.sum()
+            loss = loss.mean() if self.avg else loss.sum()
         else:
             loss = loss.view(-1, loss.shape[-1])
-            return loss.mean(dim=0) if self.avg else loss.sum(dim=0)
+            loss = loss.mean(dim=0) if self.avg else loss.sum(dim=0)
+        assert not (torch.isnan(loss).any() or torch.isinf(loss).any()), "None or inf value encountered!"
+        return loss
 
 
 class GaussianLoss(nn.Module):
@@ -199,8 +203,11 @@ class GaussianLoss(nn.Module):
         target = target.detach()
         mean, variance = output
         loss = -d.Normal(loc=mean, scale=torch.sqrt(variance)).log_prob(target)
+
         if not self.per_neuron:
-            return loss.mean() if self.avg else loss.sum()
+            loss = loss.mean() if self.avg else loss.sum()
         else:
             loss = loss.view(-1, loss.shape[-1])
-            return loss.mean(dim=0) if self.avg else loss.sum(dim=0)
+            loss = loss.mean(dim=0) if self.avg else loss.sum(dim=0)
+        assert not (torch.isnan(loss).any() or torch.isinf(loss).any()), "None or inf value encountered!"
+        return loss

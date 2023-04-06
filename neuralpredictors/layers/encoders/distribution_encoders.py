@@ -1,7 +1,9 @@
-from .base import GeneralizedEncoderBase
+from torch.nn import Identity
 
 from neuralpredictors.layers.activations import Elu1
-from torch.nn import Identity
+
+from .base import GeneralizedEncoderBase
+
 
 class GaussianEncoder(GeneralizedEncoderBase):
     def __init__(self, core, readout, shifter=None, modulator=None):

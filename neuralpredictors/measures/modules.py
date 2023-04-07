@@ -154,17 +154,18 @@ class AnscombeMSE(nn.Module):
 
 
 class GammaLoss(nn.Module):
-    def __init__(self, per_neuron=False, avg=True):
+    def __init__(self, per_neuron=False, avg=True, eps_shift_targets=1.e-10):
         """
         Computes Gamma loss with independent neurons.
 
         Args:
             per_neuron (bool, optional): If set to True, the average/total Gamma loss is returned for each entry of the last dimension (assumed to be enumeration neurons) separately. Defaults to False.
             avg (bool, optional): If set to True, return mean loss. Otherwise, returns the sum of loss. Defaults to True.
+            eps_shift_targets (float, optional): Value to shift the targets by. This is necessary when the data contains values of 0, which is not in the support of the Gamma distribution. Defaults to 1.e-10.
         """
         super().__init__()
         self.per_neuron = per_neuron
-
+        self.eps_shift_targets = eps_shift_targets
         self.avg = avg
         if self.avg:
             warnings.warn("Gammaloss is averaged per batch. It's recommended to use `sum` instead")
@@ -172,7 +173,7 @@ class GammaLoss(nn.Module):
     def forward(self, output, target):
         target = target.detach()
         concentration, rate = output
-        loss = -d.Gamma(concentration=concentration, rate=rate).log_prob(target)
+        loss = -d.Gamma(concentration=concentration, rate=rate).log_prob(target + self.eps_shift_targets)
 
         if not self.per_neuron:
             loss = loss.mean() if self.avg else loss.sum()

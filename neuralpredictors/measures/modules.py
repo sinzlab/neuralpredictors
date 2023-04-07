@@ -84,9 +84,11 @@ class PoissonLoss(nn.Module):
     def forward(self, output, target):
         target = target.detach()
         loss = output - target * torch.log(output + self.bias)
-        loss = (
-            loss + target * torch.log(target) - target + 0.5 * torch.log(2 * np.pi * target) if self.full_loss else loss
-        )
+        if self.full_loss:
+            stirling_term = target * torch.log(target) - target + 0.5 * torch.log(2 * np.pi * target)
+            stirling_term[target <= 1] = 0
+            loss = loss + stirling_term
+
         if not self.per_neuron:
             loss = loss.mean() if self.avg else loss.sum()
         else:
@@ -154,7 +156,7 @@ class AnscombeMSE(nn.Module):
 
 
 class GammaLoss(nn.Module):
-    def __init__(self, per_neuron=False, avg=True, eps_shift_targets=1.e-10):
+    def __init__(self, per_neuron=False, avg=True, eps_shift_targets=1.0e-10):
         """
         Computes Gamma loss with independent neurons.
 

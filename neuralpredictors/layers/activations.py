@@ -9,8 +9,8 @@ from torch.nn import functional as F
 logger = logging.getLogger(__name__)
 
 
-def elu1(x):
-    return F.elu(x, inplace=True) + 1.0
+def elu1(x, inplace=True):
+    return F.elu(x, inplace=inplace) + 1.0
 
 
 class Elu1(nn.Module):
@@ -20,8 +20,8 @@ class Elu1(nn.Module):
     Elu1(x) = Elu(x) + 1
     """
 
-    def forward(self, x):
-        return elu1(x)
+    def forward(self, x, inplace=True):
+        return elu1(x, inplace)
 
 
 def log1exp(x):

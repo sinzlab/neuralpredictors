@@ -258,7 +258,7 @@ class Basic3dCore(Core3d, nn.Module):
         return [self.input_kernel] + [kernel for kernel in self.hidden_kernel]
 
 
-class Factorized3dCore(nn.Module):
+class Factorized3dCore(Core3d, nn.Module):
     def __init__(
         self,
         input_channels,
@@ -283,6 +283,7 @@ class Factorized3dCore(nn.Module):
         momentum=0.01,
         laplace_padding=None,
         input_regularizer="LaplaceL2norm",
+        cuda=False,
         spatial_dilation=1,
         temporal_dilation=1,
     ):
@@ -448,6 +449,7 @@ class Factorized3dCore(nn.Module):
                     layer["nonlin"] = self.nonlinearities[hidden_nonlinearities]()
 
             self.features.add_module("layer{}".format(l + 1), nn.Sequential(layer))
+        self.initialize(cuda=cuda)
 
     def forward(self, x):
         for l, features in enumerate(self.features):

@@ -9,7 +9,7 @@ from torch.nn import functional as F
 logger = logging.getLogger(__name__)
 
 
-def elu1(x, inplace=True, eps=0.):
+def elu1(x, inplace=True, eps=0.0):
     return F.elu(x, inplace=inplace) + 1.0 + eps
 
 

@@ -6,9 +6,9 @@ from .base import GeneralizedEncoderBase
 
 
 class GaussianEncoder(GeneralizedEncoderBase):
-    def __init__(self, core, readout, shifter=None, modulator=None):
+    def __init__(self, core, readout, shifter=None, modulator=None, eps=1.e-6):
         nonlinearity_type_list = [Identity(), Elu1()]
-        nonlinearity_config_list = [{}, {"inplace": False}]
+        nonlinearity_config_list = [{}, {"inplace": False, "eps": eps}]
 
         super().__init__(core, readout, nonlinearity_type_list, shifter, modulator, nonlinearity_config_list)
 
@@ -22,9 +22,9 @@ class GaussianEncoder(GeneralizedEncoderBase):
 
 
 class GammaEncoder(GeneralizedEncoderBase):
-    def __init__(self, core, readout, shifter=None, modulator=None):
+    def __init__(self, core, readout, shifter=None, modulator=None, eps=1.e-6):
         nonlinearity_type_list = [Elu1(), Elu1()]
-        nonlinearity_config_list = [{"inplace": False}, {"inplace": False}]
+        nonlinearity_config_list = [{"inplace": False, "eps": eps}, {"inplace": False, "eps": eps}]
 
         super().__init__(core, readout, nonlinearity_type_list, shifter, modulator, nonlinearity_config_list)
 

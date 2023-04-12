@@ -203,8 +203,10 @@ class Basic3dCore(Core3d, nn.Module):
 
     def laplace_temporal(self):
         laplace = 0
-        for w, h in itertools.product(range(self.features[0].conv.weight.shape[-2]), range(self.features[0].conv.weight.shape[-1])):
-                laplace += self.temporal_regularizer(self.features[0].conv.weight[:, :, :, w, h])
+        for w, h in itertools.product(
+            range(self.features[0].conv.weight.shape[-2]), range(self.features[0].conv.weight.shape[-1])
+        ):
+            laplace += self.temporal_regularizer(self.features[0].conv.weight[:, :, :, w, h])
         return laplace
 
     def regularizer(self):
@@ -215,8 +217,9 @@ class Basic3dCore(Core3d, nn.Module):
             if self.independent_bn_bias:
                 layer["norm"] = nn.BatchNorm3d(hidden_channels, momentum=self.momentum)
             else:
-                layer["norm"] = nn.BatchNorm3d(hidden_channels,
-                                               momentum=self.momentum, affine=self.bias and self.batch_norm_scale)
+                layer["norm"] = nn.BatchNorm3d(
+                    hidden_channels, momentum=self.momentum, affine=self.bias and self.batch_norm_scale
+                )
                 if self.bias and not self.batch_norm_scale:
                     layer["bias"] = Bias3DLayer(hidden_channels)
                 elif self.batch_norm_scale:
@@ -358,10 +361,10 @@ class Factorized3dCore(Core3d, nn.Module):
                 self.hidden_channels = []
 
         if isinstance(self.spatial_input_kernel, int):
-            self.spatial_input_kernel = (self.spatial_input_kernel, ) * 2
+            self.spatial_input_kernel = (self.spatial_input_kernel,) * 2
 
         if isinstance(self.spatial_hidden_kernel, int):
-            self.spatial_hidden_kernel = (self.spatial_hidden_kernel, ) * 2
+            self.spatial_hidden_kernel = (self.spatial_hidden_kernel,) * 2
 
         if isinstance(self.spatial_hidden_kernel, (tuple, list)):
             if self.layers > 1:
@@ -383,9 +386,7 @@ class Factorized3dCore(Core3d, nn.Module):
             stride=(1, self.stride[0], self.stride[0]),
             bias=self.bias,
             dilation=(1, self.spatial_dilation, self.spatial_dilation),
-            padding=(0, self.spatial_input_kernel[0] // 2, self.spatial_input_kernel[1] // 2)
-            if self.padding
-            else 0,
+            padding=(0, self.spatial_input_kernel[0] // 2, self.spatial_input_kernel[1] // 2) if self.padding else 0,
         )
         layer["conv_temporal"] = nn.Conv3d(
             self.hidden_channels[0],
@@ -410,7 +411,7 @@ class Factorized3dCore(Core3d, nn.Module):
             layer[f"conv_spatial_{l+1}"] = nn.Conv3d(
                 in_channels=self.hidden_channels[l],
                 out_channels=self.hidden_channels[l + 1],
-                kernel_size=(1, ) + (self.spatial_hidden_kernel[l]),
+                kernel_size=(1,) + (self.spatial_hidden_kernel[l]),
                 stride=(1, self.stride[l], self.stride[l]),
                 bias=self.bias,
                 padding=(0, self.spatial_hidden_kernel[l][0] // 2, self.spatial_hidden_kernel[l][1] // 2)
@@ -432,7 +433,7 @@ class Factorized3dCore(Core3d, nn.Module):
                 else:
                     layer["nonlin"] = self.nonlinearities[hidden_nonlinearities]()
 
-            self.features.add_module("layer{}".format(l +1), nn.Sequential(layer))
+            self.features.add_module("layer{}".format(l + 1), nn.Sequential(layer))
         self.initialize(cuda=cuda)
 
     def forward(self, x):
@@ -490,8 +491,9 @@ class Factorized3dCore(Core3d, nn.Module):
             if self.independent_bn_bias:
                 layer["norm"] = nn.BatchNorm3d(hidden_channels, momentum=self.momentum)
             else:
-                layer["norm"] = nn.BatchNorm3d(hidden_channels,
-                                               momentum=self.momentum, affine=self.bias and self.batch_norm_scale)
+                layer["norm"] = nn.BatchNorm3d(
+                    hidden_channels, momentum=self.momentum, affine=self.bias and self.batch_norm_scale
+                )
                 if self.bias and not self.batch_norm_scale:
                     layer["bias"] = Bias3DLayer(hidden_channels)
                 elif self.batch_norm_scale:

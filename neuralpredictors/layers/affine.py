@@ -42,7 +42,7 @@ class Scale2DLayer(nn.Module):
 
 class Bias3DLayer(nn.Module):
     def __init__(self, channels, initial=0, **kwargs):
-        super(Bias3DLayer, self).__init__(**kwargs)
+        super().__init__(**kwargs)
 
         self.bias = torch.nn.Parameter(torch.empty((1, channels, 1, 1, 1)).fill_(initial))
 
@@ -52,7 +52,7 @@ class Bias3DLayer(nn.Module):
 
 class Scale3DLayer(nn.Module):
     def __init__(self, channels, initial=1, **kwargs):
-        super(Scale3DLayer, self).__init__(**kwargs)
+        super().__init__(**kwargs)
 
         self.scale = torch.nn.Parameter(torch.empty((1, channels, 1, 1, 1)).fill_(initial))
 

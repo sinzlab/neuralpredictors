@@ -299,7 +299,7 @@ class GaussianLaplaceL2(nn.Module):
 
 class Laplace1d(nn.Module):
     def __init__(self, padding):
-        super(Laplace1d, self).__init__()
+        super().__init__()
         filter = laplace1d()
         self.register_buffer("filter", torch.from_numpy(filter))
         self.padding_size = self.filter.shape[-1] // 2 if padding is None else padding
@@ -308,7 +308,7 @@ class Laplace1d(nn.Module):
         return F.conv1d(x, self.filter, bias=None, padding=self.padding_size)
 
 
-class TimeLaplaceL23d(nn.Module):
+class DepthLaplaceL21d(nn.Module):
     def __init__(self, padding=None):
         super().__init__()
         self.laplace = Laplace1d(padding=padding)

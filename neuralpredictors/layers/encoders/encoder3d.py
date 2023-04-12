@@ -11,7 +11,6 @@ class Encoder3d(nn.Module):
             self.nonlinearity = core.nonlinearities[readout_nonlinearity](elu_xshift, elu_yshift)
         else:
             self.nonlinearity = core.nonlinearities[readout_nonlinearity]()
-        self.visualization_dir = None
 
     def forward(self, x, data_key=None):
         out_core = self.core(x)

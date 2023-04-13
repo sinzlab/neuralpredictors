@@ -45,6 +45,10 @@ def laplace7x7():
     ).astype(np.float32)[None, None, ...]
 
 
+def laplace1d():
+    return np.array([-1, 4, -1]).astype(np.float32)[None, None, ...]
+
+
 def laplace3d():
     l = np.zeros((3, 3, 3))
     l[1, 1, 1] = -6.0
@@ -291,3 +295,27 @@ class GaussianLaplaceL2(nn.Module):
         out = out * (1 - self.gaussian2d.expand(1, 1, k1, k2).to(x.device))
 
         return agg_fn(out.pow(2)) / agg_fn(x.view(oc * ic, 1, k1, k2).pow(2))
+
+
+class Laplace1d(nn.Module):
+    def __init__(self, padding):
+        super().__init__()
+        filter = laplace1d()
+        self.register_buffer("filter", torch.from_numpy(filter))
+        self.padding_size = self.filter.shape[-1] // 2 if padding is None else padding
+
+    def forward(self, x):
+        return F.conv1d(x, self.filter, bias=None, padding=self.padding_size)
+
+
+class DepthLaplaceL21d(nn.Module):
+    def __init__(self, padding=None):
+        super().__init__()
+        self.laplace = Laplace1d(padding=padding)
+
+    def forward(self, x, avg=False):
+        oc, ic, t = x.size()
+        if avg:
+            return torch.mean(self.laplace(x.view(oc * ic, 1, t)).pow(2)) / torch.mean(x.view(oc * ic, 1, t).pow(2))
+        else:
+            return torch.sum(self.laplace(x.view(oc * ic, 1, t)).pow(2)) / torch.sum(x.view(oc * ic, 1, t).pow(2))

@@ -5,12 +5,7 @@ import torch
 import torch.nn as nn
 
 from .base import Encoder
-from .mean_variance_functions import (
-    fitted_zig_mean,
-    fitted_zig_variance,
-    fitted_zil_mean,
-    fitted_zil_variance,
-)
+from .mean_variance_functions import fitted_zig_mean, fitted_zig_variance, fitted_zil_mean, fitted_zil_variance
 
 
 class ZeroInflationEncoderBase(Encoder):

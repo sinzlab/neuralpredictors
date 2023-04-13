@@ -3,14 +3,7 @@ import torch
 from .attention import AttentionReadout
 from .base import ClonedReadout, Readout
 from .factorized import FullFactorized2d, FullSXF, SpatialXFeatureLinear
-from .gaussian import (
-    DeterministicGaussian2d,
-    FullGaussian2d,
-    Gaussian2d,
-    Gaussian3d,
-    RemappedGaussian2d,
-    UltraSparse,
-)
+from .gaussian import DeterministicGaussian2d, FullGaussian2d, Gaussian2d, Gaussian3d, RemappedGaussian2d, UltraSparse
 from .point_pooled import PointPooled2d, SpatialTransformerPooled3d
 from .pyramid import PointPyramid2d
 

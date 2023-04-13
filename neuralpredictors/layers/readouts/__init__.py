@@ -11,7 +11,11 @@ from .gaussian import (
     UltraSparse,
 )
 from .multi_readout import MultiReadoutBase, MultiReadoutSharedParametersBase
-from .point_pooled import GeneralizedPointPooled2d, PointPooled2d, SpatialTransformerPooled3d
+from .point_pooled import (
+    GeneralizedPointPooled2d,
+    PointPooled2d,
+    SpatialTransformerPooled3d,
+)
 from .pyramid import PointPyramid2d
 
 ### Userguide ###

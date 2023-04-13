@@ -6,7 +6,12 @@ from scipy.signal import convolve2d
 
 from ..transforms import DataTransform, Delay, MovieTransform, Subsequence
 from ..utils import recursively_load_dict_contents_from_group
-from .base import AttributeTransformer, DirectoryAttributeHandler, FileTreeDatasetBase, TransformDataset
+from .base import (
+    AttributeTransformer,
+    DirectoryAttributeHandler,
+    FileTreeDatasetBase,
+    TransformDataset,
+)
 
 
 class H5SequenceSet(TransformDataset):

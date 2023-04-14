@@ -84,8 +84,8 @@ class FiringRateEncoder(Encoder):
         else:
             return self.nonlinearity_fn(x)
 
-    def predict_mean(self, x, data_key, *args, **kwargs):
+    def predict_mean(self, x, *args, data_key=None, **kwargs):
         return self.forward(x, *args, data_key=data_key, **kwargs)
 
-    def predict_variance(self, x, data_key, *args, **kwargs):
+    def predict_variance(self, x, *args, data_key=None, **kwargs):
         return self.forward(x, *args, data_key=data_key, **kwargs)

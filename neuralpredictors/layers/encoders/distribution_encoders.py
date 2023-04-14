@@ -39,9 +39,9 @@ class GammaEncoder(GeneralizedEncoderBase):
         return concentration / rate**2
 
     def forward(self, *args, **kwargs):
-        rate, concentration = super().forward(*args, **kwargs)
+        concentration, rate = super().forward(*args, **kwargs)
         if self.min_rate is not None:
             rate = rate.clamp(min=self.min_rate)
         if self.max_concentration is not None:
             concentration = concentration.clamp(max=self.max_concentration)
-        return rate, concentration
+        return concentration, rate

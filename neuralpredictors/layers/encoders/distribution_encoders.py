@@ -1,4 +1,5 @@
-from torch.nn import Identity
+import torch
+from torch import nn
 
 from neuralpredictors.layers.activations import Elu1
 
@@ -7,7 +8,7 @@ from .base import GeneralizedEncoderBase
 
 class GaussianEncoder(GeneralizedEncoderBase):
     def __init__(self, core, readout, shifter=None, modulator=None, eps=1.0e-6):
-        nonlinearity_type_list = [Identity(), Elu1()]
+        nonlinearity_type_list = [nn.Identity(), Elu1()]
         nonlinearity_config_list = [{}, {"inplace": False, "eps": eps}]
 
         super().__init__(core, readout, nonlinearity_type_list, shifter, modulator, nonlinearity_config_list)

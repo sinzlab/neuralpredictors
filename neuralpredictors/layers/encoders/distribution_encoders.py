@@ -22,7 +22,18 @@ class GaussianEncoder(GeneralizedEncoderBase):
 
 
 class GammaEncoder(GeneralizedEncoderBase):
-    def __init__(self, core, readout, shifter=None, modulator=None, eps=1.0e-6, max_concentration=None, min_rate=None, concentration_image_dependent=True, rate_image_dependent=True):
+    def __init__(
+        self,
+        core,
+        readout,
+        shifter=None,
+        modulator=None,
+        eps=1.0e-6,
+        max_concentration=None,
+        min_rate=None,
+        concentration_image_dependent=True,
+        rate_image_dependent=True,
+    ):
         nonlinearity_type_list = [Elu1(), Elu1()]
         nonlinearity_config_list = [{"inplace": False, "eps": eps}, {"inplace": False, "eps": eps}]
 
@@ -54,10 +65,13 @@ class GammaEncoder(GeneralizedEncoderBase):
         concentration, rate = super().forward(x, *args, data_key=data_key, **kwargs)
 
         if not self.concentration_image_dependent:
-            concentration = self.nonlinearity_type_list[0](self.concentration_before_nonlinearity[data_key], **self.nonlinearity_config_list[0])
+            concentration = self.nonlinearity_type_list[0](
+                self.concentration_before_nonlinearity[data_key], **self.nonlinearity_config_list[0]
+            )
         if not self.rate_image_dependent:
-            rate = self.nonlinearity_type_list[1](self.rate_before_nonlinearity[data_key], **self.nonlinearity_config_list[1])
-
+            rate = self.nonlinearity_type_list[1](
+                self.rate_before_nonlinearity[data_key], **self.nonlinearity_config_list[1]
+            )
         if self.min_rate is not None:
             rate = rate.clamp(min=self.min_rate)
         if self.max_concentration is not None:

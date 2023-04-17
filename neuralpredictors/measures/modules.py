@@ -1,7 +1,6 @@
 import logging
 import warnings
 
-import numpy as np
 import torch
 import torch.distributions as d
 from torch import nn
@@ -61,33 +60,29 @@ class AvgCorr(nn.Module):
 
 
 class PoissonLoss(nn.Module):
-    def __init__(self, bias=1e-12, per_neuron=False, avg=True, full_loss=False):
+    def __init__(self, bias=1e-08, per_neuron=False, avg=True, full_loss=False):
         """
-        Computes Poisson loss between the output and target. Loss is evaluated by computing log likelihood
-        (up to a constant offset dependent on the target) that
+        Computes Poisson loss between the output and target. Loss is evaluated by computing log likelihood that
         output prescribes the mean of the Poisson distribution and target is a sample from the distribution.
 
         Args:
-            bias (float, optional): Value used to numerically stabilize evalution of the log-likelihood. This value is effecitvely added to the output during evaluation. Defaults to 1e-12.
+            bias (float, optional): Value used to numerically stabilize evalution of the log-likelihood. This value is effecitvely added to the output during evaluation. Defaults to 1e-08.
             per_neuron (bool, optional): If set to True, the average/total Poisson loss is returned for each entry of the last dimension (assumed to be enumeration neurons) separately. Defaults to False.
             avg (bool, optional): If set to True, return mean loss. Otherwise returns the sum of loss. Defaults to True.
             full_loss (bool, optional): If set to True, compute the full loss, i.e. with Stirling correction term (not needed for optimization but needed for reporting of performance). Defaults to False.
         """
         super().__init__()
         self.bias = bias
+        self.full_loss = full_loss
         self.per_neuron = per_neuron
         self.avg = avg
-        self.full_loss = full_loss
         if self.avg:
             warnings.warn("Poissonloss is averaged per batch. It's recommended to use `sum` instead")
 
     def forward(self, output, target):
         target = target.detach()
-        loss = output - target * torch.log(output + self.bias)
-        if self.full_loss:
-            stirling_term = target * torch.log(target) - target + 0.5 * torch.log(2 * np.pi * target)
-            stirling_term[target <= 1] = 0
-            loss = loss + stirling_term
+        rate = output
+        loss = nn.PoissonNLLLoss(log_input=False, full=self.full_loss, eps=self.bias, reduction="none")(rate, target)
 
         if not self.per_neuron:
             loss = loss.mean() if self.avg else loss.sum()

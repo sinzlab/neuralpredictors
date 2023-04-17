@@ -15,10 +15,10 @@ class Encoder(nn.Module):
             reg += self.modulator.regularizer(data_key=data_key)
         return reg
 
-    def predict_mean(self, x, data_key, *args, **kwargs):
+    def predict_mean(self, x, *args, data_key=None, **kwargs):
         raise NotImplementedError()
 
-    def predict_variance(self, x, data_key, *args, **kwargs):
+    def predict_variance(self, x, *args, data_key=None, **kwargs):
         raise NotImplementedError()
 
 

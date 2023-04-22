@@ -1,9 +1,9 @@
 from collections import Iterable, namedtuple
+from functools import partial
 
 import numpy as np
 import torch
 from skimage.transform import rescale
-from functools import partial
 
 
 def transform_function(img, behavior, key):

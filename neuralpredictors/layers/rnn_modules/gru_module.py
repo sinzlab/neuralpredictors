@@ -1,8 +1,9 @@
-from torch import nn
-from torch.nn.init import xavier_normal
 import torch
-from torch.nn import functional as F, Parameter
 import torch.nn.init as init
+from torch import nn
+from torch.nn import Parameter
+from torch.nn import functional as F
+from torch.nn.init import xavier_normal
 
 
 # ---- general RNN core cell

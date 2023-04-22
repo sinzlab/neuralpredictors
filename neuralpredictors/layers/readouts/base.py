@@ -68,7 +68,7 @@ class Readout(Module):
         return reduction
 
     def resolve_deprecated_gamma_readout(
-        self, feature_reg_weight: Optional[float], gamma_readout: Optional[float], default: [float] = 1.0
+        self, feature_reg_weight: Optional[float], gamma_readout: Optional[float], default: float = 1.0
     ) -> float:
         if feature_reg_weight is not None:
             if gamma_readout is not None:

@@ -316,6 +316,8 @@ class DepthLaplaceL21d(nn.Module):
     def forward(self, x, avg=False):
         oc, ic, t = x.size()
         if avg:
-            return torch.mean(self.laplace(x.reshape(oc * ic, 1, t)).pow(2)) / torch.mean(x.reshape(oc * ic, 1, t).pow(2))
+            return torch.mean(self.laplace(x.reshape(oc * ic, 1, t)).pow(2)) / torch.mean(
+                x.reshape(oc * ic, 1, t).pow(2)
+            )
         else:
             return torch.sum(self.laplace(x.reshape(oc * ic, 1, t)).pow(2)) / torch.sum(x.reshape(oc * ic, 1, t).pow(2))

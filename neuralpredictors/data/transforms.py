@@ -19,7 +19,13 @@ def transform_function(img, behavior, key):
     cat_axis = len(img.shape) - 3 if key == "images" else len(img.shape) - 4
     axis_to_add = (len(img.shape) - 2, (len(img.shape) - 1))
     expanded_behavior = shape_changer * np.expand_dims(behavior, axis=axis_to_add)
-    return np.concatenate((img, expanded_behavior,), axis=cat_axis,)
+    return np.concatenate(
+        (
+            img,
+            expanded_behavior,
+        ),
+        axis=cat_axis,
+    )
 
 
 class Invertible:
@@ -334,10 +340,16 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
     """
 
     def __init__(
-        self, data, stats_source="all", exclude=None, 
-        inputs_mean=None, inputs_std=None, 
-        subtract_behavior_mean=False, 
-        in_name=None, out_name=None, eye_name=None,
+        self,
+        data,
+        stats_source="all",
+        exclude=None,
+        inputs_mean=None,
+        inputs_std=None,
+        subtract_behavior_mean=False,
+        in_name=None,
+        out_name=None,
+        eye_name=None,
     ):
 
         self.exclude = exclude or []
@@ -424,12 +436,11 @@ class AddBehaviorAsChannels(MovieTransform, StaticTransform, Invertible):
     """
 
     def __init__(self, key):
-        
-        
+
         if not (key in ["videos", "images"]):
             raise ValueError("The provided key must be either 'videos' or 'images'")
-        
-        self.key = key    
+
+        self.key = key
         self.transforms, self.itransforms = {}, {}
         self.transforms[key] = partial(transform_function)
         self.transforms["responses"] = lambda x: x
@@ -486,7 +497,7 @@ class AddPupilCenterAsChannels(MovieTransform, StaticTransform, Invertible):
             dd["trial_idx"] = self.transforms["trial_idx"](key_vals["trial_idx"])
         return x.__class__(**dd)
 
-    
+
 class ExpandChannels(MovieTransform, StaticTransform, Invertible):
     """
     A Transformation that adds and empty channel to a video if it lacks the color channel.
@@ -530,7 +541,7 @@ class ExpandChannels(MovieTransform, StaticTransform, Invertible):
         if "trial_idx" in key_vals:
             dd["trial_idx"] = self.transforms["trial_idx"](key_vals["trial_idx"])
         return x.__class__(**dd)
-    
+
 
 class SelectInputChannel(StaticTransform):
     """
@@ -584,11 +595,13 @@ class ScaleInputs(StaticTransform, Invertible, MovieTransform):
             channel_axis=self.channel_axis,
         )
         return x.__class__(**key_vals)
-    
-    
+
+
 class ChangeChannelsOrder(StaticTransform, Invertible, MovieTransform):
     def __init__(
-        self, new_order, in_name="images",
+        self,
+        new_order,
+        in_name="images",
     ):
         """
         applies np.transpose to the images / videos

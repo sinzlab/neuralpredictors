@@ -136,4 +136,3 @@ class GRU_Module(nn.Module):
         if not batch:
             out = torch.squeeze(out, dim=0)
         return out
-    

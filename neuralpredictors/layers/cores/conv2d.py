@@ -116,15 +116,10 @@ class Stacked2dCore(Core, nn.Module):
             raise ValueError("depth_separable and attention_conv can not both be true")
 
         if independent_bn_bias:
-            warnings.warn(
-                "Deprecated `independent_bn_bias` argument will be removed in the future. Set "
-                "`independent_bn_bias=False` and control batch norm behavior by setting "
-                "`batch_norm`, `batch_norm_scale`, `final_batchnorm_scale`."
-            )
             if not bias or not batch_norm_scale or not final_batchnorm_scale:
-                raise ValueError(
-                    "Setting `independent_bn_bias=True` leads to `bias=False` or `batch_norm_scale=False` or "
-                    "`final_batchnorm_scale=False` being ignored."
+                warnings.warn(
+                    "The default of `independent_bn_bias=True` will ignore the kwargs `bias`, `batch_norm_scale`, and "
+                    "`final_batchnorm_scale` when initializing the batchnorm. If you want to use these arguments, please set `independent_bn_bias=False`."
                 )
         self.batch_norm = batch_norm
         self.final_batchnorm_scale = final_batchnorm_scale
@@ -564,10 +559,8 @@ class SE2dCore(Stacked2dCore, nn.Module):
         """
         Args:
             See Stacked2dCore for all input arguments.
-
             This core provides the functionality to add Squeeze and Excitation Layers, which can be done through
             these additional arguments:
-
             se_reduction:   Int, Reduction of channels for global pooling of the Squeeze and Excitation Block.
             n_se_blocks:    Int, number of squeeze and excitation blocks. Inserted from the last layer
                               Examples: layers=4, n_se_blocks=2:

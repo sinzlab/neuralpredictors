@@ -1,4 +1,9 @@
-from collections import Iterable, namedtuple
+from collections import namedtuple
+
+try:
+    from collections import Iterable
+except:
+    from collections.abc import Iterable
 
 import numpy as np
 import torch

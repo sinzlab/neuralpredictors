@@ -73,9 +73,10 @@ def early_stopping(
             Tracker to be invoked for every epoch. `log_objective` is invoked with the current value of `objective`. Note that `finalize`
             method is NOT invoked.
         scheduler:  scheduler object or tuple of two scheduler objects, which automatically modifies the LR by a specified amount.
-                    The scheduler's `step` method is invoked for a the approptiate scheduler if a tuple of two schedulers is provided.
-                    The current value of `objective` is passed to the `step` method if the scheduler at hand is `ReduceLROnPlateau`.
-                    For example a provided tuple of scheduler can be of the form:
+                    If a tuple of schedulers is provided the 1st scheduler is assumed to be the warm up scheduler. The .step method
+                    for the 1st scheduler will be called while epoch is smaller than number_warmup_epochs afterwards the .step method of
+                    the second scheduler is called. The current value of `objective` is passed to the `step` method if the scheduler at hand is `ReduceLROnPlateau`.
+                    For example a provided tuple of schedulers can be of the form:
 
                                  scheduler = (warmup_scheduler,CosineAnnealingLR(*args,**kwargs))
 
@@ -137,6 +138,8 @@ def early_stopping(
     # check if warm up is to be performed
     if isinstance(scheduler, tuple):
         warmup = True
+
+        # check if the warm-up scheduler is not of type None
         if scheduler[0] is None:
             logger.warning(
                 f"Provided warm up scheduler is of type None. Warm up epochs set to {number_warmup_epochs}. Setting number of warm up epochs to 0"
@@ -145,8 +148,11 @@ def early_stopping(
     else:
         warmup = False
 
+    # check if warm up scheduler and number of warm-up epochs is provided
     if warmup and number_warmup_epochs == 0:
         logger.warning("Warm up scheduler is provided, but number of warm up steps is set to 0")
+
+    # inform user that no warm-up scheduler is provided althouth warm-up epochs is non zero
     elif not warmup and number_warmup_epochs > 0:
         logger.warning(
             f"Number of warm up steps is set to {number_warmup_epochs}, but no warm up scheduler is provided"
@@ -171,13 +177,16 @@ def early_stopping(
             # if a scheduler is defined, a .step with or without the current objective is all that is needed to reduce the LR
             if scheduler is not None:
                 if warmup and epoch < number_warmup_epochs:
+                    # warm-up step
                     scheduler[0].step()
                 elif reduce_lr_on_plateau:
+                    # reduce_lr_on_plateau requires current objective for the step
                     if not warmup:
                         scheduler.step(current_objective)
                     else:
                         scheduler[1].step(current_objective)
                 else:
+                    # .step() for the rest of the schedulers
                     if not warmup:
                         scheduler.step()
                     else:

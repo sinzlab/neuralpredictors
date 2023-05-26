@@ -21,7 +21,7 @@ class FullFactorized2d(Readout):
         positive_weights=False,
         shared_features=None,
         mean_activity=None,
-        spatial_and_feature_reg_weight=1.0,
+        spatial_and_feature_reg_weight=None,
         gamma_readout=None,  # depricated, use feature_reg_weight instead
         **kwargs,
     ):
@@ -37,7 +37,7 @@ class FullFactorized2d(Readout):
         self.normalize = normalize
         self.mean_activity = mean_activity
         self.spatial_and_feature_reg_weight = self.resolve_deprecated_gamma_readout(
-            spatial_and_feature_reg_weight, gamma_readout
+            spatial_and_feature_reg_weight, gamma_readout, default=1.0
         )
 
         self._original_features = True

@@ -1,5 +1,9 @@
-from collections import Iterable, namedtuple
+from collections import namedtuple
 from functools import partial
+try:
+    from collections import Iterable
+except:
+    from collections.abc import Iterable
 
 import numpy as np
 import torch
@@ -435,7 +439,7 @@ class AddBehaviorAsChannels(MovieTransform, StaticTransform, Invertible):
         - behavior
     """
 
-    def __init__(self, key):
+    def __init__(self, key="images"):
 
         if not (key in ["videos", "images"]):
             raise ValueError("The provided key must be either 'videos' or 'images'")
@@ -471,7 +475,7 @@ class AddPupilCenterAsChannels(MovieTransform, StaticTransform, Invertible):
         - pupil center
     """
 
-    def __init__(self, key):
+    def __init__(self, key="images"):
         if not (key in ["videos", "images"]):
             raise ValueError("The provided key must be either 'videos' or 'images'")
 

@@ -19,14 +19,14 @@ class AttentionReadout(Readout):
         attention_kernel: int = 1,
         attention_layers: int = 1,
         mean_activity: Optional[torch.Tensor] = None,
-        feature_reg_weight: float = 1.0,
+        feature_reg_weight: Optional[float] = None,
         gamma_readout: Optional[float] = None,  # deprecated, use feature_reg_weight instead
         **kwargs: Any,
     ) -> None:
         super().__init__()  # type: ignore[no-untyped-call]
         self.in_shape = in_shape
         self.outdims = outdims
-        self.feature_reg_weight = self.resolve_deprecated_gamma_readout(feature_reg_weight, gamma_readout)
+        self.feature_reg_weight = self.resolve_deprecated_gamma_readout(feature_reg_weight, gamma_readout, default=1.0)
         self.mean_activity = mean_activity
         c, w, h = in_shape
         self.features = Parameter(torch.Tensor(self.outdims, c))

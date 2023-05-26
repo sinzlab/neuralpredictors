@@ -1,5 +1,6 @@
 from collections import namedtuple
 from functools import partial
+
 try:
     from collections import Iterable
 except:

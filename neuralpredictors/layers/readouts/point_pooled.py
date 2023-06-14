@@ -267,7 +267,7 @@ class GeneralizedPointPooled2d(PointPooled2d):
         y = torch.cat(pools, dim=1)
 
         if self.return_weighted_features:
-            return (y.squeeze(-1).unsqueeze(0) * feat)
+            return y.squeeze(-1).unsqueeze(0) * feat
 
         y = (y.squeeze(-1).unsqueeze(0) * feat).sum(2).view(self.inferred_params_n, N, outdims)
 

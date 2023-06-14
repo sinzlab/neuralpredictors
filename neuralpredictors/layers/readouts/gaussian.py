@@ -701,7 +701,7 @@ class GeneralizedFullGaussianReadout2d(FullGaussian2d):
         y = F.grid_sample(x, grid, align_corners=self.align_corners)
 
         if self.return_weighted_features:
-            return (y.squeeze(-1).unsqueeze(0) * feat).unsqueeze(-1)
+            return (y.squeeze(-1).unsqueeze(0) * feat)
 
         y = (y.squeeze(-1).unsqueeze(0) * feat).sum(2).view(self.inferred_params_n, N, outdims)
 

@@ -1,3 +1,4 @@
+import torch
 from torch import nn
 
 
@@ -77,7 +78,7 @@ class GeneralizedEncoderBase(Encoder):
         params = []
         for param in x:
             params.append(param[None, ...] if len(param.shape) == 1 else param)
-        x = tuple(params)
+        x = torch.stack(params)
 
         if self.modulator:
             x = self.modulator[data_key](x, behavior=behavior)

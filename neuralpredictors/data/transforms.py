@@ -653,7 +653,8 @@ class CutVideos(MovieTransform):
             idx = []
             for k in x._fields:
                 loc = getattr(x, k)
-                idx.append(np.argwhere(np.isnan(loc))[:, self.frame_axis[k]].min())
+                nans = np.argwhere(np.isnan(loc))[:, self.frame_axis[k]]
+                idx.append(nans.min() if nans.size else loc.shape[self.frame_axis[k]])
             idx = np.arange(self.min_frame, min(idx))
             return x.__class__(
                 **{

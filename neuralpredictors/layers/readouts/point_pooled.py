@@ -25,6 +25,7 @@ class PointPooled2d(Readout):
         mean_activity=None,
         feature_reg_weight=1.0,
         gamma_readout=None,  # depricated, use feature_reg_weight instead
+        return_weighted_features=False,
         **kwargs,
     ):
         """
@@ -77,6 +78,7 @@ class PointPooled2d(Readout):
         self.init_range = init_range
         self.align_corners = align_corners
         self.initialize(mean_activity)
+        self.return_weighted_features = return_weighted_features
 
     @property
     def pool_steps(self):
@@ -263,6 +265,10 @@ class GeneralizedPointPooled2d(PointPooled2d):
             x = self.avg(x)
             pools.append(F.grid_sample(x, grid, align_corners=self.align_corners))
         y = torch.cat(pools, dim=1)
+
+        if self.return_weighted_features:
+            return y.squeeze(-1).unsqueeze(0) * feat
+
         y = (y.squeeze(-1).unsqueeze(0) * feat).sum(2).view(self.inferred_params_n, N, outdims)
 
         if self.bias is not None:

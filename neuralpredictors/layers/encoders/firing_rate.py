@@ -39,7 +39,9 @@ class FiringRateEncoder(Encoder):
         self.offset = elu_offset
 
         if nonlinearity_type != "elu" and not np.isclose(elu_offset, 0.0):
-            warnings.warn("If `nonlinearity_type` is not 'elu', `elu_offset` will be ignored")
+            warnings.warn(
+                "If `nonlinearity_type` is not 'elu', `elu_offset` will be ignored"
+            )
         if nonlinearity_type == "elu":
             self.nonlinearity_fn = nn.ELU()
         elif nonlinearity_type == "identity":
@@ -80,7 +82,7 @@ class FiringRateEncoder(Encoder):
             x = self.modulator[data_key](x, behavior=behavior)
 
         if self.nonlinearity_type == "elu":
-            return self.nonlinearity_fn(x + self.offset) + 1
+            return self.nonlinearity_fn(x) + 1 + self.offset
         else:
             return self.nonlinearity_fn(x)
 

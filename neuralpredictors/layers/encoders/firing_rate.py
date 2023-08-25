@@ -73,6 +73,7 @@ class FiringRateEncoder(Encoder):
             shift = self.shifter[data_key](pupil_center, trial_idx)
 
         x = self.readout(x, data_key=data_key, shift=shift, **kwargs)
+        x = x[None, ...] if len(x.shape) == 1 else x  # keep dimensions if only one image was passed
 
         if self.modulator:
             if behavior is None:

@@ -17,8 +17,8 @@ class ZeroInflationLossBase(nn.Module):
         if loc.requires_grad:
             self.multi_clamp(loc, [0.0] * neurons_n, target.max(dim=0)[0])
 
-        zero_mask = target < loc
-        nonzero_mask = target >= loc
+        zero_mask = target <= loc
+        nonzero_mask = target > loc
 
         # spike loss
         spike_logl = torch.log(1 - q) - torch.log(loc)

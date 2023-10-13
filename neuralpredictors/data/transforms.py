@@ -1,5 +1,6 @@
 from collections import namedtuple
 from functools import partial
+from typing import Any
 
 try:
     from collections import Iterable
@@ -141,7 +142,11 @@ class Delay(MovieTransform):
     def __call__(self, x):
         first_group = x._fields[0]
         t = getattr(x, first_group).shape[int(first_group in self.channel_first)]
-        assert t > self.delay, "The sequence length {} has to be longer than the delay {}".format(t, self.delay)
+        assert (
+            t > self.delay
+        ), "The sequence length {} has to be longer than the delay {}".format(
+            t, self.delay
+        )
         key_entry = {}
         for k in x._fields:
             if k in self.delay_groups:
@@ -150,7 +155,11 @@ class Delay(MovieTransform):
                 start = 0
                 stop = t - self.delay
 
-            key_entry[k] = getattr(x, k)[:, start:stop] if k in self.channel_first else getattr(x, k)[start:stop]
+            key_entry[k] = (
+                getattr(x, k)[:, start:stop]
+                if k in self.channel_first
+                else getattr(x, k)[start:stop]
+            )
 
         return x.__class__(**key_entry)
 
@@ -162,7 +171,11 @@ class Delay(MovieTransform):
         first_group = list(id_map.keys())[0]
         v_fg = id_map[first_group]
         t = v_fg.shape[int(first_group in self.channel_first)]
-        assert t > self.delay, "The sequence length {} has to be longer than the delay {}".format(t, self.delay)
+        assert (
+            t > self.delay
+        ), "The sequence length {} has to be longer than the delay {}".format(
+            t, self.delay
+        )
 
         for k, v in id_map.items():
             if k in self.delay_groups:
@@ -175,7 +188,9 @@ class Delay(MovieTransform):
         return new_map
 
     def __repr__(self):
-        return self.__class__.__name__ + "({} on {})".format(self.delay, self.delay_groups)
+        return self.__class__.__name__ + "({} on {})".format(
+            self.delay, self.delay_groups
+        )
 
 
 class Stack(MovieTransform):
@@ -222,7 +237,10 @@ class Stack(MovieTransform):
             n_target = len(target.shape)
             n_source = len(source.shape)
             dims = list(range(-n_target + n_source, 0))
-            groups.append(np.ones((1,) * n_source + target.shape[n_source:]) * np.expand_dims(source, axis=dims))
+            groups.append(
+                np.ones((1,) * n_source + target.shape[n_source:])
+                * np.expand_dims(source, axis=dims)
+            )
         x_dict[self.target] = np.concatenate(groups, axis=self.concat_axis)
         return x.__class__(**x_dict)
 
@@ -232,7 +250,9 @@ class Stack(MovieTransform):
 
     def __repr__(self):
         items = ", ".join(s + ".T" if self.transpose else s for s in self.sources)
-        return self.__class__.__name__ + "(stack [{}] on {} along axis={})".format(items, self.target, self.concat_axis)
+        return self.__class__.__name__ + "(stack [{}] on {} along axis={})".format(
+            items, self.target, self.concat_axis
+        )
 
 
 class Subsample(MovieTransform, StaticTransform):
@@ -266,7 +286,9 @@ class Subsample(MovieTransform, StaticTransform):
     def __call__(self, x):
         return x.__class__(
             **{
-                k: np.take(getattr(x, k), self.idx, self.target_index[k]) if k in self.target_groups else getattr(x, k)
+                k: np.take(getattr(x, k), self.idx, self.target_index[k])
+                if k in self.target_groups
+                else getattr(x, k)
                 for k in x._fields
             }
         )
@@ -275,7 +297,9 @@ class Subsample(MovieTransform, StaticTransform):
         return self.__class__.__name__ + "(n={})".format(len(self.idx))
 
     def id_transform(self, id_map):
-        return {k: v[self.idx] if k in self.target_groups else v for k, v in id_map.items()}
+        return {
+            k: v[self.idx] if k in self.target_groups else v for k, v in id_map.items()
+        }
 
 
 class ToTensor(MovieTransform, StaticTransform, Invertible):
@@ -356,18 +380,29 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
         out_name=None,
         eye_name=None,
     ):
-
         self.exclude = exclude or []
 
         if in_name is None:
             in_name = "images" if "images" in data.statistics.keys() else "inputs"
         if out_name is None:
-            out_name = "responses" if "responses" in data.statistics.keys() else "targets"
+            out_name = (
+                "responses" if "responses" in data.statistics.keys() else "targets"
+            )
         if eye_name is None:
-            eye_name = "pupil_center" if "pupil_center" in data.data_keys else "eye_position"
+            eye_name = (
+                "pupil_center" if "pupil_center" in data.data_keys else "eye_position"
+            )
 
-        self._inputs_mean = data.statistics[in_name][stats_source]["mean"][()] if inputs_mean is None else inputs_mean
-        self._inputs_std = data.statistics[in_name][stats_source]["std"][()] if inputs_mean is None else inputs_std
+        self._inputs_mean = (
+            data.statistics[in_name][stats_source]["mean"][()]
+            if inputs_mean is None
+            else inputs_mean
+        )
+        self._inputs_std = (
+            data.statistics[in_name][stats_source]["std"][()]
+            if inputs_mean is None
+            else inputs_std
+        )
 
         s = np.array(data.statistics[out_name][stats_source]["std"])
 
@@ -405,12 +440,18 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
             s = np.array(data.statistics["behavior"][stats_source]["std"])
 
             self.behavior_mean = (
-                0 if not subtract_behavior_mean else np.array(data.statistics["behavior"][stats_source]["mean"])
+                0
+                if not subtract_behavior_mean
+                else np.array(data.statistics["behavior"][stats_source]["mean"])
             )
             self._behavior_precision = 1 / s
             # -- behavior
-            transforms["behavior"] = lambda x: (x - self.behavior_mean) * self._behavior_precision
-            itransforms["behavior"] = lambda x: x / self._behavior_precision + self.behavior_mean
+            transforms["behavior"] = (
+                lambda x: (x - self.behavior_mean) * self._behavior_precision
+            )
+            itransforms["behavior"] = (
+                lambda x: x / self._behavior_precision + self.behavior_mean
+            )
 
         self._transforms = transforms
         self._itransforms = itransforms
@@ -420,16 +461,26 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
         Apply transformation
         """
         return x.__class__(
-            **{k: (self._transforms[k](v) if k not in self.exclude else v) for k, v in zip(x._fields, x)}
+            **{
+                k: (self._transforms[k](v) if k not in self.exclude else v)
+                for k, v in zip(x._fields, x)
+            }
         )
 
     def inv(self, x):
         return x.__class__(
-            **{k: (self._itransforms[k](v) if k not in self.exclude else v) for k, v in zip(x._fields, x)}
+            **{
+                k: (self._itransforms[k](v) if k not in self.exclude else v)
+                for k, v in zip(x._fields, x)
+            }
         )
 
     def __repr__(self):
-        return super().__repr__() + ("(not {})".format(", ".join(self.exclude)) if self.exclude is not None else "")
+        return super().__repr__() + (
+            "(not {})".format(", ".join(self.exclude))
+            if self.exclude is not None
+            else ""
+        )
 
 
 class AddBehaviorAsChannels(MovieTransform, StaticTransform, Invertible):
@@ -441,7 +492,6 @@ class AddBehaviorAsChannels(MovieTransform, StaticTransform, Invertible):
     """
 
     def __init__(self, key="images"):
-
         if not (key in ["videos", "images"]):
             raise ValueError("The provided key must be either 'videos' or 'images'")
 
@@ -456,12 +506,16 @@ class AddBehaviorAsChannels(MovieTransform, StaticTransform, Invertible):
     def __call__(self, x):
         key_vals = {k: v for k, v in zip(x._fields, x)}
         dd = {
-            self.key: self.transforms[self.key](key_vals[self.key], key_vals["behavior"], self.key),
+            self.key: self.transforms[self.key](
+                key_vals[self.key], key_vals["behavior"], self.key
+            ),
             "responses": self.transforms["responses"](key_vals["responses"]),
             "behavior": self.transforms["behavior"](key_vals["behavior"]),
         }
         if "pupil_center" in key_vals:
-            dd["pupil_center"] = self.transforms["pupil_center"](key_vals["pupil_center"])
+            dd["pupil_center"] = self.transforms["pupil_center"](
+                key_vals["pupil_center"]
+            )
         if "trial_idx" in key_vals:
             dd["trial_idx"] = self.transforms["trial_idx"](key_vals["trial_idx"])
         return x.__class__(**dd)
@@ -488,10 +542,11 @@ class AddPupilCenterAsChannels(MovieTransform, StaticTransform, Invertible):
         self.transforms["pupil_center"] = lambda x: x
 
     def __call__(self, x):
-
         key_vals = {k: v for k, v in zip(x._fields, x)}
         dd = {
-            self.key: self.transforms[self.key](key_vals[self.key], key_vals["pupil_center"], self.key),
+            self.key: self.transforms[self.key](
+                key_vals[self.key], key_vals["pupil_center"], self.key
+            ),
             "responses": self.transforms["responses"](key_vals["responses"]),
         }
         if "behavior" in key_vals:
@@ -542,7 +597,9 @@ class ExpandChannels(MovieTransform, StaticTransform, Invertible):
         if "behavior" in key_vals:
             dd["behavior"] = self.transforms["behavior"](key_vals["behavior"])
         if "pupil_center" in key_vals:
-            dd["pupil_center"] = self.transforms["pupil_center"](key_vals["pupil_center"])
+            dd["pupil_center"] = self.transforms["pupil_center"](
+                key_vals["pupil_center"]
+            )
         if "trial_idx" in key_vals:
             dd["trial_idx"] = self.transforms["trial_idx"](key_vals["trial_idx"])
         return x.__class__(**dd)
@@ -554,12 +611,18 @@ class SelectInputChannel(StaticTransform):
     """
 
     def __init__(self, grab_channel):
-        self.grab_channel = grab_channel if isinstance(grab_channel, Iterable) else [grab_channel]
+        self.grab_channel = (
+            grab_channel if isinstance(grab_channel, Iterable) else [grab_channel]
+        )
 
     def __call__(self, x):
         key_vals = {k: v for k, v in zip(x._fields, x)}
         img = key_vals["images"]
-        key_vals["images"] = img[:, (self.grab_channel,)] if len(img.shape) == 4 else img[self.grab_channel, ...]
+        key_vals["images"] = (
+            img[:, (self.grab_channel,)]
+            if len(img.shape) == 4
+            else img[self.grab_channel, ...]
+        )
         return x.__class__(**key_vals)
 
 
@@ -578,7 +641,6 @@ class ScaleInputs(StaticTransform, Invertible, MovieTransform):
         in_name="images",
         channel_axis=0,
     ):
-
         self.scale = scale
         self.mode = mode
         self.anti_aliasing = anti_aliasing
@@ -622,6 +684,21 @@ class ChangeChannelsOrder(StaticTransform, Invertible, MovieTransform):
         return x.__class__(**key_vals)
 
 
+class SelectBehaviorChannels(StaticTransform, MovieTransform):
+    """
+    Select part of channels for the behavior
+    """
+
+    def __init__(self, channels=[0, 1]):
+        self.channels = channels
+
+    def __call__(self, x):
+        key_vals = {k: v for k, v in zip(x._fields, x)}
+        behavior = key_vals["behavior"]
+        key_vals["behavior"] = behavior[self.channels, ...]
+        return x.__class__(**key_vals)
+
+
 class CutVideos(MovieTransform):
     def __init__(
         self,
@@ -658,7 +735,9 @@ class CutVideos(MovieTransform):
             idx = np.arange(self.min_frame, min(idx))
             return x.__class__(
                 **{
-                    k: np.take(getattr(x, k), idx, self.frame_axis[k]) if k in self.target_groups else getattr(x, k)
+                    k: np.take(getattr(x, k), idx, self.frame_axis[k])
+                    if k in self.target_groups
+                    else getattr(x, k)
                     for k in x._fields
                 }
             )

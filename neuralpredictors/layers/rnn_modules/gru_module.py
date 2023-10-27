@@ -36,7 +36,17 @@ class ConvGRUCell(RNNCore, nn.Module):
     Convolutional GRU cell taken from: https://github.com/sinzlab/Sinz2018_NIPS/blob/master/nips2018/architectures/cores.py
     """
 
-    def __init__(self, input_channels, rec_channels, input_kern, rec_kern, gamma_rec=0, pad_input=True, **kwargs):
+    def __init__(
+        self,
+        input_channels,
+        rec_channels,
+        input_kern,
+        rec_kern,
+        groups=1,
+        gamma_rec=0,
+        pad_input=True,
+        **kwargs,
+    ):
         super().__init__()
 
         input_padding = input_kern // 2 if pad_input else 0
@@ -44,23 +54,62 @@ class ConvGRUCell(RNNCore, nn.Module):
 
         self.rec_channels = rec_channels
         self._shrinkage = 0 if pad_input else input_kern - 1
+        self.groups = groups
 
         self.gamma_rec = gamma_rec
-        self.reset_gate_input = nn.Conv2d(input_channels, rec_channels, input_kern, padding=input_padding)
-        self.reset_gate_hidden = nn.Conv2d(rec_channels, rec_channels, rec_kern, padding=rec_padding)
+        self.reset_gate_input = nn.Conv2d(
+            input_channels,
+            rec_channels,
+            input_kern,
+            padding=input_padding,
+            groups=self.groups,
+        )
+        self.reset_gate_hidden = nn.Conv2d(
+            rec_channels,
+            rec_channels,
+            rec_kern,
+            padding=rec_padding,
+            groups=self.groups,
+        )
 
-        self.update_gate_input = nn.Conv2d(input_channels, rec_channels, input_kern, padding=input_padding)
-        self.update_gate_hidden = nn.Conv2d(rec_channels, rec_channels, rec_kern, padding=rec_padding)
+        self.update_gate_input = nn.Conv2d(
+            input_channels,
+            rec_channels,
+            input_kern,
+            padding=input_padding,
+            groups=self.groups,
+        )
+        self.update_gate_hidden = nn.Conv2d(
+            rec_channels,
+            rec_channels,
+            rec_kern,
+            padding=rec_padding,
+            groups=self.groups,
+        )
 
-        self.out_gate_input = nn.Conv2d(input_channels, rec_channels, input_kern, padding=input_padding)
-        self.out_gate_hidden = nn.Conv2d(rec_channels, rec_channels, rec_kern, padding=rec_padding)
+        self.out_gate_input = nn.Conv2d(
+            input_channels,
+            rec_channels,
+            input_kern,
+            padding=input_padding,
+            groups=self.groups,
+        )
+        self.out_gate_hidden = nn.Conv2d(
+            rec_channels,
+            rec_channels,
+            rec_kern,
+            padding=rec_padding,
+            groups=self.groups,
+        )
 
         self.apply(self.init_conv)
         self.register_parameter("_prev_state", None)
 
     def init_state(self, input_):
         batch_size, _, *spatial_size = input_.data.size()
-        state_size = [batch_size, self.rec_channels] + [s - self._shrinkage for s in spatial_size]
+        state_size = [batch_size, self.rec_channels] + [
+            s - self._shrinkage for s in spatial_size
+        ]
         prev_state = torch.zeros(*state_size)
         if input_.is_cuda:
             prev_state = prev_state.cuda()
@@ -98,7 +147,17 @@ class ConvGRUCell(RNNCore, nn.Module):
 
 
 class GRU_Module(nn.Module):
-    def __init__(self, input_channels, rec_channels, input_kern, rec_kern, gamma_rec=0, pad_input=True, **kwargs):
+    def __init__(
+        self,
+        input_channels,
+        rec_channels,
+        input_kern,
+        rec_kern,
+        groups=1,
+        gamma_rec=0,
+        pad_input=True,
+        **kwargs,
+    ):
         """
         A GRU module for video data to add between the core and the readout.
         Recieves as input the output of a 3Dcore. Expected dimentions:
@@ -107,7 +166,13 @@ class GRU_Module(nn.Module):
         """
         super().__init__()
         self.gru = ConvGRUCell(
-            input_channels, rec_channels, input_kern, rec_kern, gamma_rec=gamma_rec, pad_input=pad_input
+            input_channels,
+            rec_channels,
+            input_kern,
+            rec_kern,
+            groups=groups,
+            gamma_rec=gamma_rec,
+            pad_input=pad_input,
         )
 
     def forward(self, x):
@@ -130,7 +195,9 @@ class GRU_Module(nn.Module):
         frame_pos = 2
 
         for frame in range(x.shape[frame_pos]):
-            slice_channel = [frame if frame_pos == i else slice(None) for i in range(len(x.shape))]
+            slice_channel = [
+                frame if frame_pos == i else slice(None) for i in range(len(x.shape))
+            ]
             hidden = self.gru(x[slice_channel], hidden)
             states.append(hidden)
         out = torch.stack(states, frame_pos)

@@ -107,9 +107,7 @@ class ConvGRUCell(RNNCore, nn.Module):
 
     def init_state(self, input_):
         batch_size, _, *spatial_size = input_.data.size()
-        state_size = [batch_size, self.rec_channels] + [
-            s - self._shrinkage for s in spatial_size
-        ]
+        state_size = [batch_size, self.rec_channels] + [s - self._shrinkage for s in spatial_size]
         prev_state = torch.zeros(*state_size)
         if input_.is_cuda:
             prev_state = prev_state.cuda()
@@ -195,9 +193,7 @@ class GRU_Module(nn.Module):
         frame_pos = 2
 
         for frame in range(x.shape[frame_pos]):
-            slice_channel = [
-                frame if frame_pos == i else slice(None) for i in range(len(x.shape))
-            ]
+            slice_channel = [frame if frame_pos == i else slice(None) for i in range(len(x.shape))]
             hidden = self.gru(x[slice_channel], hidden)
             states.append(hidden)
         out = torch.stack(states, frame_pos)

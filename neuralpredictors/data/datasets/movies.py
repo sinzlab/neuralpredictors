@@ -3,6 +3,7 @@ from collections import namedtuple
 import h5py
 import numpy as np
 from scipy.signal import convolve2d
+from torch.utils.data import Dataset
 
 from ..transforms import DataTransform, Delay, MovieTransform, Subsequence
 from ..utils import recursively_load_dict_contents_from_group
@@ -233,3 +234,49 @@ class MovieFileTreeDataset(FileTreeDatasetBase):
         if self.rename_output:
             x = self._output_point(*x)
         return x
+
+
+class NRandomSubSequenceDataset(Dataset):
+    """
+    Data augmentation for training. 
+    Generate a new dataset based on dat2, by random sampling of each training item in dat2 for multiple times.
+    This only works for movie data and each sampling is a subsequence of the full sequence in a dat2 item.
+    Args:
+        dat2: an original dataset
+        newtiers: list, tiers for each item in new dataset
+        newinds: list, indice for each item in new dataset
+        random_start: array, start positions at each dat2 item for random sampling
+        subsequence_length: the length of each subsequence
+    """
+
+    def __init__(self, dat2, newtiers, newinds, random_start, subsequence_length):
+        self.dat2 = dat2
+        self.newtiers = newtiers
+        self.newinds = newinds
+        self.random_start = random_start
+        self.num4rand = len(self.random_start)
+        self.random_end = self.random_start + subsequence_length
+
+    def __getitem__(self, index):
+        if self.newtiers[index] == "train":
+            return self.dat2[self.newinds[index]].__class__(
+                **{
+                    k: getattr(self.dat2[self.newinds[index]], k)[
+                        :,
+                        self.random_start[index % self.num4rand] : self.random_end[
+                            index % self.num4rand
+                        ],
+                    ]
+                    for k in self.dat2[self.newinds[index]]._fields
+                }
+            )
+
+        else:
+            return self.dat2[self.newinds[index]]
+
+    def __len__(self):
+        return len(self.newtiers)
+
+    @property
+    def neurons(self):
+        return self.dat2.neurons

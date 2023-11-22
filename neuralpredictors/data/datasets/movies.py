@@ -238,7 +238,7 @@ class MovieFileTreeDataset(FileTreeDatasetBase):
 
 class NRandomSubSequenceDataset(Dataset):
     """
-    Data augmentation for training. 
+    Data augmentation for training.
     Generate a new dataset based on dat2, by random sampling of each training item in dat2 for multiple times.
     This only works for movie data and each sampling is a subsequence of the full sequence in a dat2 item.
     Args:
@@ -263,9 +263,7 @@ class NRandomSubSequenceDataset(Dataset):
                 **{
                     k: getattr(self.dat2[self.newinds[index]], k)[
                         :,
-                        self.random_start[index % self.num4rand] : self.random_end[
-                            index % self.num4rand
-                        ],
+                        self.random_start[index % self.num4rand] : self.random_end[index % self.num4rand],
                     ]
                     for k in self.dat2[self.newinds[index]]._fields
                 }

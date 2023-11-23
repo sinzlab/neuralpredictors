@@ -239,42 +239,56 @@ class MovieFileTreeDataset(FileTreeDatasetBase):
 class NRandomSubSequenceDataset(Dataset):
     """
     Data augmentation for training.
-    Generate a new dataset based on dat2, by random sampling of each training item in dat2 for multiple times.
-    This only works for movie data and each sampling is a subsequence of the full sequence in a dat2 item.
+    Generate a new dataset based on original_dat, by random sampling of each training item in original_dat for multiple times.
+    This only works for movie data and each sampling is a subsequence of the full sequence in a original_dat item.
     Args:
-        dat2: an original dataset
-        newtiers: list, tiers for each item in new dataset
-        newinds: list, indice for each item in new dataset
-        random_start: array, start positions at each dat2 item for random sampling
+        original_dat: an original dataset
+        new_tiers: list, tiers for each item in new dataset
+        new_inds: list, indice for each item in new dataset
+        num_random_subsequence: number of subsequences sampled from each original_dat item
         subsequence_length: the length of each subsequence
+        sequence_length: full sequence length of a training item from original_dat
+        seed: random seed
     """
 
-    def __init__(self, dat2, newtiers, newinds, random_start, subsequence_length):
-        self.dat2 = dat2
-        self.newtiers = newtiers
-        self.newinds = newinds
-        self.random_start = random_start
+    def __init__(
+        self,
+        original_dat,
+        new_tiers,
+        new_inds,
+        num_random_subsequence,
+        subsequence_length,
+        sequence_length=300,
+        seed=10,
+    ):
+        self.original_dat = original_dat
+        self.new_tiers = new_tiers
+        self.new_inds = new_inds
+        np.random.seed(seed)
+        self.random_start = np.random.randint(
+            low=0, high=sequence_length - subsequence_length, size=num_random_subsequence
+        )  # array, start positions at each original_dat item for random sampling
         self.num4rand = len(self.random_start)
         self.random_end = self.random_start + subsequence_length
 
     def __getitem__(self, index):
-        if self.newtiers[index] == "train":
-            return self.dat2[self.newinds[index]].__class__(
+        if self.new_tiers[index] == "train":
+            return self.original_dat[self.new_inds[index]].__class__(
                 **{
-                    k: getattr(self.dat2[self.newinds[index]], k)[
+                    k: getattr(self.original_dat[self.new_inds[index]], k)[
                         :,
                         self.random_start[index % self.num4rand] : self.random_end[index % self.num4rand],
                     ]
-                    for k in self.dat2[self.newinds[index]]._fields
+                    for k in self.original_dat[self.new_inds[index]]._fields
                 }
             )
 
         else:
-            return self.dat2[self.newinds[index]]
+            return self.original_dat[self.new_inds[index]]
 
     def __len__(self):
-        return len(self.newtiers)
+        return len(self.new_tiers)
 
     @property
     def neurons(self):
-        return self.dat2.neurons
+        return self.original_dat.neurons

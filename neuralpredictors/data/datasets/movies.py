@@ -243,8 +243,6 @@ class NRandomSubSequenceDataset(Dataset):
     This only works for movie data and each sampling is a subsequence of the full sequence in a original_dat item.
     Args:
         original_dat: an original dataset
-        new_tiers: list, tiers for each item in new dataset
-        new_inds: list, indice for each item in new dataset
         num_random_subsequence: number of subsequences sampled from each original_dat item
         subsequence_length: the length of each subsequence
         sequence_length: full sequence length of a training item from original_dat
@@ -254,13 +252,23 @@ class NRandomSubSequenceDataset(Dataset):
     def __init__(
         self,
         original_dat,
-        new_tiers,
-        new_inds,
-        num_random_subsequence,
-        subsequence_length,
+        num_random_subsequence=10,
+        subsequence_length=100,
         sequence_length=300,
         seed=10,
     ):
+        new_tiers = []  # list, tiers for each item in new dataset
+        new_inds = []  # list, indice for each item in new dataset
+        for ii, tier in enumerate(original_dat.trial_info.tiers):
+            if tier != "none":  # if tier!='none' and ii<15:
+                # print (ii, dat2[ii]._fields, tier)
+                if tier == "train":
+                    new_tiers.extend(["train"] * num_random_subsequence)
+                    new_inds.extend([ii] * num_random_subsequence)
+                else:
+                    new_tiers.append(tier)
+                    new_inds.append(ii)
+
         self.original_dat = original_dat
         self.new_tiers = new_tiers
         self.new_inds = new_inds

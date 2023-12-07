@@ -1,5 +1,6 @@
 from collections import namedtuple
 from functools import partial
+from typing import Any
 
 try:
     from collections import Iterable
@@ -356,7 +357,6 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
         out_name=None,
         eye_name=None,
     ):
-
         self.exclude = exclude or []
 
         if in_name is None:
@@ -441,7 +441,6 @@ class AddBehaviorAsChannels(MovieTransform, StaticTransform, Invertible):
     """
 
     def __init__(self, key="images"):
-
         if not (key in ["videos", "images"]):
             raise ValueError("The provided key must be either 'videos' or 'images'")
 
@@ -488,7 +487,6 @@ class AddPupilCenterAsChannels(MovieTransform, StaticTransform, Invertible):
         self.transforms["pupil_center"] = lambda x: x
 
     def __call__(self, x):
-
         key_vals = {k: v for k, v in zip(x._fields, x)}
         dd = {
             self.key: self.transforms[self.key](key_vals[self.key], key_vals["pupil_center"], self.key),
@@ -578,7 +576,6 @@ class ScaleInputs(StaticTransform, Invertible, MovieTransform):
         in_name="images",
         channel_axis=0,
     ):
-
         self.scale = scale
         self.mode = mode
         self.anti_aliasing = anti_aliasing
@@ -619,6 +616,21 @@ class ChangeChannelsOrder(StaticTransform, Invertible, MovieTransform):
         key_vals = {k: v for k, v in zip(x._fields, x)}
         img = key_vals[self.in_name]
         key_vals[self.in_name] = np.transpose(img, axes=self.order)
+        return x.__class__(**key_vals)
+
+
+class SelectBehaviorChannels(StaticTransform, MovieTransform):
+    """
+    Select part of channels for the behavior
+    """
+
+    def __init__(self, channels=[0, 1]):
+        self.channels = channels
+
+    def __call__(self, x):
+        key_vals = {k: v for k, v in zip(x._fields, x)}
+        behavior = key_vals["behavior"]
+        key_vals["behavior"] = behavior[self.channels, ...]
         return x.__class__(**key_vals)
 
 

@@ -6,6 +6,7 @@ try:
     from collections import Iterable
 except:
     from collections.abc import Iterable
+
 from functools import partial
 
 import torch
@@ -223,7 +224,11 @@ class Stacked2dCore(Core, nn.Module):
                     not self.batch_norm_scale or (self.penultimate_layer_built() and not self.final_batchnorm_scale)
                 ):
                     layer["bias"] = self.bias_layer_cls(hidden_channels)
-                elif self.batch_norm_scale and not (self.penultimate_layer_built() and not self.final_batchnorm_scale):
+                elif (
+                    self.batch_norm_scale
+                    and not self.bias
+                    and not (self.penultimate_layer_built() and not self.final_batchnorm_scale)
+                ):
                     layer["scale"] = self.scale_layer_cls(hidden_channels)
 
     def add_activation(self, layer):

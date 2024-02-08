@@ -218,7 +218,7 @@ class Stacked2dCore(Core, nn.Module):
             layer["norm"] = self.batchnorm_layer_cls(hidden_channels, momentum=self.momentum, affine=bias and scale)
             if bias and not scale:
                 layer["bias"] = self.bias_layer_cls(hidden_channels)
-            else:  # not bias and scale
+            elif not bias and scale:
                 layer["scale"] = self.scale_layer_cls(hidden_channels)
 
     def penultimate_layer_built(self):

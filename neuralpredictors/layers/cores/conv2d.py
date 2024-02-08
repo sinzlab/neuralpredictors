@@ -60,6 +60,7 @@ class Stacked2dCore(Core, nn.Module):
         independent_bn_bias=True,
         batch_norm: Union[bool, list[bool]] = True,
         batch_norm_scale: Union[bool, list[bool]] = True,
+        final_batchnorm_scale: bool = True,
         hidden_dilation=1,
         laplace_padding=0,
         input_regularizer="LaplaceL2",
@@ -91,6 +92,7 @@ class Stacked2dCore(Core, nn.Module):
                             except the first (input) layer.
             batch_norm:     Boolean, if True appends a BN layer after each convolutional layer
             batch_norm_scale: If True, learns BN including the scaling factor
+            final_batchnorm_scale: Deprecated. If batch_norm_scale passed as an Iterable, this will be ignored.
             independent_bn_bias: Deprecated. If False, will allow for scaling the batch norm, so that batchnorm
                                     and bias can both be true. Defaults to True.
             hidden_dilation:    If set to > 1, will apply dilated convs for all hidden layers
@@ -121,9 +123,17 @@ class Stacked2dCore(Core, nn.Module):
             raise ValueError("depth_separable and attention_conv can not both be true")
 
         self.batch_norm = batch_norm if isinstance(batch_norm, Iterable) else [batch_norm] * layers
-        self.batch_norm_scale = (
-            batch_norm_scale if isinstance(batch_norm_scale, Iterable) else [batch_norm_scale] * layers
-        )
+
+        if isinstance(batch_norm_scale, bool):
+            if batch_norm_scale != final_batchnorm_scale:
+                warnings.warn(
+                    "The argument `final_batchnorm_scale` is deprecated and will be removed in the future. "
+                    "Please use `batch_norm_scale` instead."
+                )
+            self.batch_norm_scale = [batch_norm_scale] * (layers - 1) + [final_batchnorm_scale]
+        else:
+            logger.warning("Passed `batch_norm_scale` as an iterable, ignoring `final_batchnorm_scale`.")
+
         self.bias = bias if isinstance(bias, Iterable) else [bias] * layers
         self.independent_bn_bias = independent_bn_bias
         if self.independent_bn_bias and not all(self.bias) and not all(self.batch_norm_scale):

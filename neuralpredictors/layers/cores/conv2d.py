@@ -122,6 +122,12 @@ class Stacked2dCore(Core, nn.Module):
         if depth_separable and attention_conv:
             raise ValueError("depth_separable and attention_conv can not both be true")
 
+        # TODO
+        print(batch_norm)
+        print(batch_norm_scale)
+        print(final_batchnorm_scale)
+        print(bias)
+
         self.batch_norm = batch_norm if isinstance(batch_norm, Iterable) else [batch_norm] * layers
 
         if isinstance(batch_norm_scale, bool):
@@ -133,8 +139,10 @@ class Stacked2dCore(Core, nn.Module):
             self.batch_norm_scale = [batch_norm_scale] * (layers - 1) + [final_batchnorm_scale]
         else:
             logger.warning("Passed `batch_norm_scale` as an iterable, ignoring `final_batchnorm_scale`.")
+            self.batch_norm_scale = batch_norm_scale
 
         self.bias = bias if isinstance(bias, Iterable) else [bias] * layers
+
         self.independent_bn_bias = independent_bn_bias
         if self.independent_bn_bias and not all(self.bias) and not all(self.batch_norm_scale):
             warnings.warn(

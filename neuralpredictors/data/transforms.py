@@ -289,9 +289,9 @@ class ToTensor(MovieTransform, StaticTransform, Invertible):
     def __call__(self, x):
         return x.__class__(
             *[
-                torch.from_numpy(elem.astype(np.float32)).cuda()
-                if self.cuda
-                else torch.from_numpy(elem.astype(np.float32))
+                torch.from_numpy(elem.astype(np.float32))
+                if not self.cuda
+                else torch.from_numpy(elem.astype(np.float32)).cuda()
                 for elem in x
             ]
         )

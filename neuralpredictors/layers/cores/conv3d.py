@@ -11,10 +11,10 @@ from neuralpredictors.utils import check_hyperparam_for_layers
 
 from ...regularizers import DepthLaplaceL21d
 from ..affine import Bias3DLayer, Scale3DLayer
-from .base import Core
+from .base import ConvCore
 
 
-class Core3d(Core):
+class Core3d(ConvCore):
     def initialize(self, cuda=False):
         self.apply(self.init_conv)
         self.put_to_cuda(cuda=cuda)

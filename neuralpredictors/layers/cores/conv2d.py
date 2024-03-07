@@ -27,12 +27,12 @@ from ..hermite import (
     RotationEquivariantScale2DLayer,
 )
 from ..squeeze_excitation import SqueezeExcitationBlock
-from .base import Core
+from .base import ConvCore, Core
 
 logger = logging.getLogger(__name__)
 
 
-class Stacked2dCore(Core, nn.Module):
+class Stacked2dCore(ConvCore, nn.Module):
     """
     An instantiation of the Core base class. Made up of layers layers of nn.sequential modules.
     Allows for the flexible implementations of many different architectures, such as convolutional layers,

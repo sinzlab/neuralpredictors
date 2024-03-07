@@ -9,10 +9,6 @@ class Core(ABC):
     Base class for the core models, taking 2d inputs and computing nonlinear features.
     """
 
-    def __init__(self) -> None:
-        super().__init__()
-        self.set_batchnorm_type()
-
     def initialize(self):
         """
         Initialization applied on the core.
@@ -33,6 +29,35 @@ class Core(ABC):
             nn.init.xavier_normal_(m.weight.data)
             if m.bias is not None:
                 m.bias.data.fill_(0)
+
+    @abstractmethod
+    def regularizer(self):
+        """
+        Regularization applied on the core. Returns a scalar value.
+        """
+
+    @abstractmethod
+    def forward(self, x):
+        """
+        Forward function for pytorch nn module.
+
+        Args:
+            x (torch.tensor): input of shape (batch, channels, height, width)
+        """
+
+    def __repr__(self):
+        s = super().__repr__()
+        s += f" [{self.__class__.__name__} regularizers: "
+        ret = []
+        for attr in filter(lambda x: "gamma" in x or "skip" in x, dir(self)):
+            ret.append(f"{attr} = {getattr(self, attr)}")
+        return s + "|".join(ret) + "]\n"
+
+
+class ConvCore(Core):
+    def __init__(self) -> None:
+        super().__init__()
+        self.set_batchnorm_type()
 
     @abstractmethod
     def set_batchnorm_type(self):
@@ -63,26 +88,3 @@ class Core(ABC):
                 layer["bias"] = self.bias_layer_cls(hidden_channels)
             elif not bias and scale:
                 layer["scale"] = self.scale_layer_cls(hidden_channels)
-
-    @abstractmethod
-    def regularizer(self):
-        """
-        Regularization applied on the core. Returns a scalar value.
-        """
-
-    @abstractmethod
-    def forward(self, x):
-        """
-        Forward function for pytorch nn module.
-
-        Args:
-            x (torch.tensor): input of shape (batch, channels, height, width)
-        """
-
-    def __repr__(self):
-        s = super().__repr__()
-        s += f" [{self.__class__.__name__} regularizers: "
-        ret = []
-        for attr in filter(lambda x: "gamma" in x or "skip" in x, dir(self)):
-            ret.append(f"{attr} = {getattr(self, attr)}")
-        return s + "|".join(ret) + "]\n"

@@ -245,25 +245,27 @@ class Stacked2dCore(Core, nn.Module):
         self.add_activation(layer)
         self.features.add_module("layer0", nn.Sequential(layer))
 
+    def add_subsequent_conv_layer(self, layer: OrderedDict, l: int) -> None:
+        layer[self.conv_layer_name] = self.ConvLayer(
+            in_channels=self.hidden_channels[l - 1]
+            if not self.skip > 1
+            else min(self.skip, l) * self.hidden_channels[0],
+            out_channels=self.hidden_channels[l],
+            kernel_size=self.hidden_kern[l - 1],
+            stride=self.stride,
+            padding=self.hidden_padding or ((self.hidden_kern[l - 1] - 1) * self.hidden_dilation + 1) // 2,
+            dilation=self.hidden_dilation,
+            bias=self.bias,
+        )
+
     def add_subsequent_layers(self):
         if not isinstance(self.hidden_kern, Iterable):
             self.hidden_kern = [self.hidden_kern] * (self.num_layers - 1)
 
         for l in range(1, self.num_layers):
             layer = OrderedDict()
-            if self.hidden_padding is None:
-                self.hidden_padding = ((self.hidden_kern[l - 1] - 1) * self.hidden_dilation + 1) // 2
-            layer[self.conv_layer_name] = self.ConvLayer(
-                in_channels=self.hidden_channels[l - 1]
-                if not self.skip > 1
-                else min(self.skip, l) * self.hidden_channels[0],
-                out_channels=self.hidden_channels[l],
-                kernel_size=self.hidden_kern[l - 1],
-                stride=self.stride,
-                padding=self.hidden_padding,
-                dilation=self.hidden_dilation,
-                bias=self.bias,
-            )
+
+            self.add_subsequent_conv_layer(layer, l)
             self.add_bn_layer(layer, l)
             self.add_activation(layer)
             self.features.add_module("layer{}".format(l), nn.Sequential(layer))
@@ -344,6 +346,9 @@ class RotationEquivariant2dCore(Stacked2dCore, nn.Module):
         self.rot_eq_batch_norm = rot_eq_batch_norm
         self.init_std = init_std
         super().__init__(*args, **kwargs, input_regularizer=input_regularizer)
+
+        if self.skip > 0:
+            raise NotImplementedError("Skip connections are not implemented for RotationEquivariant2dCore")
 
     def set_batchnorm_type(self):
         if not self.rot_eq_batch_norm:
@@ -588,17 +593,8 @@ class SE2dCore(Stacked2dCore, nn.Module):
 
         for l in range(1, self.num_layers):
             layer = OrderedDict()
-            if self.hidden_padding is None:
-                self.hidden_padding = ((self.hidden_kern[l - 1] - 1) * self.hidden_dilation + 1) // 2
-            layer[self.conv_layer_name] = self.ConvLayer(
-                in_channels=self.hidden_channels if not self.skip > 1 else min(self.skip, l) * self.hidden_channels,
-                out_channels=self.hidden_channels,
-                kernel_size=self.hidden_kern[l - 1],
-                stride=self.stride,
-                padding=self.hidden_padding,
-                dilation=self.hidden_dilation,
-                bias=self.bias,
-            )
+
+            self.add_subsequent_conv_layer(layer, l)
             self.add_bn_layer(layer, l)
             self.add_activation(layer)
             if (self.num_layers - l) <= self.n_se_blocks:

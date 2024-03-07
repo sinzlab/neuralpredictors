@@ -57,7 +57,6 @@ class Stacked2dCore(Core, nn.Module):
         momentum=0.1,
         pad_input=True,
         hidden_padding=None,
-        independent_bn_bias=True,
         batch_norm: Union[bool, list[bool]] = True,
         batch_norm_scale: Union[bool, list[bool]] = True,
         final_batchnorm_scale: bool = True,
@@ -93,8 +92,6 @@ class Stacked2dCore(Core, nn.Module):
             batch_norm:     Boolean, if True appends a BN layer after each convolutional layer
             batch_norm_scale: If True, learns BN including the scaling factor
             final_batchnorm_scale: Deprecated. If batch_norm_scale passed as an Iterable, this will be ignored.
-            independent_bn_bias: Deprecated. If False, will allow for scaling the batch norm, so that batchnorm
-                                    and bias can both be true. Defaults to True.
             hidden_dilation:    If set to > 1, will apply dilated convs for all hidden layers
             laplace_padding: Padding size for the laplace convolution. If padding = None, it defaults to half of
                 the kernel size (recommended). Setting Padding to 0 is not recommended and leads to artefacts,
@@ -136,13 +133,6 @@ class Stacked2dCore(Core, nn.Module):
             self.batch_norm_scale = batch_norm_scale
 
         self.bias = bias if isinstance(bias, Iterable) else [bias] * layers
-
-        self.independent_bn_bias = independent_bn_bias
-        if self.independent_bn_bias and not all(self.bias) and not all(self.batch_norm_scale):
-            warnings.warn(
-                """The default of `independent_bn_bias=True` will ignore the kwargs `bias`, `batch_norm_scale`. 
-                    If you want to use these arguments, please set `independent_bn_bias=False`."""
-            )
 
         super().__init__()
         regularizer_config = (
@@ -219,11 +209,6 @@ class Stacked2dCore(Core, nn.Module):
     def add_bn_layer(self, layer: OrderedDict, layer_idx: int):
         if self.batch_norm[layer_idx]:
             hidden_channels = self.hidden_channels[layer_idx]
-
-            if self.independent_bn_bias:
-                layer["norm"] = self.batchnorm_layer_cls(hidden_channels, momentum=self.momentum)
-                return
-
             bias = self.bias[layer_idx]
             scale = self.batch_norm_scale[layer_idx]
 

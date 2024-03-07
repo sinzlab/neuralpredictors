@@ -6,6 +6,8 @@
 [![Mypy](https://github.com/sinzlab/neuralpredictors/actions/workflows/mypy.yml/badge.svg)](https://github.com/sinzlab/neuralpredictors/actions/workflows/mypy.yml)
 [![Isort](https://github.com/sinzlab/neuralpredictors/actions/workflows/isort.yml/badge.svg)](https://github.com/sinzlab/neuralpredictors/actions/workflows/isort.yml)
 [![PyPI version](https://badge.fury.io/py/neuralpredictors.svg)](https://badge.fury.io/py/neuralpredictors)
+[![DOI](https://zenodo.org/badge/164856779.svg)](https://zenodo.org/badge/latestdoi/164856779)
+
 
 [Sinz Lab](https://sinzlab.org/) Neural System Identification Utilities for [PyTorch](https://pytorch.org/).
 

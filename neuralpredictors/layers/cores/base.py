@@ -75,6 +75,9 @@ class ConvCore(Core):
         for attr in ["batch_norm", "hidden_channels", "independent_bn_bias", "momentum"]:
             if not hasattr(self, attr):
                 raise NotImplementedError(f"Subclasses must have a `{attr}` attribute.")
+        for attr in ["batch_norm", "hidden_channels"]:
+            if not isinstance(getattr(self, attr), list):
+                raise ValueError(f"`{attr}` must be a list.")
 
         if self.batch_norm[layer_idx]:
             hidden_channels = self.hidden_channels[layer_idx]

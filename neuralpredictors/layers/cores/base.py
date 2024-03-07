@@ -56,6 +56,9 @@ class Core(ABC):
 
 class ConvCore(Core):
     def __init__(self) -> None:
+        """
+        Derived classes need to define "batch_norm", "hidden_channels", "independent_bn_bias", "momentum" attributes.
+        """
         super().__init__()
         self.set_batchnorm_type()
 

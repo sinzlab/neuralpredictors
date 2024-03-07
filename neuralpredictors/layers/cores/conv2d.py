@@ -1,11 +1,13 @@
 import logging
 import warnings
 from collections import OrderedDict
+from typing import Union
 
 try:
     from collections import Iterable
-except:
+except ImportError:
     from collections.abc import Iterable
+
 from functools import partial
 
 import torch
@@ -51,14 +53,14 @@ class Stacked2dCore(Core, nn.Module):
         input_stride=1,
         final_nonlinearity=True,
         elu_shift=(0, 0),
-        bias=True,
+        bias: Union[bool, list[bool]] = True,
         momentum=0.1,
         pad_input=True,
         hidden_padding=None,
-        batch_norm=True,
-        batch_norm_scale=True,
-        final_batchnorm_scale=True,
         independent_bn_bias=True,
+        batch_norm: Union[bool, list[bool]] = True,
+        batch_norm_scale: Union[bool, list[bool]] = True,
+        final_batchnorm_scale: bool = True,
         hidden_dilation=1,
         laplace_padding=0,
         input_regularizer="LaplaceL2",
@@ -89,8 +91,8 @@ class Stacked2dCore(Core, nn.Module):
             hidden_padding: int or list of int. Padding for hidden layers. Note that this will apply to all the layers
                             except the first (input) layer.
             batch_norm:     Boolean, if True appends a BN layer after each convolutional layer
-            batch_norm_scale: If True, a scaling factor after BN will be learned.
-            final_batchnorm_scale: If True, the final layer's BN will learn a scale. Defaults to True.
+            batch_norm_scale: If True, learns BN including the scaling factor
+            final_batchnorm_scale: Deprecated. If batch_norm_scale passed as an Iterable, this will be ignored.
             independent_bn_bias: Deprecated. If False, will allow for scaling the batch norm, so that batchnorm
                                     and bias can both be true. Defaults to True.
             hidden_dilation:    If set to > 1, will apply dilated convs for all hidden layers
@@ -120,17 +122,27 @@ class Stacked2dCore(Core, nn.Module):
         if depth_separable and attention_conv:
             raise ValueError("depth_separable and attention_conv can not both be true")
 
-        if independent_bn_bias:
-            if not bias or not batch_norm_scale or not final_batchnorm_scale:
+        self.batch_norm = batch_norm if isinstance(batch_norm, Iterable) else [batch_norm] * layers
+
+        if isinstance(batch_norm_scale, bool):
+            if batch_norm_scale != final_batchnorm_scale:
                 warnings.warn(
-                    "The default of `independent_bn_bias=True` will ignore the kwargs `bias`, `batch_norm_scale`, and "
-                    "`final_batchnorm_scale` when initializing the batchnorm. If you want to use these arguments, please set `independent_bn_bias=False`."
+                    "The argument `final_batchnorm_scale` is deprecated and will be removed in the future. "
+                    "Please use `batch_norm_scale` instead."
                 )
-        self.batch_norm = batch_norm
-        self.final_batchnorm_scale = final_batchnorm_scale
-        self.bias = bias
+            self.batch_norm_scale = [batch_norm_scale] * (layers - 1) + [final_batchnorm_scale]
+        else:
+            logger.warning("Passed `batch_norm_scale` as an iterable, ignoring `final_batchnorm_scale`.")
+            self.batch_norm_scale = batch_norm_scale
+
+        self.bias = bias if isinstance(bias, Iterable) else [bias] * layers
+
         self.independent_bn_bias = independent_bn_bias
-        self.batch_norm_scale = batch_norm_scale
+        if self.independent_bn_bias and not all(self.bias) and not all(self.batch_norm_scale):
+            warnings.warn(
+                """The default of `independent_bn_bias=True` will ignore the kwargs `bias`, `batch_norm_scale`. 
+                    If you want to use these arguments, please set `independent_bn_bias=False`."""
+            )
 
         super().__init__()
         regularizer_config = (
@@ -203,28 +215,27 @@ class Stacked2dCore(Core, nn.Module):
         self.bias_layer_cls = Bias2DLayer
         self.scale_layer_cls = Scale2DLayer
 
+    # def add_bn_layer(self, layer, hidden_channels):
+    def add_bn_layer(self, layer: OrderedDict, layer_idx: int):
+        if self.batch_norm[layer_idx]:
+            hidden_channels = self.hidden_channels[layer_idx]
+
+            if self.independent_bn_bias:
+                layer["norm"] = self.batchnorm_layer_cls(hidden_channels, momentum=self.momentum)
+                return
+
+            bias = self.bias[layer_idx]
+            scale = self.batch_norm_scale[layer_idx]
+
+            layer["norm"] = self.batchnorm_layer_cls(hidden_channels, momentum=self.momentum, affine=bias and scale)
+            if bias and not scale:
+                layer["bias"] = self.bias_layer_cls(hidden_channels)
+            elif not bias and scale:
+                layer["scale"] = self.scale_layer_cls(hidden_channels)
+
     def penultimate_layer_built(self):
         """Returns True if the penultimate layer has been built."""
         return len(self.features) == self.num_layers - 1
-
-    def add_bn_layer(self, layer, hidden_channels):
-        if self.batch_norm:
-            if self.independent_bn_bias:
-                layer["norm"] = self.batchnorm_layer_cls(hidden_channels, momentum=self.momentum)
-            else:
-                layer["norm"] = self.batchnorm_layer_cls(
-                    hidden_channels,
-                    momentum=self.momentum,
-                    affine=self.bias
-                    and self.batch_norm_scale
-                    and (not self.penultimate_layer_built() or self.final_batchnorm_scale),
-                )
-                if self.bias and (
-                    not self.batch_norm_scale or (self.penultimate_layer_built() and not self.final_batchnorm_scale)
-                ):
-                    layer["bias"] = self.bias_layer_cls(hidden_channels)
-                elif self.batch_norm_scale and not (self.penultimate_layer_built() and not self.final_batchnorm_scale):
-                    layer["scale"] = self.scale_layer_cls(hidden_channels)
 
     def add_activation(self, layer):
         if self.linear:
@@ -245,7 +256,7 @@ class Stacked2dCore(Core, nn.Module):
             padding=self.input_kern // 2 if self.pad_input else 0,
             bias=self.bias and not self.batch_norm,
         )
-        self.add_bn_layer(layer, self.hidden_channels[0])
+        self.add_bn_layer(layer, 0)
         self.add_activation(layer)
         self.features.add_module("layer0", nn.Sequential(layer))
 
@@ -268,7 +279,7 @@ class Stacked2dCore(Core, nn.Module):
                 dilation=self.hidden_dilation,
                 bias=self.bias,
             )
-            self.add_bn_layer(layer, self.hidden_channels[l])
+            self.add_bn_layer(layer, l)
             self.add_activation(layer)
             self.features.add_module("layer{}".format(l), nn.Sequential(layer))
 
@@ -371,7 +382,7 @@ class RotationEquivariant2dCore(Stacked2dCore, nn.Module):
             padding=self.input_kern // 2 if self.pad_input else 0,
             first_layer=True,
         )
-        self.add_bn_layer(layer, self.hidden_channels[0])
+        self.add_bn_layer(layer, 0)
         self.add_activation(layer)
         self.features.add_module("layer0", nn.Sequential(layer))
 
@@ -395,7 +406,7 @@ class RotationEquivariant2dCore(Stacked2dCore, nn.Module):
                 padding=self.hidden_padding,
                 first_layer=False,
             )
-            self.add_bn_layer(layer, self.hidden_channels[l])
+            self.add_bn_layer(layer, l)
             self.add_activation(layer)
             self.features.add_module(f"layer{l}", nn.Sequential(layer))
 
@@ -408,7 +419,7 @@ class RotationEquivariant2dCore(Stacked2dCore, nn.Module):
 
     def forward(self, input_):
         ret = []
-        for l, feat in enumerate(self.features):
+        for feat in self.features:
             input_ = feat(input_)
             ret.append(input_)
 
@@ -603,7 +614,7 @@ class SE2dCore(Stacked2dCore, nn.Module):
                 dilation=self.hidden_dilation,
                 bias=self.bias,
             )
-            self.add_bn_layer(layer)
+            self.add_bn_layer(layer, l)
             self.add_activation(layer)
             if (self.num_layers - l) <= self.n_se_blocks:
                 layer["seg_ex_block"] = SqueezeExcitationBlock(in_ch=self.hidden_channels, reduction=self.se_reduction)

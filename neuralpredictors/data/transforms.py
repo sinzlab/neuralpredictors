@@ -1,8 +1,37 @@
-from collections import Iterable, namedtuple
+from collections import namedtuple
+from functools import partial
+from typing import Any
+
+try:
+    from collections import Iterable
+except:
+    from collections.abc import Iterable
 
 import numpy as np
 import torch
 from skimage.transform import rescale
+
+
+def transform_function(img, behavior, key):
+    """
+    Function that adds the behaviour to the color channels of the images/vidoes.
+    Modifies the input dimentions to mathc the desired format:
+        - images: (batch,behaviour + color chanels,x,y)
+        - videos: (batch,frame,behaviour + color chanels,x,y)
+    """
+    shape_changer = np.ones((1, *img.shape[-(len(img.shape) - 1) :]))
+    if (len(img.shape) != 4) & (key == "videos"):
+        img = np.expand_dims(img, axis=(len(img.shape) - 3))
+    cat_axis = len(img.shape) - 3 if key == "images" else len(img.shape) - 4
+    axis_to_add = (len(img.shape) - 2, (len(img.shape) - 1))
+    expanded_behavior = shape_changer * np.expand_dims(behavior, axis=axis_to_add)
+    return np.concatenate(
+        (
+            img,
+            expanded_behavior,
+        ),
+        axis=cat_axis,
+    )
 
 
 class Invertible:
@@ -260,9 +289,9 @@ class ToTensor(MovieTransform, StaticTransform, Invertible):
     def __call__(self, x):
         return x.__class__(
             *[
-                torch.from_numpy(elem.astype(np.float32)).cuda()
-                if self.cuda
-                else torch.from_numpy(elem.astype(np.float32))
+                torch.from_numpy(elem.astype(np.float32))
+                if not self.cuda
+                else torch.from_numpy(elem.astype(np.float32)).cuda()
                 for elem in x
             ]
         )
@@ -317,14 +346,25 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
     """
 
     def __init__(
-        self, data, stats_source="all", exclude=None, inputs_mean=None, inputs_std=None, subtract_behavior_mean=False
+        self,
+        data,
+        stats_source="all",
+        exclude=None,
+        inputs_mean=None,
+        inputs_std=None,
+        subtract_behavior_mean=False,
+        in_name=None,
+        out_name=None,
+        eye_name=None,
     ):
-
         self.exclude = exclude or []
 
-        in_name = "images" if "images" in data.statistics.keys() else "inputs"
-        out_name = "responses" if "responses" in data.statistics.keys() else "targets"
-        eye_name = "pupil_center" if "pupil_center" in data.data_keys else "eye_position"
+        if in_name is None:
+            in_name = "images" if "images" in data.statistics.keys() else "inputs"
+        if out_name is None:
+            out_name = "responses" if "responses" in data.statistics.keys() else "targets"
+        if eye_name is None:
+            eye_name = "pupil_center" if "pupil_center" in data.data_keys else "eye_position"
 
         self._inputs_mean = data.statistics[in_name][stats_source]["mean"][()] if inputs_mean is None else inputs_mean
         self._inputs_std = data.statistics[in_name][stats_source]["std"][()] if inputs_mean is None else inputs_std
@@ -332,7 +372,7 @@ class NeuroNormalizer(MovieTransform, StaticTransform, Invertible):
         s = np.array(data.statistics[out_name][stats_source]["std"])
 
         # TODO: consider other baselines
-        threshold = 0.01 * s.mean()
+        threshold = 0.01 * np.nanmean(s)
         idx = s > threshold
         self._response_precision = np.ones_like(s) / threshold
         self._response_precision[idx] = 1 / s[idx]
@@ -400,26 +440,22 @@ class AddBehaviorAsChannels(MovieTransform, StaticTransform, Invertible):
         - behavior
     """
 
-    def __init__(self):
+    def __init__(self, key="images"):
+        if not (key in ["videos", "images"]):
+            raise ValueError("The provided key must be either 'videos' or 'images'")
+
+        self.key = key
         self.transforms, self.itransforms = {}, {}
-        self.transforms["images"] = lambda img, behavior: np.concatenate(
-            (
-                img,
-                np.ones((1, *img.shape[-(len(img.shape) - 1) :]))
-                * np.expand_dims(behavior, axis=((len(img.shape) - 2), (len(img.shape) - 1))),
-            ),
-            axis=len(img.shape) - 3,
-        )
+        self.transforms[key] = partial(transform_function)
         self.transforms["responses"] = lambda x: x
         self.transforms["behavior"] = lambda x: x
         self.transforms["pupil_center"] = lambda x: x
         self.transforms["trial_idx"] = lambda x: x
 
     def __call__(self, x):
-
         key_vals = {k: v for k, v in zip(x._fields, x)}
         dd = {
-            "images": self.transforms["images"](key_vals["images"], key_vals["behavior"]),
+            self.key: self.transforms[self.key](key_vals[self.key], key_vals["behavior"], self.key),
             "responses": self.transforms["responses"](key_vals["responses"]),
             "behavior": self.transforms["behavior"](key_vals["behavior"]),
         }
@@ -439,31 +475,72 @@ class AddPupilCenterAsChannels(MovieTransform, StaticTransform, Invertible):
         - pupil center
     """
 
-    def __init__(self):
+    def __init__(self, key="images"):
+        if not (key in ["videos", "images"]):
+            raise ValueError("The provided key must be either 'videos' or 'images'")
+
+        self.key = key
         self.transforms, self.itransforms = {}, {}
-        self.transforms["images"] = lambda img, pupil_center: np.concatenate(
-            (
-                img,
-                np.ones((1, *img.shape[-(len(img.shape) - 1) :]))
-                * np.expand_dims(pupil_center, axis=((len(img.shape) - 2), (len(img.shape) - 1))),
-            ),
-            axis=len(img.shape) - 3,
-        )
+        self.transforms[key] = partial(transform_function)
         self.transforms["responses"] = lambda x: x
         self.transforms["behavior"] = lambda x: x
         self.transforms["pupil_center"] = lambda x: x
 
     def __call__(self, x):
-
         key_vals = {k: v for k, v in zip(x._fields, x)}
         dd = {
-            "images": self.transforms["images"](key_vals["images"], key_vals["pupil_center"]),
+            self.key: self.transforms[self.key](key_vals[self.key], key_vals["pupil_center"], self.key),
             "responses": self.transforms["responses"](key_vals["responses"]),
         }
         if "behavior" in key_vals:
             dd["behavior"] = self.transforms["behavior"](key_vals["behavior"])
         dd["pupil_center"] = self.transforms["pupil_center"](key_vals["pupil_center"])
 
+        if "trial_idx" in key_vals:
+            dd["trial_idx"] = self.transforms["trial_idx"](key_vals["trial_idx"])
+        return x.__class__(**dd)
+
+
+class ExpandChannels(MovieTransform, StaticTransform, Invertible):
+    """
+    A Transformation that adds and empty channel to a video if it lacks the color channel.
+    Can be further extended to work with images.
+    """
+
+    def __init__(self, key):
+        def transform_function(img, key):
+            """
+            Function that adds the behaviour to the color channels of the images/vidoes.
+            Modifies the input dimentions to mathc the desired format:
+                - images: (batch,behaviour + color chanels,x,y)
+                - videos: (batch,frame,behaviour + color chanels,x,y)
+            """
+            if (len(img.shape) != 4) & (key == "videos"):
+                img = np.expand_dims(img, axis=(len(img.shape) - 3))
+            return img
+
+        if not (key in ["videos", "images"]):
+            raise ValueError("The provided key must be either 'videos' or 'images'")
+
+        self.key = key
+        self.transforms, self.itransforms = {}, {}
+
+        self.transforms[key] = transform_function
+        self.transforms["responses"] = lambda x: x
+        self.transforms["behavior"] = lambda x: x
+        self.transforms["pupil_center"] = lambda x: x
+        self.transforms["trial_idx"] = lambda x: x
+
+    def __call__(self, x):
+        key_vals = {k: v for k, v in zip(x._fields, x)}
+        dd = {
+            self.key: self.transforms[self.key](key_vals[self.key], self.key),
+            "responses": self.transforms["responses"](key_vals["responses"]),
+        }
+        if "behavior" in key_vals:
+            dd["behavior"] = self.transforms["behavior"](key_vals["behavior"])
+        if "pupil_center" in key_vals:
+            dd["pupil_center"] = self.transforms["pupil_center"](key_vals["pupil_center"])
         if "trial_idx" in key_vals:
             dd["trial_idx"] = self.transforms["trial_idx"](key_vals["trial_idx"])
         return x.__class__(**dd)
@@ -484,7 +561,7 @@ class SelectInputChannel(StaticTransform):
         return x.__class__(**key_vals)
 
 
-class ScaleInputs(StaticTransform, Invertible):
+class ScaleInputs(StaticTransform, Invertible, MovieTransform):
     """
     Applies skimage.transform.rescale to the data_key "images".
     """
@@ -499,7 +576,6 @@ class ScaleInputs(StaticTransform, Invertible):
         in_name="images",
         channel_axis=0,
     ):
-
         self.scale = scale
         self.mode = mode
         self.anti_aliasing = anti_aliasing
@@ -521,3 +597,80 @@ class ScaleInputs(StaticTransform, Invertible):
             channel_axis=self.channel_axis,
         )
         return x.__class__(**key_vals)
+
+
+class ChangeChannelsOrder(StaticTransform, Invertible, MovieTransform):
+    def __init__(
+        self,
+        new_order,
+        in_name="images",
+    ):
+        """
+        applies np.transpose to the images / videos
+        new_order is like [3, 0, 2, 1]
+        """
+        self.order = new_order
+        self.in_name = in_name
+
+    def __call__(self, x):
+        key_vals = {k: v for k, v in zip(x._fields, x)}
+        img = key_vals[self.in_name]
+        key_vals[self.in_name] = np.transpose(img, axes=self.order)
+        return x.__class__(**key_vals)
+
+
+class SelectBehaviorChannels(StaticTransform, MovieTransform):
+    """
+    Select part of channels for the behavior
+    """
+
+    def __init__(self, channels=[0, 1]):
+        self.channels = channels
+
+    def __call__(self, x):
+        key_vals = {k: v for k, v in zip(x._fields, x)}
+        behavior = key_vals["behavior"]
+        key_vals["behavior"] = behavior[self.channels, ...]
+        return x.__class__(**key_vals)
+
+
+class CutVideos(MovieTransform):
+    def __init__(
+        self,
+        min_frame=0,
+        max_frame=300,
+        frame_axis={"videos": -1, "responses": -1},
+        target_groups=["videos", "responses"],
+    ):
+        self.min_frame = min_frame
+        self.max_frame = max_frame
+        if max_frame is not None:
+            self.idx = np.arange(min_frame, max_frame)
+        else:
+            self.idx = None
+        self.frame_axis = frame_axis
+        self.target_groups = target_groups
+
+    def __call__(self, x):
+        if self.idx is not None:
+            return x.__class__(
+                **{
+                    k: np.take(getattr(x, k), self.idx, self.frame_axis[k])
+                    if k in self.target_groups
+                    else getattr(x, k)
+                    for k in x._fields
+                }
+            )
+        else:
+            idx = []
+            for k in x._fields:
+                loc = getattr(x, k)
+                nans = np.argwhere(np.isnan(loc))[:, self.frame_axis[k]]
+                idx.append(nans.min() if nans.size else loc.shape[self.frame_axis[k]])
+            idx = np.arange(self.min_frame, min(idx))
+            return x.__class__(
+                **{
+                    k: np.take(getattr(x, k), idx, self.frame_axis[k]) if k in self.target_groups else getattr(x, k)
+                    for k in x._fields
+                }
+            )

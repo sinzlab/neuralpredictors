@@ -1,5 +1,9 @@
 import logging
-from collections import Mapping
+
+try:
+    from collections import Mapping
+except:
+    from collections.abc import Mapping
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 

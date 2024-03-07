@@ -6,11 +6,16 @@ from .gaussian import (
     FullGaussian2d,
     Gaussian2d,
     Gaussian3d,
+    GeneralizedFullGaussianReadout2d,
     RemappedGaussian2d,
     UltraSparse,
 )
 from .multi_readout import MultiReadoutBase, MultiReadoutSharedParametersBase
-from .point_pooled import PointPooled2d, SpatialTransformerPooled3d
+from .point_pooled import (
+    GeneralizedPointPooled2d,
+    PointPooled2d,
+    SpatialTransformerPooled3d,
+)
 from .pyramid import PointPyramid2d
 
 ### Userguide ###

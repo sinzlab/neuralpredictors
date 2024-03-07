@@ -23,7 +23,7 @@ def corr(
         eps:     offset to the standard deviation to avoid exploding the correlation due to small division (default 1e-8)
         **kwargs: passed to final numpy.mean operation over standardized y1 * y2
 
-    Returns: correlation array
+    Returns: correlation array for the neurons
     """
 
     y1 = (y1 - y1.mean(axis=axis, keepdims=True)) / (y1.std(axis=axis, keepdims=True, ddof=0) + eps)

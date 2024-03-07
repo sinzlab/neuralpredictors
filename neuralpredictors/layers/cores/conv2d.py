@@ -204,7 +204,6 @@ class Stacked2dCore(Core, nn.Module):
             warnings.warn(
                 "group sparsity can not be calculated for the requested conv type. Hidden channels will not be regularized and gamma_hidden is ignored."
             )
-        self.set_batchnorm_type()
         self.features = nn.Sequential()
         self.add_first_layer()
         self.add_subsequent_layers()
@@ -214,24 +213,6 @@ class Stacked2dCore(Core, nn.Module):
         self.batchnorm_layer_cls = nn.BatchNorm2d
         self.bias_layer_cls = Bias2DLayer
         self.scale_layer_cls = Scale2DLayer
-
-    # def add_bn_layer(self, layer, hidden_channels):
-    def add_bn_layer(self, layer: OrderedDict, layer_idx: int):
-        if self.batch_norm[layer_idx]:
-            hidden_channels = self.hidden_channels[layer_idx]
-
-            if self.independent_bn_bias:
-                layer["norm"] = self.batchnorm_layer_cls(hidden_channels, momentum=self.momentum)
-                return
-
-            bias = self.bias[layer_idx]
-            scale = self.batch_norm_scale[layer_idx]
-
-            layer["norm"] = self.batchnorm_layer_cls(hidden_channels, momentum=self.momentum, affine=bias and scale)
-            if bias and not scale:
-                layer["bias"] = self.bias_layer_cls(hidden_channels)
-            elif not bias and scale:
-                layer["scale"] = self.scale_layer_cls(hidden_channels)
 
     def penultimate_layer_built(self):
         """Returns True if the penultimate layer has been built."""

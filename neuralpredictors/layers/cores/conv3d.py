@@ -7,6 +7,7 @@ from torch import nn
 
 from neuralpredictors import regularizers
 from neuralpredictors.layers.activations import AdaptiveELU
+from neuralpredictors.utils import check_hyperparam_for_layers
 
 from ...regularizers import DepthLaplaceL21d
 from ..affine import Bias3DLayer, Scale3DLayer
@@ -56,6 +57,8 @@ class Basic3dCore(Core3d, nn.Module):
         independent_bn_bias=True,
         spatial_dilation: int = 1,
         temporal_dilation: int = 1,
+        hidden_spatial_dilation=1,
+        hidden_temporal_dilation=1,
     ):
 
         """
@@ -113,6 +116,8 @@ class Basic3dCore(Core3d, nn.Module):
         self.momentum = momentum
         self.spatial_dilation = spatial_dilation
         self.temporal_dilation = temporal_dilation
+        self.hidden_spatial_dilation = spatial_dilation
+        self.hidden_temporal_dilation = temporal_dilation
         self.final_nonlinearity = final_nonlin
         self.padding = padding
         self.gamma_input_spatial = gamma_input_spatial
@@ -129,6 +134,10 @@ class Basic3dCore(Core3d, nn.Module):
                 self.hidden_channels = [hidden_channels] * (self.layers)
             else:
                 self.hidden_channels = []
+
+        self.hidden_channels = check_hyperparam_for_layers(hidden_channels, layers)
+        self.hidden_temporal_dilation = check_hyperparam_for_layers(hidden_temporal_dilation, layers)
+        self.hidden_spatial_dilation = check_hyperparam_for_layers(hidden_spatial_dilation, layers)
 
         if isinstance(self.input_kernel, int):
             self.input_kernel = (self.input_kernel,) * 3
@@ -157,7 +166,7 @@ class Basic3dCore(Core3d, nn.Module):
             padding=(0, input_kernel[1] // 2, input_kernel[2] // 2) if self.padding else 0,
         )
 
-        self.add_bn_layer(layer=layer, hidden_channels=hidden_channels)
+        self.add_bn_layer(layer=layer, hidden_channels=self.hidden_channels[0])
 
         if layers > 1 or self.final_nonlinearity:
             if hidden_nonlinearities == "adaptive_elu":
@@ -173,12 +182,16 @@ class Basic3dCore(Core3d, nn.Module):
                 self.hidden_channels[l],
                 self.hidden_channels[l + 1],
                 kernel_size=self.hidden_kernel[l],
-                dilation=spatial_dilation,
+                dilation=(
+                    self.hidden_temporal_dilation[l],
+                    self.hidden_spatial_dilation[l],
+                    self.hidden_spatial_dilation[l],
+                ),
                 stride=(1, self.stride[l + 1], self.stride[l + 1]),
                 padding=(0, self.hidden_kernel[l][1] // 2, self.hidden_kernel[l][2] // 2) if self.padding else 0,
             )
 
-            self.add_bn_layer(layer=layer, hidden_channels=hidden_channels)
+            self.add_bn_layer(layer=layer, hidden_channels=self.hidden_channels[l + 1])
 
             if self.final_nonlinearity or l < self.layers:
                 if hidden_nonlinearities == "adaptive_elu":
@@ -229,31 +242,6 @@ class Basic3dCore(Core3d, nn.Module):
     def out_channels(self):
         return self.hidden_channels[-1]
 
-    def get_output_shape(self, input_shape, layer=None):
-        ch, t, h, w = input_shape[:]
-
-        if layer is None:
-            layers = self.layers
-        else:
-            layers = layer
-
-        for i in range(layers):
-            if i == 0:
-                kernel_size = self.input_kernel
-                spatial_dilation = self.spatial_dilation
-                temporal_dilation = self.temporal_dilation
-            else:
-                kernel_size = self.hidden_kernel[i - 1]
-                spatial_dilation = 1
-                temporal_dilation = 1
-
-            t = math.floor(t - (kernel_size[0] - 1) * temporal_dilation)
-            h = math.floor((h - (kernel_size[1] - 1) * spatial_dilation - 1) / self.stride[i] + 1)
-            w = math.floor((w - (kernel_size[2] - 1) * spatial_dilation - 1) / self.stride[i] + 1)
-
-        output_shape = self.hidden_channels[layers - 1], t, h, w
-        return output_shape
-
     def get_kernels(self):
         return [self.input_kernel] + [kernel for kernel in self.hidden_kernel]
 
@@ -286,6 +274,8 @@ class Factorized3dCore(Core3d, nn.Module):
         cuda=False,
         spatial_dilation=1,
         temporal_dilation=1,
+        hidden_spatial_dilation=1,
+        hidden_temporal_dilation=1,
     ):
         """
         Core3d, similar to Basic3dCore but the convolution is separated into first spatial and then temporal.
@@ -344,6 +334,8 @@ class Factorized3dCore(Core3d, nn.Module):
         self.stride = stride
         self.spatial_dilation = spatial_dilation
         self.temporal_dilation = temporal_dilation
+        self.hidden_spatial_dilation = (hidden_spatial_dilation,)
+        self.hidden_temporal_dilation = (hidden_temporal_dilation,)
         self.padding = padding
         self.gamma_input_spatial = gamma_input_spatial
         self.gamma_input_temporal = gamma_input_temporal
@@ -354,11 +346,9 @@ class Factorized3dCore(Core3d, nn.Module):
             "adaptive_elu": AdaptiveELU,
         }
 
-        if isinstance(self.hidden_channels, int):
-            if self.layers >= 1:
-                self.hidden_channels = [hidden_channels] * self.layers
-            else:
-                self.hidden_channels = []
+        self.hidden_channels = check_hyperparam_for_layers(hidden_channels, self.layers)
+        self.hidden_temporal_dilation = check_hyperparam_for_layers(hidden_temporal_dilation, self.layers - 1)
+        self.hidden_spatial_dilation = check_hyperparam_for_layers(hidden_spatial_dilation, self.layers - 1)
 
         if isinstance(self.spatial_input_kernel, int):
             self.spatial_input_kernel = (self.spatial_input_kernel,) * 2
@@ -396,7 +386,7 @@ class Factorized3dCore(Core3d, nn.Module):
             dilation=(self.temporal_dilation, 1, 1),
         )
 
-        self.add_bn_layer(layer=layer, hidden_channels=hidden_channels)
+        self.add_bn_layer(layer=layer, hidden_channels=self.hidden_channels[0])
 
         if layers > 1 or final_nonlin:
             if hidden_nonlinearities == "adaptive_elu":
@@ -414,18 +404,20 @@ class Factorized3dCore(Core3d, nn.Module):
                 kernel_size=(1,) + (self.spatial_hidden_kernel[l]),
                 stride=(1, self.stride[l], self.stride[l]),
                 bias=self.bias,
+                dilation=(1, self.hidden_spatial_dilation[l], self.hidden_spatial_dilation[l]),
                 padding=(0, self.spatial_hidden_kernel[l][0] // 2, self.spatial_hidden_kernel[l][1] // 2)
                 if self.padding
                 else 0,
             )
             layer[f"conv_temporal_{l+1}"] = nn.Conv3d(
-                self.hidden_channels[l],
-                self.hidden_channels[l],
+                self.hidden_channels[l + 1],
+                self.hidden_channels[l + 1],
                 kernel_size=(self.temporal_hidden_kernel[l], 1, 1),
                 bias=self.bias,
+                dilation=(self.hidden_temporal_dilation[l], 1, 1),
             )
 
-            self.add_bn_layer(layer=layer, hidden_channels=hidden_channels)
+            self.add_bn_layer(layer=layer, hidden_channels=self.hidden_channels[l + 1])
 
             if final_nonlin or l < self.layers:
                 if hidden_nonlinearities == "adaptive_elu":
@@ -452,33 +444,6 @@ class Factorized3dCore(Core3d, nn.Module):
 
     def regularizer(self):
         return self.gamma_input_spatial * self.laplace_spatial(), self.gamma_input_temporal * self.laplace_temporal()
-
-    def get_output_shape(self, input_shape, layer=None):
-        ch, t, h, w = input_shape[:]
-
-        if layer is None:
-            layers = self.layers
-        else:
-            layers = layer
-
-        for i in range(layers):
-            if i == 0:
-                temp_kernel_size = self.temporal_input_kernel
-                spatial_kernel_size = self.spatial_input_kernel
-                spatial_dilation = self.spatial_dilation
-                temporal_dilation = self.temporal_dilation
-            else:
-                temp_kernel_size = self.temporal_hidden_kernel[i - 1]
-                spatial_kernel_size = self.spatial_hidden_kernel[i - 1]
-                spatial_dilation = 1
-                temporal_dilation = 1
-
-            t = math.floor(t - (temp_kernel_size - 1) * temporal_dilation)
-            h = math.floor((h - (spatial_kernel_size[0] - 1) * spatial_dilation - 1) / self.stride[i] + 1)
-            w = math.floor((w - (spatial_kernel_size[1] - 1) * spatial_dilation - 1) / self.stride[i] + 1)
-
-        output_shape = self.hidden_channels[layers - 1], t, h, w
-        return output_shape
 
     def get_kernels(self):
         return [(self.temporal_input_kernel,) + self.spatial_input_kernel] + [

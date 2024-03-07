@@ -103,6 +103,12 @@ class ZeroInflationEncoderBase(Encoder):
         else:
             x = self.readout(x, data_key=data_key, shift=shift)
 
+        # keep batch dimension if only one image was passed
+        params = []
+        for param in x:
+            params.append(param[None, ...] if len(param.shape) == 1 else param)
+        x = torch.stack(params)
+
         if self.modulator:
             x = self.modulator[data_key](x, behavior=behavior)
 

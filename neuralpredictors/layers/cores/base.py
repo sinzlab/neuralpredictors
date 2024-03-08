@@ -57,7 +57,7 @@ class Core(ABC):
 class ConvCore(Core):
     def __init__(self) -> None:
         """
-        Derived classes need to define "batch_norm", "hidden_channels", "independent_bn_bias", "momentum" attributes.
+        Derived classes need to define "batch_norm", "hidden_channels", "momentum", "bias", "batch_norm_scale" attributes.
         """
         super().__init__()
         self.set_batchnorm_type()
@@ -72,7 +72,7 @@ class ConvCore(Core):
         self.scale_layer_cls = None
 
     def add_bn_layer(self, layer: OrderedDict, layer_idx: int):
-        for attr in ["batch_norm", "hidden_channels", "independent_bn_bias", "momentum", "bias", "batch_norm_scale"]:
+        for attr in ["batch_norm", "hidden_channels", "momentum", "bias", "batch_norm_scale"]:
             if not hasattr(self, attr):
                 raise NotImplementedError(f"Subclasses must have a `{attr}` attribute.")
         for attr in ["batch_norm", "hidden_channels", "bias", "batch_norm_scale"]:
@@ -81,10 +81,6 @@ class ConvCore(Core):
 
         if self.batch_norm[layer_idx]:
             hidden_channels = self.hidden_channels[layer_idx]
-
-            if self.independent_bn_bias:
-                layer["norm"] = self.batchnorm_layer_cls(hidden_channels, momentum=self.momentum)
-                return
 
             bias = self.bias[layer_idx]
             scale = self.batch_norm_scale[layer_idx]

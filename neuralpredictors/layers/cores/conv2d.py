@@ -1,7 +1,7 @@
 import logging
 import warnings
 from collections import OrderedDict
-from typing import Union
+from typing import List, Union
 
 try:
     from collections import Iterable
@@ -53,13 +53,12 @@ class Stacked2dCore(ConvCore, nn.Module):
         input_stride=1,
         final_nonlinearity=True,
         elu_shift=(0, 0),
-        bias: Union[bool, list[bool]] = True,
+        bias: Union[bool, List[bool]] = True,
         momentum=0.1,
         pad_input=True,
         hidden_padding=None,
-        independent_bn_bias=True,
-        batch_norm: Union[bool, list[bool]] = True,
-        batch_norm_scale: Union[bool, list[bool]] = True,
+        batch_norm: Union[bool, List[bool]] = True,
+        batch_norm_scale: Union[bool, List[bool]] = True,
         final_batchnorm_scale: bool = True,
         hidden_dilation=1,
         laplace_padding=0,
@@ -93,8 +92,6 @@ class Stacked2dCore(ConvCore, nn.Module):
             batch_norm:     Boolean, if True appends a BN layer after each convolutional layer
             batch_norm_scale: If True, learns BN including the scaling factor
             final_batchnorm_scale: Deprecated. If batch_norm_scale passed as an Iterable, this will be ignored.
-            independent_bn_bias: Deprecated. If False, will allow for scaling the batch norm, so that batchnorm
-                                    and bias can both be true. Defaults to True.
             hidden_dilation:    If set to > 1, will apply dilated convs for all hidden layers
             laplace_padding: Padding size for the laplace convolution. If padding = None, it defaults to half of
                 the kernel size (recommended). Setting Padding to 0 is not recommended and leads to artefacts,
@@ -112,11 +109,6 @@ class Stacked2dCore(ConvCore, nn.Module):
             linear:         Boolean, if True, removes all nonlinearities
             nonlinearity_type: String to set the used nonlinearity type loaded from neuralpredictors.layers.activation
             nonlinearity_config: Dict of the nonlinearities __init__ parameters.
-            To enable learning batch_norms bias and scale independently, the arguments bias, batch_norm and batch_norm_scale
-            work together: By default, all are true. In this case there won't be a bias learned in the convolutional layer, but
-            batch_norm will learn both its bias and scale. If batch_norm is false, but bias true, a bias will be learned in the
-            convolutional layer. If batch_norm and bias are true, but batch_norm_scale is false, batch_norm won't have learnable
-            parameters and a BiasLayer will be added after the batch_norm layer.
         """
 
         if depth_separable and attention_conv:
@@ -136,13 +128,6 @@ class Stacked2dCore(ConvCore, nn.Module):
             self.batch_norm_scale = batch_norm_scale
 
         self.bias = bias if isinstance(bias, Iterable) else [bias] * layers
-
-        self.independent_bn_bias = independent_bn_bias
-        if self.independent_bn_bias and not all(self.bias) and not all(self.batch_norm_scale):
-            warnings.warn(
-                """The default of `independent_bn_bias=True` will ignore the kwargs `bias`, `batch_norm_scale`. 
-                    If you want to use these arguments, please set `independent_bn_bias=False`."""
-            )
 
         super().__init__()
         regularizer_config = (

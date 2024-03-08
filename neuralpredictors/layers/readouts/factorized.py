@@ -36,7 +36,7 @@ class FullFactorized2d(Readout):
             in_shape: batch, channels, height, width (batch could be arbitrary)
             outdims: number of neurons to predict
             bias: if True, bias is used
-            normalize: if True, normalizes mask using by l2 norm
+            normalize: if True, normalizes the spatial mask using l2 norm
             init_noise: the std for readout  initialisation
             constrain_pos: if True, negative values in the neuronal features are turned into 0
             positive_weights: if True, negative values in the mask are turned into 0

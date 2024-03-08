@@ -1,12 +1,10 @@
-import logging
+import warnings
 
 import numpy as np
 import torch
 from torch import nn as nn
 
 from .base import Readout
-
-logger = logging.getLogger(__name__)
 
 
 class FullFactorized2d(Readout):
@@ -58,7 +56,7 @@ class FullFactorized2d(Readout):
         self.constrain_pos = constrain_pos
         self.positive_spatial = positive_spatial
         if positive_spatial and constrain_pos:
-            logger.warning(
+            warnings.warn(
                 f"If both positive_spatial and constrain_pos are True, "
                 f"only constrain_pos will effectively take place"
             )

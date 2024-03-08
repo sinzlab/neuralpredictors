@@ -11,10 +11,10 @@ from neuralpredictors.utils import check_hyperparam_for_layers
 
 from ...regularizers import DepthLaplaceL21d
 from ..affine import Bias3DLayer, Scale3DLayer
-from .base import Core
+from .base import ConvCore
 
 
-class Core3d(Core):
+class Core3d(ConvCore):
     def initialize(self, cuda=False):
         self.apply(self.init_conv)
         self.put_to_cuda(cuda=cuda)
@@ -428,6 +428,11 @@ class Factorized3dCore(Core3d, nn.Module):
             self.features.add_module("layer{}".format(l + 1), nn.Sequential(layer))
         self.initialize(cuda=cuda)
 
+    def set_batchnorm_type(self):
+        self.batchnorm_layer_cls = nn.BatchNorm3d
+        self.bias_layer_cls = Bias3DLayer
+        self.scale_layer_cls = Scale3DLayer
+
     def forward(self, x):
         for features in self.features:
             x = features(x)
@@ -450,16 +455,3 @@ class Factorized3dCore(Core3d, nn.Module):
             (temporal_kernel,) + spatial_kernel
             for temporal_kernel, spatial_kernel in zip(self.temporal_hidden_kernel, self.spatial_hidden_kernel)
         ]
-
-    def add_bn_layer(self, layer, hidden_channels):
-        if self.batch_norm:
-            if self.independent_bn_bias:
-                layer["norm"] = nn.BatchNorm3d(hidden_channels, momentum=self.momentum)
-            else:
-                layer["norm"] = nn.BatchNorm3d(
-                    hidden_channels, momentum=self.momentum, affine=self.bias and self.batch_norm_scale
-                )
-                if self.bias and not self.batch_norm_scale:
-                    layer["bias"] = Bias3DLayer(hidden_channels)
-                elif self.batch_norm_scale:
-                    layer["scale"] = Scale3DLayer(hidden_channels)

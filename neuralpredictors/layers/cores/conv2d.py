@@ -57,14 +57,8 @@ class Stacked2dCore(ConvCore, nn.Module):
         momentum=0.1,
         pad_input=True,
         hidden_padding=None,
-<<<<<<< HEAD
-        batch_norm: Union[bool, list[bool]] = True,
-        batch_norm_scale: Union[bool, list[bool]] = True,
-=======
-        independent_bn_bias=True,
         batch_norm: Union[bool, List[bool]] = True,
         batch_norm_scale: Union[bool, List[bool]] = True,
->>>>>>> upstream/main
         final_batchnorm_scale: bool = True,
         hidden_dilation=1,
         laplace_padding=0,
@@ -115,11 +109,6 @@ class Stacked2dCore(ConvCore, nn.Module):
             linear:         Boolean, if True, removes all nonlinearities
             nonlinearity_type: String to set the used nonlinearity type loaded from neuralpredictors.layers.activation
             nonlinearity_config: Dict of the nonlinearities __init__ parameters.
-            To enable learning batch_norms bias and scale independently, the arguments bias, batch_norm and batch_norm_scale
-            work together: By default, all are true. In this case there won't be a bias learned in the convolutional layer, but
-            batch_norm will learn both its bias and scale. If batch_norm is false, but bias true, a bias will be learned in the
-            convolutional layer. If batch_norm and bias are true, but batch_norm_scale is false, batch_norm won't have learnable
-            parameters and a BiasLayer will be added after the batch_norm layer.
         """
 
         if depth_separable and attention_conv:

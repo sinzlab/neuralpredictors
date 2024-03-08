@@ -38,9 +38,9 @@ class FullFactorized2d(Readout):
             bias: if True, bias is used
             normalize: if True, normalizes the spatial mask using l2 norm
             init_noise: the std for readout  initialisation
-            constrain_pos: if True, negative values in the neuronal features are turned into 0
-            positive_weights: if True, negative values in the mask are turned into 0
-            positive_spatial: if True, mask values are restricted to be positive by taking absolute values
+            constrain_pos: if True, negative values in the spatial mask and feature readout are clamped to 0
+            positive_weights: if True, negative values in the feature readout are turned into 0
+            positive_spatial: if True, spatial readout mask values are restricted to be positive by taking the absolute values
             shared_features: if True, uses a copy of the features from somewhere else
             mean_activity: the mean for readout  initialisation
             spatial_and_feature_reg_weight: lagrange multiplier (constant) for L1 penalty,

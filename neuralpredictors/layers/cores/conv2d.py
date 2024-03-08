@@ -1,7 +1,7 @@
 import logging
 import warnings
 from collections import OrderedDict
-from typing import Union
+from typing import List, Union
 
 try:
     from collections import Iterable
@@ -27,12 +27,12 @@ from ..hermite import (
     RotationEquivariantScale2DLayer,
 )
 from ..squeeze_excitation import SqueezeExcitationBlock
-from .base import Core
+from .base import ConvCore, Core
 
 logger = logging.getLogger(__name__)
 
 
-class Stacked2dCore(Core, nn.Module):
+class Stacked2dCore(ConvCore, nn.Module):
     """
     An instantiation of the Core base class. Made up of layers layers of nn.sequential modules.
     Allows for the flexible implementations of many different architectures, such as convolutional layers,
@@ -53,12 +53,12 @@ class Stacked2dCore(Core, nn.Module):
         input_stride=1,
         final_nonlinearity=True,
         elu_shift=(0, 0),
-        bias: Union[bool, list[bool]] = True,
+        bias: Union[bool, List[bool]] = True,
         momentum=0.1,
         pad_input=True,
         hidden_padding=None,
-        batch_norm: Union[bool, list[bool]] = True,
-        batch_norm_scale: Union[bool, list[bool]] = True,
+        batch_norm: Union[bool, List[bool]] = True,
+        batch_norm_scale: Union[bool, List[bool]] = True,
         final_batchnorm_scale: bool = True,
         hidden_dilation=1,
         laplace_padding=0,
@@ -109,11 +109,6 @@ class Stacked2dCore(Core, nn.Module):
             linear:         Boolean, if True, removes all nonlinearities
             nonlinearity_type: String to set the used nonlinearity type loaded from neuralpredictors.layers.activation
             nonlinearity_config: Dict of the nonlinearities __init__ parameters.
-            To enable learning batch_norms bias and scale independently, the arguments bias, batch_norm and batch_norm_scale
-            work together: By default, all are true. In this case there won't be a bias learned in the convolutional layer, but
-            batch_norm will learn both its bias and scale. If batch_norm is false, but bias true, a bias will be learned in the
-            convolutional layer. If batch_norm and bias are true, but batch_norm_scale is false, batch_norm won't have learnable
-            parameters and a BiasLayer will be added after the batch_norm layer.
         """
 
         if depth_separable and attention_conv:
@@ -194,7 +189,6 @@ class Stacked2dCore(Core, nn.Module):
             warnings.warn(
                 "group sparsity can not be calculated for the requested conv type. Hidden channels will not be regularized and gamma_hidden is ignored."
             )
-        self.set_batchnorm_type()
         self.features = nn.Sequential()
         self.add_first_layer()
         self.add_subsequent_layers()
@@ -204,19 +198,6 @@ class Stacked2dCore(Core, nn.Module):
         self.batchnorm_layer_cls = nn.BatchNorm2d
         self.bias_layer_cls = Bias2DLayer
         self.scale_layer_cls = Scale2DLayer
-
-    # def add_bn_layer(self, layer, hidden_channels):
-    def add_bn_layer(self, layer: OrderedDict, layer_idx: int):
-        if self.batch_norm[layer_idx]:
-            hidden_channels = self.hidden_channels[layer_idx]
-            bias = self.bias[layer_idx]
-            scale = self.batch_norm_scale[layer_idx]
-
-            layer["norm"] = self.batchnorm_layer_cls(hidden_channels, momentum=self.momentum, affine=bias and scale)
-            if bias and not scale:
-                layer["bias"] = self.bias_layer_cls(hidden_channels)
-            elif not bias and scale:
-                layer["scale"] = self.scale_layer_cls(hidden_channels)
 
     def penultimate_layer_built(self):
         """Returns True if the penultimate layer has been built."""

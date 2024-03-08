@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from collections import OrderedDict
 
 from torch import nn
 
@@ -51,3 +52,41 @@ class Core(ABC):
         for attr in filter(lambda x: "gamma" in x or "skip" in x, dir(self)):
             ret.append(f"{attr} = {getattr(self, attr)}")
         return s + "|".join(ret) + "]\n"
+
+
+class ConvCore(Core):
+    def __init__(self) -> None:
+        """
+        Derived classes need to define "batch_norm", "hidden_channels", "momentum", "bias", "batch_norm_scale" attributes.
+        """
+        super().__init__()
+        self.set_batchnorm_type()
+
+    @abstractmethod
+    def set_batchnorm_type(self):
+        """
+        Set batchnorm_layer_cls, bias_layer_cls, scale_layer_cls class attributes
+        """
+        self.batchnorm_layer_cls = None
+        self.bias_layer_cls = None
+        self.scale_layer_cls = None
+
+    def add_bn_layer(self, layer: OrderedDict, layer_idx: int):
+        for attr in ["batch_norm", "hidden_channels", "momentum", "bias", "batch_norm_scale"]:
+            if not hasattr(self, attr):
+                raise NotImplementedError(f"Subclasses must have a `{attr}` attribute.")
+        for attr in ["batch_norm", "hidden_channels", "bias", "batch_norm_scale"]:
+            if not isinstance(getattr(self, attr), list):
+                raise ValueError(f"`{attr}` must be a list.")
+
+        if self.batch_norm[layer_idx]:
+            hidden_channels = self.hidden_channels[layer_idx]
+
+            bias = self.bias[layer_idx]
+            scale = self.batch_norm_scale[layer_idx]
+
+            layer["norm"] = self.batchnorm_layer_cls(hidden_channels, momentum=self.momentum, affine=bias and scale)
+            if bias and not scale:
+                layer["bias"] = self.bias_layer_cls(hidden_channels)
+            elif not bias and scale:
+                layer["scale"] = self.scale_layer_cls(hidden_channels)

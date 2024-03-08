@@ -37,7 +37,6 @@ class Core3d(ConvCore):
 
 
 class Basic3dCore(Core3d, nn.Module):
-
     def __init__(
         self,
         input_channels,
@@ -229,7 +228,6 @@ class Basic3dCore(Core3d, nn.Module):
 
 
 class Factorized3dCore(Core3d, nn.Module):
-
     def __init__(
         self,
         input_channels,

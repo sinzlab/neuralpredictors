@@ -23,7 +23,7 @@ class FullFactorized2d(Readout):
         init_noise=1e-3,
         constrain_pos=False,
         positive_weights=False,
-        positive_spatial=True,
+        positive_spatial=False,
         shared_features=None,
         mean_activity=None,
         spatial_and_feature_reg_weight=None,

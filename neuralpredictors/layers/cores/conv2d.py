@@ -1,7 +1,7 @@
 import logging
 import warnings
 from collections import OrderedDict
-from typing import Union
+from typing import List, Union
 
 try:
     from collections import Iterable
@@ -53,13 +53,12 @@ class Stacked2dCore(ConvCore, nn.Module):
         input_stride=1,
         final_nonlinearity=True,
         elu_shift=(0, 0),
-        bias: Union[bool, list[bool]] = True,
+        bias: Union[bool, List[bool]] = True,
         momentum=0.1,
         pad_input=True,
         hidden_padding=None,
-        independent_bn_bias=True,
-        batch_norm: Union[bool, list[bool]] = True,
-        batch_norm_scale: Union[bool, list[bool]] = True,
+        batch_norm: Union[bool, List[bool]] = True,
+        batch_norm_scale: Union[bool, List[bool]] = True,
         final_batchnorm_scale: bool = True,
         hidden_dilation=1,
         laplace_padding=0,
@@ -93,8 +92,6 @@ class Stacked2dCore(ConvCore, nn.Module):
             batch_norm:     Boolean, if True appends a BN layer after each convolutional layer
             batch_norm_scale: If True, learns BN including the scaling factor
             final_batchnorm_scale: Deprecated. If batch_norm_scale passed as an Iterable, this will be ignored.
-            independent_bn_bias: Deprecated. If False, will allow for scaling the batch norm, so that batchnorm
-                                    and bias can both be true. Defaults to True.
             hidden_dilation:    If set to > 1, will apply dilated convs for all hidden layers
             laplace_padding: Padding size for the laplace convolution. If padding = None, it defaults to half of
                 the kernel size (recommended). Setting Padding to 0 is not recommended and leads to artefacts,
@@ -112,11 +109,6 @@ class Stacked2dCore(ConvCore, nn.Module):
             linear:         Boolean, if True, removes all nonlinearities
             nonlinearity_type: String to set the used nonlinearity type loaded from neuralpredictors.layers.activation
             nonlinearity_config: Dict of the nonlinearities __init__ parameters.
-            To enable learning batch_norms bias and scale independently, the arguments bias, batch_norm and batch_norm_scale
-            work together: By default, all are true. In this case there won't be a bias learned in the convolutional layer, but
-            batch_norm will learn both its bias and scale. If batch_norm is false, but bias true, a bias will be learned in the
-            convolutional layer. If batch_norm and bias are true, but batch_norm_scale is false, batch_norm won't have learnable
-            parameters and a BiasLayer will be added after the batch_norm layer.
         """
 
         if depth_separable and attention_conv:
@@ -136,13 +128,6 @@ class Stacked2dCore(ConvCore, nn.Module):
             self.batch_norm_scale = batch_norm_scale
 
         self.bias = bias if isinstance(bias, Iterable) else [bias] * layers
-
-        self.independent_bn_bias = independent_bn_bias
-        if self.independent_bn_bias and not all(self.bias) and not all(self.batch_norm_scale):
-            warnings.warn(
-                """The default of `independent_bn_bias=True` will ignore the kwargs `bias`, `batch_norm_scale`. 
-                    If you want to use these arguments, please set `independent_bn_bias=False`."""
-            )
 
         super().__init__()
         regularizer_config = (
@@ -241,25 +226,27 @@ class Stacked2dCore(ConvCore, nn.Module):
         self.add_activation(layer)
         self.features.add_module("layer0", nn.Sequential(layer))
 
+    def add_subsequent_conv_layer(self, layer: OrderedDict, l: int) -> None:
+        layer[self.conv_layer_name] = self.ConvLayer(
+            in_channels=self.hidden_channels[l - 1]
+            if not self.skip > 1
+            else min(self.skip, l) * self.hidden_channels[0],
+            out_channels=self.hidden_channels[l],
+            kernel_size=self.hidden_kern[l - 1],
+            stride=self.stride,
+            padding=self.hidden_padding or ((self.hidden_kern[l - 1] - 1) * self.hidden_dilation + 1) // 2,
+            dilation=self.hidden_dilation,
+            bias=self.bias,
+        )
+
     def add_subsequent_layers(self):
         if not isinstance(self.hidden_kern, Iterable):
             self.hidden_kern = [self.hidden_kern] * (self.num_layers - 1)
 
         for l in range(1, self.num_layers):
             layer = OrderedDict()
-            if self.hidden_padding is None:
-                self.hidden_padding = ((self.hidden_kern[l - 1] - 1) * self.hidden_dilation + 1) // 2
-            layer[self.conv_layer_name] = self.ConvLayer(
-                in_channels=self.hidden_channels[l - 1]
-                if not self.skip > 1
-                else min(self.skip, l) * self.hidden_channels[0],
-                out_channels=self.hidden_channels[l],
-                kernel_size=self.hidden_kern[l - 1],
-                stride=self.stride,
-                padding=self.hidden_padding,
-                dilation=self.hidden_dilation,
-                bias=self.bias,
-            )
+
+            self.add_subsequent_conv_layer(layer, l)
             self.add_bn_layer(layer, l)
             self.add_activation(layer)
             self.features.add_module("layer{}".format(l), nn.Sequential(layer))
@@ -340,6 +327,9 @@ class RotationEquivariant2dCore(Stacked2dCore, nn.Module):
         self.rot_eq_batch_norm = rot_eq_batch_norm
         self.init_std = init_std
         super().__init__(*args, **kwargs, input_regularizer=input_regularizer)
+
+        if self.skip > 0:
+            raise NotImplementedError("Skip connections are not implemented for RotationEquivariant2dCore")
 
     def set_batchnorm_type(self):
         if not self.rot_eq_batch_norm:
@@ -584,17 +574,8 @@ class SE2dCore(Stacked2dCore, nn.Module):
 
         for l in range(1, self.num_layers):
             layer = OrderedDict()
-            if self.hidden_padding is None:
-                self.hidden_padding = ((self.hidden_kern[l - 1] - 1) * self.hidden_dilation + 1) // 2
-            layer[self.conv_layer_name] = self.ConvLayer(
-                in_channels=self.hidden_channels if not self.skip > 1 else min(self.skip, l) * self.hidden_channels,
-                out_channels=self.hidden_channels,
-                kernel_size=self.hidden_kern[l - 1],
-                stride=self.stride,
-                padding=self.hidden_padding,
-                dilation=self.hidden_dilation,
-                bias=self.bias,
-            )
+
+            self.add_subsequent_conv_layer(layer, l)
             self.add_bn_layer(layer, l)
             self.add_activation(layer)
             if (self.num_layers - l) <= self.n_se_blocks:

@@ -1,4 +1,5 @@
 import warnings
+from typing import Sequence
 
 import numpy as np
 import torch
@@ -22,7 +23,7 @@ class Gaussian2d(Readout):
     map from a given location, sample from Gaussian at train time but set to mean at eval time, and the unit's response with or without an additional elu non-linearity.
 
     Args:
-        in_shape (list): shape of the input feature map [channels, width, height]
+        in_shape (Sequence[int]): shape of the input feature map [channels, height, width]
         outdims (int): number of output units
         bias (bool): adds a bias term
         init_mu_range (float): initialises the the mean with Uniform([-init_range, init_range])
@@ -41,7 +42,7 @@ class Gaussian2d(Readout):
 
     def __init__(
         self,
-        in_shape,
+        in_shape: Sequence[int],
         outdims,
         bias,
         init_mu_range=0.5,
@@ -53,7 +54,7 @@ class Gaussian2d(Readout):
         feature_reg_weight=None,
         gamma_readout=None,  # depricated, use feature_reg_weight instead
         **kwargs,
-    ):
+    ) -> None:
         warnings.warn(
             "Gaussian2d is deprecated and will be removed in the future. Use `layers.readout.NonIsoGaussian2d` instead",
             DeprecationWarning,
@@ -63,7 +64,7 @@ class Gaussian2d(Readout):
             raise ValueError("either init_mu_range doesn't belong to [0.0, 1.0] or init_sigma_range is non-positive")
         self.in_shape = in_shape
         self.feature_reg_weight = self.resolve_deprecated_gamma_readout(feature_reg_weight, gamma_readout, default=1.0)
-        c, w, h = in_shape
+        c = in_shape[0]
         self.outdims = outdims
         self.batch_sample = batch_sample
         self.grid_shape = (1, outdims, 1, 2)
@@ -146,11 +147,11 @@ class Gaussian2d(Readout):
     def regularizer(self, reduction="sum", average=None):
         return self.feature_l1(reduction=reduction, average=average) * self.feature_reg_weight
 
-    def forward(self, x, sample=None, shift=None, out_idx=None, **kwargs):
+    def forward(self, x: torch.Tensor, sample=None, shift=None, out_idx=None, **kwargs):
         """
         Propagates the input forwards through the readout
         Args:
-            x: input data
+            x: input data, shape (batch, channels, height, width)
             sample (bool/None): sample determines whether we draw a sample from Gaussian distribution, N(mu,sigma), defined per neuron
                             or use the mean, mu, of the Gaussian distribution without sampling.
                            if sample is None (default), samples from the N(mu,sigma) during training phase and
@@ -162,9 +163,9 @@ class Gaussian2d(Readout):
         Returns:
             y: neuronal activity
         """
-        N, c, w, h = x.size()
-        c_in, w_in, h_in = self.in_shape
-        if (c_in, w_in, h_in) != (c, w, h):
+        bs, c, h, w = x.size()
+        c_in, h_in, w_in = self.in_shape
+        if (c_in, h_in, w_in) != (c, h, w):
             raise ValueError("the specified feature map dimension is not the readout's expected input dimension")
         feat = self.features.view(1, c, self.outdims)
         bias = self.bias
@@ -172,10 +173,10 @@ class Gaussian2d(Readout):
 
         if self.batch_sample:
             # sample the grid_locations separately per image per batch
-            grid = self.sample_grid(batch_size=N, sample=sample)  # sample determines sampling from Gaussian
+            grid = self.sample_grid(batch_size=bs, sample=sample)  # sample determines sampling from Gaussian
         else:
             # use one sampled grid_locations for all images in the batch
-            grid = self.sample_grid(batch_size=1, sample=sample).expand(N, outdims, 1, 2)
+            grid = self.sample_grid(batch_size=1, sample=sample).expand(bs, outdims, 1, 2)
 
         if out_idx is not None:
             if isinstance(out_idx, np.ndarray):
@@ -191,15 +192,15 @@ class Gaussian2d(Readout):
             grid = grid + shift[:, None, None, :]
 
         y = F.grid_sample(x, grid, align_corners=self.align_corners)
-        y = (y.squeeze(-1) * feat).sum(1).view(N, outdims)
+        y = (y.squeeze(-1) * feat).sum(1).view(bs, outdims)
 
         if self.bias is not None:
             y = y + bias
         return y
 
     def __repr__(self):
-        c, w, h = self.in_shape
-        r = self.__class__.__name__ + " (" + "{} x {} x {}".format(c, w, h) + " -> " + str(self.outdims) + ")"
+        c, h, w = self.in_shape
+        r = self.__class__.__name__ + " (" + "{} x {} x {}".format(c, h, w) + " -> " + str(self.outdims) + ")"
         if self.bias is not None:
             r += " with bias"
         for ch in self.children():
@@ -213,7 +214,7 @@ class FullGaussian2d(Readout):
     and covariance of that Gaussian are learned.
 
     Args:
-        in_shape (list, tuple): shape of the input feature map [channels, width, height]
+        in_shape (Sequence[int]): shape of the input feature map [channels, height, width]
         outdims (int): number of output units
         bias (bool): adds a bias term
         init_mu_range (float): initialises the the mean with Uniform([-init_range, init_range])
@@ -260,7 +261,7 @@ class FullGaussian2d(Readout):
 
     def __init__(
         self,
-        in_shape,
+        in_shape: Sequence[int],
         outdims,
         bias,
         init_mu_range=0.1,
@@ -277,8 +278,7 @@ class FullGaussian2d(Readout):
         gamma_readout=None,  # depricated, use feature_reg_weight instead
         return_weighted_features=False,
         **kwargs,
-    ):
-
+    ) -> None:
         super().__init__()
         self.feature_reg_weight = self.resolve_deprecated_gamma_readout(feature_reg_weight, gamma_readout, default=1.0)
         self.mean_activity = mean_activity
@@ -476,7 +476,7 @@ class FullGaussian2d(Readout):
         learns the original features (True) or if it uses a copy of the features from another instance of FullGaussian2d
         via the `shared_features` (False). If it uses a copy, the feature_l1 regularizer for this copy will return 0
         """
-        c, w, h = self.in_shape
+        c = self.in_shape[0]
         self._original_features = True
         if match_ids is not None:
             assert self.outdims == len(match_ids)
@@ -506,8 +506,6 @@ class FullGaussian2d(Readout):
             self._shared_features = False
 
     def initialize_shared_grid(self, match_ids=None, shared_grid=None):
-        c, w, h = self.in_shape
-
         if match_ids is None:
             raise ConfigurationError("match_ids must be set for sharing grid")
         assert self.outdims == len(match_ids), "There must be one match ID per output dimension"
@@ -531,7 +529,7 @@ class FullGaussian2d(Readout):
         self.register_buffer("grid_sharing_index", torch.from_numpy(sharing_idx))
         self._shared_grid = True
 
-    def forward(self, x, sample=None, shift=None, out_idx=None, **kwargs):
+    def forward(self, x: torch.Tensor, sample=None, shift=None, out_idx=None, **kwargs) -> torch.Tensor:
         """
         Propagates the input forwards through the readout
         Args:
@@ -547,9 +545,9 @@ class FullGaussian2d(Readout):
         Returns:
             y: neuronal activity
         """
-        N, c, w, h = x.size()
-        c_in, w_in, h_in = self.in_shape
-        if (c_in, w_in, h_in) != (c, w, h):
+        bs, c, h, w = x.size()
+        c_in, h_in, w_in = self.in_shape
+        if (c_in, h_in, w_in) != (c, h, w):
             warnings.warn("the specified feature map dimension is not the readout's expected input dimension")
         feat = self.features.view(1, c, self.outdims)
         bias = self.bias
@@ -557,10 +555,10 @@ class FullGaussian2d(Readout):
 
         if self.batch_sample:
             # sample the grid_locations separately per image per batch
-            grid = self.sample_grid(batch_size=N, sample=sample)  # sample determines sampling from Gaussian
+            grid = self.sample_grid(batch_size=bs, sample=sample)  # sample determines sampling from Gaussian
         else:
             # use one sampled grid_locations for all images in the batch
-            grid = self.sample_grid(batch_size=1, sample=sample).expand(N, outdims, 1, 2)
+            grid = self.sample_grid(batch_size=1, sample=sample).expand(bs, outdims, 1, 2)
 
         if out_idx is not None:
             if isinstance(out_idx, np.ndarray):
@@ -576,16 +574,16 @@ class FullGaussian2d(Readout):
             grid = grid + shift[:, None, None, :]
 
         y = F.grid_sample(x, grid, align_corners=self.align_corners)
-        y = (y.squeeze(-1) * feat).sum(1).view(N, outdims)
+        y = (y.squeeze(-1) * feat).sum(1).view(bs, outdims)
 
         if self.bias is not None:
             y = y + bias
         return y
 
     def __repr__(self):
-        c, w, h = self.in_shape
+        c, h, w = self.in_shape
         r = self.gauss_type + " "
-        r += self.__class__.__name__ + " (" + "{} x {} x {}".format(c, w, h) + " -> " + str(self.outdims) + ")"
+        r += self.__class__.__name__ + " (" + "{} x {} x {}".format(c, h, w) + " -> " + str(self.outdims) + ")"
         if self.bias is not None:
             r += " with bias"
         if self._shared_features:
@@ -623,7 +621,7 @@ class GeneralizedFullGaussianReadout2d(FullGaussian2d):
         learns the original features (True) or if it uses a copy of the features from another instance of FullGaussian2d
         via the `shared_features` (False). If it uses a copy, the feature_l1 regularizer for this copy will return 0
         """
-        c, w, h = self.in_shape
+        c = self.in_shape[0]
         self._original_features = True
         if match_ids is not None:
             assert self.outdims == len(match_ids)
@@ -670,9 +668,9 @@ class GeneralizedFullGaussianReadout2d(FullGaussian2d):
         Returns:
             y: neuronal activity
         """
-        N, c, w, h = x.size()
-        c_in, w_in, h_in = self.in_shape
-        if (c_in, w_in, h_in) != (c, w, h):
+        bs, c, h, w = x.size()
+        c_in, h_in, w_in = self.in_shape
+        if (c_in, h_in, w_in) != (c, h, w):
             raise ValueError("the specified feature map dimension is not the readout's expected input dimension")
         feat = self.features.view(self.inferred_params_n, 1, c, self.outdims)
         bias = self.bias
@@ -680,10 +678,10 @@ class GeneralizedFullGaussianReadout2d(FullGaussian2d):
 
         if self.batch_sample:
             # sample the grid_locations separately per image per batch
-            grid = self.sample_grid(batch_size=N, sample=sample)  # sample determines sampling from Gaussian
+            grid = self.sample_grid(batch_size=bs, sample=sample)  # sample determines sampling from Gaussian
         else:
             # use one sampled grid_locations for all images in the batch
-            grid = self.sample_grid(batch_size=1, sample=sample).expand(N, outdims, 1, 2)
+            grid = self.sample_grid(batch_size=1, sample=sample).expand(bs, outdims, 1, 2)
 
         if out_idx is not None:
             if isinstance(out_idx, np.ndarray):
@@ -703,7 +701,7 @@ class GeneralizedFullGaussianReadout2d(FullGaussian2d):
         if self.return_weighted_features:
             return y.squeeze(-1).unsqueeze(0) * feat
 
-        y = (y.squeeze(-1).unsqueeze(0) * feat).sum(2).view(self.inferred_params_n, N, outdims)
+        y = (y.squeeze(-1).unsqueeze(0) * feat).sum(2).view(self.inferred_params_n, bs, outdims)
 
         if self.bias is not None:
             y = y + bias.unsqueeze(1)
@@ -743,16 +741,16 @@ class RemappedGaussian2d(FullGaussian2d):
     def __init__(self, *args, remap_layers=2, remap_kernel=3, max_remap_amplitude=0.2, **kwargs):
 
         super().__init__(*args, **kwargs)
-        channels, width, height = self.in_shape
+        c = self.in_shape[0]
         remapper = nn.Sequential()
         for i in range(remap_layers - 1):
-            remapper.add_module(f"conv{i}", nn.Conv2d(channels, channels, remap_kernel, padding=True))
-            remapper.add_module(f"norm{i}", nn.BatchNorm2d(channels))
+            remapper.add_module(f"conv{i}", nn.Conv2d(c, c, remap_kernel, padding=True))
+            remapper.add_module(f"norm{i}", nn.BatchNorm2d(c))
             remapper.add_module(f"nonlin{i}", nn.ELU())
         else:
             remapper.add_module(
                 f"conv{remap_layers}",
-                nn.Conv2d(channels, 2, remap_kernel, padding=True),
+                nn.Conv2d(c, 2, remap_kernel, padding=True),
             )
             remapper.add_module(f"norm{remap_layers}", nn.BatchNorm2d(2))
             remapper.add_module(f"nonlin{remap_layers}", nn.Tanh())
@@ -776,9 +774,9 @@ class RemappedGaussian2d(FullGaussian2d):
     def forward(self, x, sample=None, shift=None, out_idx=None, **kwargs):
         offset_field = self.remap_field(x) * self.max_remap_amplitude
 
-        N, c, w, h = x.size()
-        c_in, w_in, h_in = self.in_shape
-        if (c_in, w_in, h_in) != (c, w, h):
+        bs, c, h, w = x.size()
+        c_in, h_in, w_in = self.in_shape
+        if (c_in, h_in, w_in) != (c, h, w):
             raise ValueError("the specified feature map dimension is not the readout's expected input dimension")
         feat = self.features.view(1, c, self.outdims)
         bias = self.bias
@@ -786,10 +784,10 @@ class RemappedGaussian2d(FullGaussian2d):
 
         if self.batch_sample:
             # sample the grid_locations separately per image per batch
-            grid = self.sample_grid(batch_size=N, sample=sample)  # sample determines sampling from Gaussian
+            grid = self.sample_grid(batch_size=bs, sample=sample)  # sample determines sampling from Gaussian
         else:
             # use one sampled grid_locations for all images in the batch
-            grid = self.sample_grid(batch_size=1, sample=sample).expand(N, outdims, 1, 2)
+            grid = self.sample_grid(batch_size=1, sample=sample).expand(bs, outdims, 1, 2)
 
         if out_idx is not None:
             if isinstance(out_idx, np.ndarray):
@@ -807,7 +805,7 @@ class RemappedGaussian2d(FullGaussian2d):
             grid = grid + shift[:, None, None, :]
 
         y = F.grid_sample(x, grid, align_corners=self.align_corners)
-        y = (y.squeeze(-1) * feat).sum(1).view(N, outdims)
+        y = (y.squeeze(-1) * feat).sum(1).view(bs, outdims)
 
 
 class DeterministicGaussian2d(Readout):
@@ -824,7 +822,7 @@ class DeterministicGaussian2d(Readout):
     the normal distribution. The filter is applied only on the spatial dimensions of the input.
 
     Args:
-        in_shape (list): shape of the input feature map [channels, width, height]
+        in_shape (Sequence[int]): shape of the input feature map [channels, height, width]
         outdims (int): number of output units
         bias (bool): adds a bias term
         positive (bool): if True, all weights will be constrained to have positive values, default: False
@@ -835,7 +833,7 @@ class DeterministicGaussian2d(Readout):
 
     def __init__(
         self,
-        in_shape,
+        in_shape: Sequence[int],
         outdims,
         bias,
         init_mu_range=0.1,
@@ -845,15 +843,14 @@ class DeterministicGaussian2d(Readout):
         mean_activity=None,
         feature_reg_weight=None,
         gamma_readout=None,  # depricated, use feature_reg_weight instead
-    ):
-
+    ) -> None:
         super().__init__()
 
         if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma <= 0.0:
             raise ValueError("either init_mu_range doesn't belong to [0.0, 1.0] or init_sigma_range is non-positive")
 
         self.in_shape = in_shape
-        c, w, h = in_shape
+        c = in_shape[0]
         self.outdims = outdims
         self.positive = positive
         self.feature_reg_weight = self.resolve_deprecated_gamma_readout(feature_reg_weight, gamma_readout, default=1.0)
@@ -953,19 +950,14 @@ class DeterministicGaussian2d(Readout):
         ) * self.feature_reg_weight
 
     def forward(self, x, shift=None, out_idx=None, **kwargs):
-        N, c, w, h = x.size()
         feat = self.features
 
         if out_idx is None:
-            grid = self.grid
             bias = self.bias
-            outdims = self.outdims
         else:
             feat = feat[:, out_idx]
-            grid = self.grid[:, out_idx]
             if self.bias is not None:
                 bias = self.bias[out_idx]
-            outdims = len(out_idx)
 
         if shift is None:
             mask = self.mask()
@@ -990,8 +982,8 @@ class DeterministicGaussian2d(Readout):
         return y
 
     def __repr__(self):
-        c, w, h = self.in_shape
-        r = self.__class__.__name__ + " (" + "{} x {} x {}".format(c, w, h) + " -> " + str(self.outdims) + ")"
+        c, h, w = self.in_shape
+        r = self.__class__.__name__ + " (" + "{} x {} x {}".format(c, h, w) + " -> " + str(self.outdims) + ")"
         if self.bias is not None:
             r += " with bias"
         for ch in self.children():
@@ -1012,7 +1004,7 @@ class Gaussian3d(Readout):
     map from a given location, sample from Gaussian at train time but set to mean at eval time, and the unit's response with or without an additional elu non-linearity.
 
     Args:
-        in_shape (list): shape of the input feature map [channels, width, height]
+        in_shape (Sequence[int]): shape of the input feature map [channels, height, width]
         outdims (int): number of output units
         bias (bool): adds a bias term
         init_mu_range (float): initialises the the mean with Uniform([-init_range, init_range])
@@ -1031,7 +1023,7 @@ class Gaussian3d(Readout):
 
     def __init__(
         self,
-        in_shape,
+        in_shape: Sequence[int],
         outdims,
         bias,
         init_mu_range=0.5,
@@ -1043,7 +1035,7 @@ class Gaussian3d(Readout):
         feature_reg_weight=None,
         gamma_readout=None,  # depricated, use feature_reg_weight instead
         **kwargs,
-    ):
+    ) -> None:
         super().__init__()
         if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma_range <= 0.0:
             raise ValueError("init_mu_range or init_sigma_range is not within required limit!")
@@ -1138,21 +1130,21 @@ class Gaussian3d(Readout):
         Returns:
             y: neuronal activity
         """
-        N, c, w, h = x.size()
-        c_in, w_in, h_in = self.in_shape
-        if (c_in, w_in, h_in) != (c, w, h):
+        bs, c, h, w = x.size()
+        c_in, h_in, w_in = self.in_shape
+        if (c_in, h_in, w_in) != (c, h, w):
             raise ValueError("the specified feature map dimension is not the readout's expected input dimension")
-        x = x.view(N, 1, c, w, h)
+        x = x.view(bs, 1, c, h, w)
         feat = self.features
         bias = self.bias
         outdims = self.outdims
 
         if self.batch_sample:
             # sample the grid_locations separately per image per batch
-            grid = self.sample_grid(batch_size=N, sample=sample)  # sample determines sampling from Gaussian
+            grid = self.sample_grid(batch_size=bs, sample=sample)  # sample determines sampling from Gaussian
         else:
             # use one sampled grid_locations for all images in the batch
-            grid = self.sample_grid(batch_size=1, sample=sample).expand(N, outdims, 1, 3)
+            grid = self.sample_grid(batch_size=1, sample=sample).expand(bs, outdims, 1, 3)
 
         if out_idx is not None:
             # out_idx specifies the indices to subset of neurons for training/testing
@@ -1169,7 +1161,7 @@ class Gaussian3d(Readout):
             grid = grid + shift[:, None, None, :]
 
         y = F.grid_sample(x, grid, align_corners=self.align_corners)
-        y = (y.squeeze(-1) * feat).sum(1).view(N, outdims)
+        y = (y.squeeze(-1) * feat).sum(1).view(bs, outdims)
 
         if self.bias is not None:
             y = y + bias
@@ -1190,7 +1182,7 @@ class UltraSparse(Readout):
     map from a given location, sample from Gaussian at train time but set to mean at eval time, and the unit's response with or without an additional elu non-linearity.
 
     Args:
-        in_shape (list): shape of the input feature map [channels, width, height]
+        in_shape (Sequence[int]): shape of the input feature map [channels, height, width]
         outdims (int): number of output units
         bias (bool): adds a bias term
         init_mu_range (float): initialises the the mean with Uniform([-init_range, init_range])
@@ -1212,7 +1204,7 @@ class UltraSparse(Readout):
 
     def __init__(
         self,
-        in_shape,
+        in_shape: Sequence[int],
         outdims,
         bias,
         init_mu_range,
@@ -1226,13 +1218,11 @@ class UltraSparse(Readout):
         feature_reg_weight=None,
         gamma_readout=None,  # depricated, use feature_reg_weight instead
         **kwargs,
-    ):
-
+    ) -> None:
         super().__init__()
         if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma_range <= 0.0:
             raise ValueError("either init_mu_range doesn't belong to [0.0, 1.0] or init_sigma_range is non-positive!")
         self.in_shape = in_shape
-        c, w, h = in_shape
         self.outdims = outdims
         self.feature_reg_weight = self.resolve_deprecated_gamma_readout(feature_reg_weight, gamma_readout, default=1.0)
         self.batch_sample = batch_sample
@@ -1378,21 +1368,21 @@ class UltraSparse(Readout):
             y: neuronal activity
         """
 
-        N, c, w, h = x.size()
-        c_in, w_in, h_in = self.in_shape
-        if (c_in, w_in, h_in) != (c, w, h):
+        bs, c, h, w = x.size()
+        c_in, h_in, w_in = self.in_shape
+        if (c_in, h_in, w_in) != (c, h, w):
             raise ValueError("the specified feature map dimension is not the readout's expected input dimension")
-        x = x.view(N, 1, c, w, h)
+        x = x.view(bs, 1, c, h, w)
         feat = self.features
         bias = self.bias
         outdims = self.outdims
 
         if self.batch_sample:
             # sample the grid_locations separately per image per batch
-            grid = self.sample_grid(batch_size=N, sample=sample)  # sample determines sampling from Gaussian
+            grid = self.sample_grid(batch_size=bs, sample=sample)  # sample determines sampling from Gaussian
         else:
             # use one sampled grid_locations for all images in the batch
-            grid = self.sample_grid(batch_size=1, sample=sample).expand(N, 1, outdims * self.num_filters, 1, 3)
+            grid = self.sample_grid(batch_size=1, sample=sample).expand(bs, 1, outdims * self.num_filters, 1, 3)
 
         if out_idx is not None:
             # predict output only for neurons given by out_idx
@@ -1409,7 +1399,7 @@ class UltraSparse(Readout):
             grid = grid + shift[:, None, None, :]
 
         y = F.grid_sample(x, grid, align_corners=self.align_corners).squeeze(-1)
-        z = y.view((N, 1, self.num_filters, outdims)).permute(0, 1, 3, 2)  # reorder the dims
+        z = y.view((bs, 1, self.num_filters, outdims)).permute(0, 1, 3, 2)  # reorder the dims
         z = torch.einsum(
             "nkpf,mkpf->np", z, feat
         )  # dim: batch_size, 1, num_neurons, num_filters -> batch_size, num_neurons
@@ -1419,8 +1409,8 @@ class UltraSparse(Readout):
         return z
 
     def __repr__(self):
-        c, w, h = self.in_shape
-        r = self.__class__.__name__ + " (" + "{} x {} x {}".format(c, w, h) + " -> " + str(self.outdims) + ")"
+        c, h, w = self.in_shape
+        r = self.__class__.__name__ + " (" + "{} x {} x {}".format(c, h, w) + " -> " + str(self.outdims) + ")"
         if self.bias is not None:
             r += " with bias"
         for ch in self.children():

@@ -12,16 +12,7 @@ class Encoder3d(nn.Module):
         else:
             self.nonlinearity = core.nonlinearities[readout_nonlinearity]()
 
-    def forward(
-            self,
-            x,
-            data_key=None,
-            pupil_center=None,
-            trial_idx=None,
-            shift=None,
-            detach_core=False,
-            **kwargs
-    ):
+    def forward(self, x, data_key=None, pupil_center=None, trial_idx=None, shift=None, detach_core=False, **kwargs):
         out_core = self.core(x)
         if detach_core:
             x = x.detach()

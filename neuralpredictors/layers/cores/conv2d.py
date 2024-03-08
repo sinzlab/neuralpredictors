@@ -1,7 +1,7 @@
 import logging
 import warnings
 from collections import OrderedDict
-from typing import Union
+from typing import List, Union
 
 try:
     from collections import Iterable
@@ -53,12 +53,18 @@ class Stacked2dCore(ConvCore, nn.Module):
         input_stride=1,
         final_nonlinearity=True,
         elu_shift=(0, 0),
-        bias: Union[bool, list[bool]] = True,
+        bias: Union[bool, List[bool]] = True,
         momentum=0.1,
         pad_input=True,
         hidden_padding=None,
+<<<<<<< HEAD
         batch_norm: Union[bool, list[bool]] = True,
         batch_norm_scale: Union[bool, list[bool]] = True,
+=======
+        independent_bn_bias=True,
+        batch_norm: Union[bool, List[bool]] = True,
+        batch_norm_scale: Union[bool, List[bool]] = True,
+>>>>>>> upstream/main
         final_batchnorm_scale: bool = True,
         hidden_dilation=1,
         laplace_padding=0,

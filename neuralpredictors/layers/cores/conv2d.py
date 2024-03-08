@@ -1,7 +1,7 @@
 import logging
 import warnings
 from collections import OrderedDict
-from typing import Union, List
+from typing import List, Union
 
 try:
     from collections import Iterable

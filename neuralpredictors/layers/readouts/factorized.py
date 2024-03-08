@@ -45,7 +45,7 @@ class FullFactorized2d(Readout):
             mean_activity: the mean for readout  initialisation
             spatial_and_feature_reg_weight: lagrange multiplier (constant) for L1 penalty,
                 the bigger the number, the stronger the penalty
-            gamma_readout: depricated, use feature_reg_weight instead
+            gamma_readout: depricated, use spatial_and_feature_reg_weight instead
             **kwargs:
         """
 

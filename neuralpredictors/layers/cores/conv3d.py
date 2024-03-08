@@ -30,8 +30,14 @@ class Core3d(ConvCore):
             if m.bias is not None:
                 m.bias.data.fill_(0)
 
+    def set_batchnorm_type(self):
+        self.batchnorm_layer_cls = nn.BatchNorm3d
+        self.bias_layer_cls = Bias3DLayer
+        self.scale_layer_cls = Scale3DLayer
+
 
 class Basic3dCore(Core3d, nn.Module):
+
     def __init__(
         self,
         input_channels,
@@ -54,13 +60,11 @@ class Basic3dCore(Core3d, nn.Module):
         input_regularizer="LaplaceL2norm",
         cuda=False,
         final_nonlin=True,
-        independent_bn_bias=True,
         spatial_dilation: int = 1,
         temporal_dilation: int = 1,
         hidden_spatial_dilation=1,
         hidden_temporal_dilation=1,
     ):
-
         """
         :param input_channels: integer, number of input channels as in
         :param hidden_channels:  number of hidden channels (i.e feature maps) in each hidden layer
@@ -85,14 +89,6 @@ class Basic3dCore(Core3d, nn.Module):
                 zero is the default however to recreate backwards compatibility.
         :param input_regularizer: specifies what kind of spatial regularized is applied
         :param final_nonlin: bool specifiyng whether to include a nonlinearity after last convolutional layer in core
-        :param independent_bn_bias: If False, will allow for scaling the batch norm, so that batch norm
-                                    and bias can both be true. Defaults to True.
-
-        To enable learning batch_norms bias and scale independently, the arguments bias, batch_norm and batch_norm_scale
-        work together: By default, all are true. In this case there won't be a bias learned in the convolutional layer, but
-        batch_norm will learn both its bias and scale. If batch_norm is false, but bias true, a bias will be learned in the
-        convolutional layer. If batch_norm and bias are true, but batch_norm_scale is false, batch_norm won't have learnable
-        parameters and a BiasLayer will be added after the batch_norm layer.
         """
         super().__init__()
 
@@ -112,7 +108,6 @@ class Basic3dCore(Core3d, nn.Module):
         self.bias = bias
         self.batch_norm = batch_norm
         self.batch_norm_scale = batch_norm_scale
-        self.independent_bn_bias = independent_bn_bias
         self.momentum = momentum
         self.spatial_dilation = spatial_dilation
         self.temporal_dilation = temporal_dilation
@@ -225,19 +220,6 @@ class Basic3dCore(Core3d, nn.Module):
     def regularizer(self):
         return self.gamma_input_spatial * self.laplace_spatial(), self.gamma_input_temporal * self.laplace_temporal()
 
-    def add_bn_layer(self, layer, hidden_channels):
-        if self.batch_norm:
-            if self.independent_bn_bias:
-                layer["norm"] = nn.BatchNorm3d(hidden_channels, momentum=self.momentum)
-            else:
-                layer["norm"] = nn.BatchNorm3d(
-                    hidden_channels, momentum=self.momentum, affine=self.bias and self.batch_norm_scale
-                )
-                if self.bias and not self.batch_norm_scale:
-                    layer["bias"] = Bias3DLayer(hidden_channels)
-                elif self.batch_norm_scale:
-                    layer["scale"] = Scale3DLayer(hidden_channels)
-
     @property
     def out_channels(self):
         return self.hidden_channels[-1]
@@ -247,6 +229,7 @@ class Basic3dCore(Core3d, nn.Module):
 
 
 class Factorized3dCore(Core3d, nn.Module):
+
     def __init__(
         self,
         input_channels,
@@ -267,7 +250,6 @@ class Factorized3dCore(Core3d, nn.Module):
         batch_norm=True,
         padding=False,
         batch_norm_scale=True,
-        independent_bn_bias=True,
         momentum=0.01,
         laplace_padding=None,
         input_regularizer="LaplaceL2norm",
@@ -300,8 +282,6 @@ class Factorized3dCore(Core3d, nn.Module):
         :param batch_norm: bool specifying whether to include batch norm after convolution in core
         :param padding: whether to pad convolutions. Defaults to False.
         :param batch_norm_scale: bool, if True, a scaling factor after BN will be learned.
-        :param independent_bn_bias: If False, will allow for scaling the batch norm, so that batchnorm
-                                    and bias can both be true. Defaults to True.
         :param momentum: momentum for batch norm
         :param laplace_padding: padding size for the laplace convolution. If padding = None, it defaults to half of
                 the kernel size (recommended). Setting Padding to 0 is not recommended and leads to artefacts,
@@ -329,7 +309,6 @@ class Factorized3dCore(Core3d, nn.Module):
         self.bias = bias
         self.batch_norm = batch_norm
         self.batch_norm_scale = batch_norm_scale
-        self.independent_bn_bias = independent_bn_bias
         self.momentum = momentum
         self.stride = stride
         self.spatial_dilation = spatial_dilation
@@ -427,11 +406,6 @@ class Factorized3dCore(Core3d, nn.Module):
 
             self.features.add_module("layer{}".format(l + 1), nn.Sequential(layer))
         self.initialize(cuda=cuda)
-
-    def set_batchnorm_type(self):
-        self.batchnorm_layer_cls = nn.BatchNorm3d
-        self.bias_layer_cls = Bias3DLayer
-        self.scale_layer_cls = Scale3DLayer
 
     def forward(self, x):
         for features in self.features:

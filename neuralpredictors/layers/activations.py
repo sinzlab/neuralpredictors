@@ -28,6 +28,11 @@ def log1exp(x):
     return torch.log(1.0 + torch.exp(x))
 
 
+class Exp(nn.Module):
+    def forward(self, x):
+        return torch.exp(x)
+
+
 class Log1Exp(nn.Module):
     def forward(self, x):
         return log1exp(x)

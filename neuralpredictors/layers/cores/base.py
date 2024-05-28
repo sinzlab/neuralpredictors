@@ -1,3 +1,4 @@
+import warnings
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 
@@ -77,7 +78,8 @@ class ConvCore(Core):
                 raise NotImplementedError(f"Subclasses must have a `{attr}` attribute.")
         for attr in ["batch_norm", "hidden_channels", "bias", "batch_norm_scale"]:
             if not isinstance(getattr(self, attr), list):
-                raise ValueError(f"`{attr}` must be a list.")
+                setattr(self, attr, [getattr(self, attr)] * self.layers)
+                warnings.warn(f"The {attr} is applied to all layers", UserWarning)
 
         if self.batch_norm[layer_idx]:
             hidden_channels = self.hidden_channels[layer_idx]

@@ -160,7 +160,7 @@ class Basic3dCore(Core3d, nn.Module):
             padding=(0, input_kernel[1] // 2, input_kernel[2] // 2) if self.padding else 0,
         )
 
-        self.add_bn_layer(layer=layer, hidden_channels=self.hidden_channels[0])
+        self.add_bn_layer(layer=layer, layer_idx=0)
 
         if layers > 1 or self.final_nonlinearity:
             if hidden_nonlinearities == "adaptive_elu":
@@ -185,7 +185,7 @@ class Basic3dCore(Core3d, nn.Module):
                 padding=(0, self.hidden_kernel[l][1] // 2, self.hidden_kernel[l][2] // 2) if self.padding else 0,
             )
 
-            self.add_bn_layer(layer=layer, hidden_channels=self.hidden_channels[l + 1])
+            self.add_bn_layer(layer=layer, layer_idx=l + 1)
 
             if self.final_nonlinearity or l < self.layers:
                 if hidden_nonlinearities == "adaptive_elu":
@@ -363,7 +363,10 @@ class Factorized3dCore(Core3d, nn.Module):
             dilation=(self.temporal_dilation, 1, 1),
         )
 
-        self.add_bn_layer(layer=layer, hidden_channels=self.hidden_channels[0])
+        self.add_bn_layer(
+            layer=layer,
+            layer_idx=0,
+        )
 
         if layers > 1 or final_nonlin:
             if hidden_nonlinearities == "adaptive_elu":
@@ -394,7 +397,7 @@ class Factorized3dCore(Core3d, nn.Module):
                 dilation=(self.hidden_temporal_dilation[l], 1, 1),
             )
 
-            self.add_bn_layer(layer=layer, hidden_channels=self.hidden_channels[l + 1])
+            self.add_bn_layer(layer=layer, layer_idx=l + 1)
 
             if final_nonlin or l < self.layers:
                 if hidden_nonlinearities == "adaptive_elu":

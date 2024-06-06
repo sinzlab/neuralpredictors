@@ -65,7 +65,7 @@ def hermite_2d(N, npts, xvalmax=None):
     for i, (mui, nui, desci) in enumerate(zip(mu, nu, desc)):
         radvals = polyval(radsq, hermite_coefficients(mui, nui))
         basis = gaussian * (radsq ** (mui / 2)) * radvals * np.exp(1j * mui * theta)
-        basis /= np.sqrt(2 ** (mui + 2 * nui) * pi * math.factorial(mui + nui) * math.factorial(nui))
+        basis /= np.sqrt(2 ** (mui + 2 * nui) * pi * math.factorial(int(mui + nui)) * math.factorial(int(nui)))
         if desci == "z":
             H[i] = basis.real / np.sqrt(2)
         elif desci == "r":

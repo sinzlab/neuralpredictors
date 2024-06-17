@@ -277,6 +277,8 @@ class FullGaussian2d(Readout):
         feature_reg_weight=None,
         gamma_readout=None,  # depricated, use feature_reg_weight instead
         return_weighted_features=False,
+        regularizer_type="l1",
+        gamma_sigma=0.1,
         **kwargs,
     ) -> None:
         super().__init__()
@@ -284,6 +286,13 @@ class FullGaussian2d(Readout):
         self.mean_activity = mean_activity
         # determines whether the Gaussian is isotropic or not
         self.gauss_type = gauss_type
+        self.regularizer_type = regularizer_type
+
+        if self.regularizer_type == "adaptive_log_norm":
+            self.gamma_sigma = gamma_sigma
+            self.adaptive = torch.nn.Parameter(torch.normal(mean=torch.ones(1, outdims), std=torch.ones(1, outdims)))
+        if self.regularizer_type != "adaptive_log_norm" and self.regularizer_type != "l1":
+            raise ValueError("regularizer_type should be 'l1' or 'adaptive_log_norm'")
 
         if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma <= 0.0:
             raise ValueError("either init_mu_range doesn't belong to [0.0, 1.0] or init_sigma_range is non-positive")
@@ -379,6 +388,23 @@ class FullGaussian2d(Readout):
             return self.apply_reduction(self.features.abs(), reduction=reduction, average=average)
         else:
             return 0
+
+    def adaptive_l1_lognorm(self, reduction="sum", average=None):
+        if self._original_features:
+            features = self.adaptive.abs() * self.features
+            return self.apply_reduction(features.abs(), reduction=reduction, average=average)
+        else:
+            return 0
+
+    def regularizer(self, reduction="sum", average=None):
+        if self.regularizer_type == "l1":
+            return self.feature_l1(reduction=reduction, average=average) * self.feature_reg_weight
+        else:
+            new_gamma = self.feature_reg_weight
+            readout_reg = self.adaptive_l1_lognorm(reduction=reduction, average=average) * new_gamma
+            #             gammas are supposted to be from lognorm distribution
+            gamma_prior = 1 / (self.gamma_sigma**2) * ((torch.log(self.adaptive.abs()) ** 2).sum())
+            return readout_reg + gamma_prior
 
     def regularizer(self, reduction="sum", average=None):
         return self.feature_l1(reduction=reduction, average=average) * self.feature_reg_weight
